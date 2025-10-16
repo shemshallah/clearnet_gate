@@ -315,4 +315,22 @@
         loadConfig();
     </script>
 </body>
+</html>                } else {
+                    throw new Error('Save failed');
+                }
+            } catch (error) {
+                statusMessage.className = 'status-message error';
+                statusMessage.textContent = '✗ Error saving configuration: ' + error.message;
+            }
+            
+            // Hide message after 5 seconds
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Load config on page load
+        loadConfig();
+    </script>
+</body>
 </html>
