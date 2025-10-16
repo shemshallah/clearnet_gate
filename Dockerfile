@@ -10,7 +10,7 @@ COPY requirements.txt .
 # Install dependencies (no cache to reduce image size)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire application code (includes main.py and all .html files)
+# Copy the entire application code (includes quantum_proxy.py and all .html files)
 COPY . .
 
 # Create uploads directory if it doesn't exist
@@ -19,5 +19,5 @@ RUN mkdir -p uploads
 # Expose the port the app runs on
 EXPOSE 8000
 
-# Run the application with uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application with uvicorn (updated for quantum_proxy.py)
+CMD ["uvicorn", "quantum_proxy:app", "--host", "0.0.0.0", "--port", "8000"]
