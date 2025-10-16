@@ -1,10 +1,8 @@
-from fastapi import FastAPI, Request, Form, File, UploadFile, HTTPException
+from fastapi import FastAPI, Request, File, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
 import json
 import os
 import hashlib
-import time
 import random
 import asyncio
 from datetime import datetime
@@ -19,9 +17,6 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Config file
 CONFIG_FILE = "config.json"
-
-# Mount static files if needed (not used here)
-# app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Load/Save config
 def load_config():
