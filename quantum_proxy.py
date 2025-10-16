@@ -1,5 +1,3 @@
-
-
 from fastapi import FastAPI, BackgroundTasks, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from pydantic import BaseModel
@@ -693,7 +691,7 @@ METRICS_HTML = """
     
     <div class="metrics-sidebar">
         <div class="metrics-title">⚛️ LIVE METRICS</div>
-        <button class="test-button" onclick="runSpeedTest()">🚀 RUN SPEED TEST</button>
+        <button class="test-button" onclick="runSpeedTest(event)">🚀 RUN SPEED TEST</button>
         <div id="realMetrics"></div>
         <div id="quantumMetrics"></div>
     </div>
@@ -721,7 +719,6 @@ METRICS_HTML = """
                 </div>
                 <div class="chat-input-container">
                     <input type="text" class="chat-input" id="chatInput" placeholder="Enter QSH query..." onkeypress="handleChatKeyPress(event)">
-                    ```html
                     <button class="send-button" onclick="sendQuery()">SEND</button>
                 </div>
             </div>
@@ -1008,7 +1005,7 @@ Type 'help' or '??' for available commands.
         }
         
         // Metrics
-        async function runSpeedTest() {
+        async function runSpeedTest(event) {
             const btn = event.target;
             btn.disabled = true;
             btn.textContent = '⏳ TESTING...';
