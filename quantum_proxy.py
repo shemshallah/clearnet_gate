@@ -1,12 +1,4 @@
 
-#!/usr/bin/env python3
-"""
-Quantum Foam Network - Complete Fixed Implementation with Alice TCP Proxy
-- FastAPI app with QSH query, file upload, shell execution, and metrics
-- Integrated Alice TCP Proxy Server for DNS distribution and routing
-- Fixed tabs and metrics display
-- All functionality in one file
-"""
 
 from fastapi import FastAPI, BackgroundTasks, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
@@ -1186,10 +1178,3 @@ if __name__ == "__main__":
     
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-```
-
-Save this as a single file (e.g., `quantum_foam.py`) and run it with:
-
-```bash
-python quantum_foam.py
-```
