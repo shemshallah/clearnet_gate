@@ -1,7 +1,8 @@
 
-from fastapi import FastAPI, BackgroundTasks, UploadFile, File, WebSocket
+
+## quantum_proxy.py
+from fastapi import FastAPI, BackgroundTasks, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import logging
 import random
@@ -11,7 +12,6 @@ import asyncio
 import httpx
 import os
 import subprocess
-import shutil
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +33,6 @@ class NetworkMetrics:
         self.testing = False
         
     async def test_download_speed(self):
-        """Test download speed"""
         try:
             test_url = "http://speedtest.ftp.otenet.gr/files/test10Mb.db"
             start_time = time.time()
@@ -51,9 +50,7 @@ class NetworkMetrics:
             return self.last_download_speed
     
     async def test_upload_speed(self):
-        """Test upload speed to local file server"""
         try:
-            # Test upload to our own server
             test_data = b'x' * (5 * 1024 * 1024)
             test_url = "http://127.0.0.1:8000/api/upload-test"
             
@@ -71,7 +68,6 @@ class NetworkMetrics:
             return self.last_upload_speed
     
     async def test_ping(self):
-        """Test ping latency"""
         try:
             start_time = time.time()
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -84,7 +80,6 @@ class NetworkMetrics:
             return self.last_ping
     
     async def run_full_test(self):
-        """Run all network tests"""
         if self.testing:
             return
         
@@ -130,17 +125,13 @@ class QSHQuery(BaseModel):
 class ShellCommand(BaseModel):
     command: str
 
-# Quantum collider simulation
 def process_qsh_query(query: str) -> dict:
-    """Process a QSH query through the quantum collider"""
     import hashlib
     
     classical_hash = hashlib.sha256(query.encode()).hexdigest()
-    
     entanglement_strength = random.uniform(0.85, 0.99)
     collision_energy = random.uniform(5.0, 12.0)
     particle_states = random.randint(64, 256)
-    
     qsh_hash = classical_hash[:16]
     
     return {
@@ -156,11 +147,8 @@ def process_qsh_query(query: str) -> dict:
         "timestamp": datetime.now().isoformat()
     }
 
-# Shell command execution
 def execute_shell_command(command: str) -> dict:
-    """Execute shell command in foam REPL"""
     try:
-        # Special commands
         if command.strip().lower() == "install wireshark":
             return {
                 "output": "Installing Wireshark to *.computer domain...\n" +
@@ -188,7 +176,6 @@ def execute_shell_command(command: str) -> dict:
                 "timestamp": datetime.now().isoformat()
             }
         
-        # Execute actual shell command
         result = subprocess.run(
             command,
             shell=True,
@@ -348,14 +335,82 @@ SPLASH_HTML = """
 </html>
 """
 
-METRICS_HTML = open('metrics.html', 'r').read() if os.path.exists('metrics.html') else ""
+@app.get("/", response_class=HTMLResponse)
+async def splash():
+    return SPLASH_HTML
 
-# Create metrics.html separately due to size
-with open('/app/metrics.html', 'w') as f:
-    f.write("""<!DOCTYPE html>
+@app.get("/metrics", response_class=HTMLResponse)
+async def metrics():
+    return HTMLResponse(content=open('/app/metrics.html', 'r').read())
+
+@app.get("/api/quantum-metrics")
+async def get_quantum_metrics():
+    return JSONResponse(network_metrics.get_metrics())
+
+@app.post("/api/run-speed-test")
+async def run_speed_test(background_tasks: BackgroundTasks):
+    background_tasks.add_task(network_metrics.run_full_test)
+    return {"status": "test_started"}
+
+@app.post("/api/qsh-query")
+async def qsh_query(query: QSHQuery):
+    result = process_qsh_query(query.query)
+    return JSONResponse(result)
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...)):
+    file_path = UPLOAD_DIR / file.filename
+    with open(file_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
+    return {"filename": file.filename, "size": len(content)}
+
+@app.post("/api/upload-test")
+async def upload_test(file: UploadFile = File(...)):
+    content = await file.read()
+    return {"size": len(content)}
+
+@app.get("/api/files")
+async def list_files():
+    files = []
+    for file_path in UPLOAD_DIR.iterdir():
+        if file_path.is_file():
+            files.append({
+                "name": file_path.name,
+                "size": file_path.stat().st_size
+            })
+    return files
+
+@app.get("/api/download/{filename}")
+async def download_file(filename: str):
+    file_path = UPLOAD_DIR / filename
+    if file_path.exists():
+        return FileResponse(file_path)
+    return JSONResponse({"error": "File not found"}, status_code=404)
+
+@app.post("/api/shell")
+async def shell_command(command: ShellCommand):
+    result = execute_shell_command(command.command)
+    return JSONResponse(result)
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+Now create this as a SEPARATE file:
+
+## metrics.html
+```html
+<!DOCTYPE html>
 <html>
 <head>
     <title>Quantum Network Control</title>
+    <meta charset="UTF-8">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -365,25 +420,27 @@ with open('/app/metrics.html', 'w') as f:
             height: 100vh;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
         .header {
-            padding: 20px;
+            padding: 15px 20px;
             background: rgba(10, 10, 10, 0.9);
             border-bottom: 2px solid #00ff88;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
         }
-        .header h1 { font-size: 1.8em; text-shadow: 0 0 10px #00ff88; }
+        .header h1 { font-size: 1.5em; text-shadow: 0 0 10px #00ff88; }
         .nav-button {
-            padding: 10px 20px;
+            padding: 8px 16px;
             background: rgba(0, 255, 136, 0.2);
             border: 1px solid #00ff88;
             color: #00ff88;
             border-radius: 5px;
             cursor: pointer;
             font-family: 'Courier New', monospace;
-            font-size: 0.9em;
+            font-size: 0.85em;
             text-decoration: none;
         }
         .nav-button:hover {
@@ -393,50 +450,50 @@ with open('/app/metrics.html', 'w') as f:
         .metrics-sidebar {
             position: absolute;
             left: 0;
-            top: 70px;
-            width: 350px;
-            height: calc(100vh - 70px);
+            top: 60px;
+            width: 320px;
+            height: calc(100vh - 60px);
             background: rgba(10, 10, 10, 0.95);
             border-right: 2px solid #00ff88;
-            padding: 20px;
+            padding: 15px;
             overflow-y: auto;
             z-index: 10;
         }
         .metrics-title {
-            font-size: 1.1em;
+            font-size: 1em;
             color: #00ddff;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             text-align: center;
             border-bottom: 1px solid #00ff88;
-            padding-bottom: 10px;
+            padding-bottom: 8px;
         }
         .test-button {
             width: 100%;
-            padding: 10px;
+            padding: 8px;
             background: linear-gradient(135deg, #00ff88, #00ddff);
             color: #0a0a0a;
             border: none;
             border-radius: 5px;
             font-family: 'Courier New', monospace;
-            font-size: 0.9em;
+            font-size: 0.85em;
             font-weight: bold;
             cursor: pointer;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
         .metric-card {
             background: rgba(0, 255, 136, 0.05);
             border: 1px solid #00ff88;
             border-radius: 5px;
-            padding: 10px;
-            margin-bottom: 10px;
+            padding: 8px;
+            margin-bottom: 8px;
         }
-        .metric-label { font-size: 0.8em; color: #00ddff; margin-bottom: 3px; }
-        .metric-value { font-size: 1.1em; color: #00ff88; font-weight: bold; }
+        .metric-label { font-size: 0.75em; color: #00ddff; margin-bottom: 3px; }
+        .metric-value { font-size: 1em; color: #00ff88; font-weight: bold; }
         .metric-value.real { color: #00ddff; }
-        .metric-unit { font-size: 0.75em; color: #888; margin-left: 5px; }
+        .metric-unit { font-size: 0.7em; color: #888; margin-left: 4px; }
         .main-content {
-            margin-left: 350px;
-            height: calc(100vh - 70px);
+            margin-left: 320px;
+            height: calc(100vh - 60px);
             display: flex;
             flex-direction: column;
         }
@@ -445,6 +502,7 @@ with open('/app/metrics.html', 'w') as f:
             background: rgba(10, 10, 10, 0.95);
             border-bottom: 1px solid #00ff88;
             overflow-x: auto;
+            flex-shrink: 0;
         }
         .tab {
             padding: 10px 15px;
@@ -454,7 +512,7 @@ with open('/app/metrics.html', 'w') as f:
             color: #00ff88;
             font-family: 'Courier New', monospace;
             cursor: pointer;
-            font-size: 0.85em;
+            font-size: 0.8em;
             white-space: nowrap;
         }
         .tab:hover { background: rgba(0, 255, 136, 0.2); }
@@ -472,28 +530,30 @@ with open('/app/metrics.html', 'w') as f:
             display: flex;
             flex-direction: column;
             background: rgba(10, 10, 10, 0.95);
-            padding: 20px;
+            padding: 15px;
+            overflow: hidden;
         }
         .collider-header {
             text-align: center;
-            padding: 15px;
+            padding: 12px;
             border-bottom: 2px solid #00ff88;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
+            flex-shrink: 0;
         }
-        .collider-header h2 { color: #00ddff; font-size: 1.3em; margin-bottom: 8px; }
-        .collider-domain { color: #00ff88; font-size: 0.85em; }
+        .collider-header h2 { color: #00ddff; font-size: 1.2em; margin-bottom: 6px; }
+        .collider-domain { color: #00ff88; font-size: 0.8em; }
         .chat-output {
             flex: 1;
             overflow-y: auto;
-            padding: 15px;
+            padding: 12px;
             background: rgba(0, 0, 0, 0.3);
             border: 1px solid #00ff88;
             border-radius: 5px;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
         .message {
-            margin-bottom: 15px;
-            padding: 12px;
+            margin-bottom: 12px;
+            padding: 10px;
             border-radius: 5px;
         }
         .message.user {
@@ -504,37 +564,37 @@ with open('/app/metrics.html', 'w') as f:
             background: rgba(0, 255, 136, 0.1);
             border-left: 3px solid #00ff88;
         }
-        .message-label { font-size: 0.75em; color: #888; margin-bottom: 5px; }
-        .message-content { color: #00ff88; line-height: 1.5; font-size: 0.9em; }
+        .message-label { font-size: 0.7em; color: #888; margin-bottom: 4px; }
+        .message-content { color: #00ff88; line-height: 1.4; font-size: 0.85em; }
         .qsh-result {
-            font-size: 0.85em;
-            margin-top: 8px;
-            padding: 8px;
+            font-size: 0.8em;
+            margin-top: 6px;
+            padding: 6px;
             background: rgba(0, 0, 0, 0.5);
             border-radius: 3px;
         }
-        .qsh-field { margin: 4px 0; }
+        .qsh-field { margin: 3px 0; }
         .qsh-label {
             color: #00ddff;
             display: inline-block;
-            width: 180px;
-            font-size: 0.9em;
+            width: 160px;
+            font-size: 0.85em;
         }
         .qsh-value { color: #00ff88; }
-        .chat-input-container { display: flex; gap: 10px; }
+        .chat-input-container { display: flex; gap: 8px; flex-shrink: 0; }
         .chat-input {
             flex: 1;
-            padding: 10px;
+            padding: 8px;
             background: rgba(0, 0, 0, 0.5);
             border: 1px solid #00ff88;
             color: #00ff88;
             font-family: 'Courier New', monospace;
             border-radius: 5px;
             outline: none;
-            font-size: 0.9em;
+            font-size: 0.85em;
         }
         .send-button {
-            padding: 10px 25px;
+            padding: 8px 20px;
             background: linear-gradient(135deg, #00ff88, #00ddff);
             color: #0a0a0a;
             border: none;
@@ -542,7 +602,7 @@ with open('/app/metrics.html', 'w') as f:
             font-family: 'Courier New', monospace;
             font-weight: bold;
             cursor: pointer;
-            font-size: 0.9em;
+            font-size: 0.85em;
         }
         
         /* File Server Interface */
@@ -551,15 +611,17 @@ with open('/app/metrics.html', 'w') as f:
             display: flex;
             flex-direction: column;
             background: rgba(10, 10, 10, 0.95);
-            padding: 20px;
+            padding: 15px;
+            overflow: hidden;
         }
         .upload-area {
             border: 2px dashed #00ff88;
             border-radius: 10px;
-            padding: 40px;
+            padding: 30px;
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             background: rgba(0, 255, 136, 0.05);
+            flex-shrink: 0;
         }
         .upload-area.dragover {
             background: rgba(0, 255, 136, 0.2);
@@ -571,17 +633,18 @@ with open('/app/metrics.html', 'w') as f:
             background: rgba(0, 0, 0, 0.3);
             border: 1px solid #00ff88;
             border-radius: 5px;
-            padding: 15px;
+            padding: 12px;
         }
         .file-item {
-            padding: 10px;
-            margin-bottom: 8px;
+            padding: 8px;
+            margin-bottom: 6px;
             background: rgba(0, 255, 136, 0.05);
             border: 1px solid #00ff88;
             border-radius: 5px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            font-size: 0.85em;
         }
         .file-item:hover { background: rgba(0, 255, 136, 0.1); }
         
@@ -591,25 +654,27 @@ with open('/app/metrics.html', 'w') as f:
             display: flex;
             flex-direction: column;
             background: #000;
-            padding: 15px;
+            padding: 12px;
             font-family: 'Courier New', monospace;
+            overflow: hidden;
         }
         .terminal-output {
             flex: 1;
             overflow-y: auto;
             color: #00ff88;
-            margin-bottom: 10px;
-            font-size: 0.9em;
-            line-height: 1.4;
+            margin-bottom: 8px;
+            font-size: 0.85em;
+            line-height: 1.3;
         }
         .terminal-input-line {
             display: flex;
             align-items: center;
+            flex-shrink: 0;
         }
         .terminal-prompt {
             color: #00ddff;
-            margin-right: 8px;
-            font-size: 0.9em;
+            margin-right: 6px;
+            font-size: 0.85em;
         }
         .terminal-input {
             flex: 1;
@@ -618,7 +683,7 @@ with open('/app/metrics.html', 'w') as f:
             color: #00ff88;
             font-family: 'Courier New', monospace;
             outline: none;
-            font-size: 0.9em;
+            font-size: 0.85em;
         }
         
         /* Wireshark */
@@ -627,13 +692,15 @@ with open('/app/metrics.html', 'w') as f:
             display: flex;
             flex-direction: column;
             background: rgba(10, 10, 10, 0.95);
-            padding: 20px;
+            padding: 15px;
+            overflow: hidden;
         }
         .wireshark-header {
             text-align: center;
-            padding: 15px;
+            padding: 12px;
             border-bottom: 2px solid #00ff88;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
+            flex-shrink: 0;
         }
         .packet-list {
             flex: 1;
@@ -641,12 +708,12 @@ with open('/app/metrics.html', 'w') as f:
             background: rgba(0, 0, 0, 0.5);
             border: 1px solid #00ff88;
             border-radius: 5px;
-            padding: 15px;
-            font-size: 0.85em;
+            padding: 12px;
+            font-size: 0.8em;
         }
         .packet {
-            padding: 8px;
-            margin-bottom: 5px;
+            padding: 6px;
+            margin-bottom: 4px;
             background: rgba(0, 255, 136, 0.05);
             border-left: 3px solid #00ff88;
             font-family: 'Courier New', monospace;
@@ -673,7 +740,7 @@ with open('/app/metrics.html', 'w') as f:
     
     <div class="main-content">
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('collider')">⚛️ Collider</button>
+            <button class="tab active" onclick="switchTab('collider')">⚛️ Quantum Collider</button>
             <button class="tab" onclick="switchTab('files')">📁 File Server (127.0.0.1:9999)</button>
             <button class="tab" onclick="switchTab('shell')">🖥️ QSH::FOAM REPL (127.0.0.1:alice)</button>
             <button class="tab" onclick="switchTab('wireshark')">🔍 Wireshark (*.computer)</button>
@@ -707,12 +774,12 @@ with open('/app/metrics.html', 'w') as f:
                     <div class="collider-domain">127.0.0.1:9999</div>
                 </div>
                 <div class="upload-area" id="uploadArea">
-                    <h3 style="color: #00ddff; margin-bottom: 15px;">📤 Upload Files</h3>
-                    <p style="margin-bottom: 15px;">Drag & drop files here or click to browse</p>
+                    <h3 style="color: #00ddff; margin-bottom: 12px;">📤 Upload Files</h3>
+                    <p style="margin-bottom: 12px;">Drag & drop files here or click to browse</p>
                     <input type="file" id="fileInput" multiple style="display:none">
                     <button class="send-button" onclick="document.getElementById('fileInput').click()">SELECT FILES</button>
                 </div>
-                <h3 style="color: #00ddff; margin-bottom: 10px;">📂 Uploaded Files</h3>
+                <h3 style="color: #00ddff; margin-bottom: 8px;">📂 Uploaded Files</h3>
                 <div class="file-list" id="fileList"></div>
             </div>
         </div>
@@ -720,8 +787,7 @@ with open('/app/metrics.html', 'w') as f:
         <!-- Shell Tab -->
         <div id="shell-tab" class="tab-content">
             <div class="terminal">
-                <div class="terminal-output" id="terminalOutput">
-QSH::FOAM REPL v1.0.0 (127.0.0.1:alice)
+                <div class="terminal-output" id="terminalOutput">QSH::FOAM REPL v1.0.0 (127.0.0.1:alice)
 Connected to quantum.realm.domain.dominion.foam.computer.networking
 Type 'help' or '??' for available commands.
 
@@ -739,13 +805,13 @@ Type 'help' or '??' for available commands.
                 <div class="wireshark-header">
                     <h2>🔍 WIRESHARK QUANTUM PACKET ANALYZER</h2>
                     <div class="collider-domain">*.computer domain</div>
-                    <p style="margin-top: 10px; color: #888; font-size: 0.85em;">
+                    <p style="margin-top: 8px; color: #888; font-size: 0.8em;">
                         Monitoring quantum foam network traffic across computational substrate
                     </p>
                 </div>
-                <button class="test-button" onclick="capturePackets()" style="margin-bottom: 15px;">📡 START CAPTURE</button>
+                <button class="test-button" onclick="capturePackets()" style="margin-bottom: 12px;">📡 START CAPTURE</button>
                 <div class="packet-list" id="packetList">
-                    <div style="color: #888; text-align: center; padding: 40px;">
+                    <div style="color: #888; text-align: center; padding: 30px;">
                         Click "START CAPTURE" to begin monitoring quantum packets
                     </div>
                 </div>
@@ -761,9 +827,7 @@ Type 'help' or '??' for available commands.
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             
-            const tabs = {
-                'collider': 0, 'files': 1, 'shell': 2, 'wireshark': 3
-            };
+            const tabs = {'collider': 0, 'files': 1, 'shell': 2, 'wireshark': 3};
             document.getElementById(tabName + '-tab').classList.add('active');
             document.querySelectorAll('.tab')[tabs[tabName]].classList.add('active');
         }
@@ -847,7 +911,7 @@ Type 'help' or '??' for available commands.
                 formData.append('file', file);
                 
                 try {
-                    const res = await fetch('/api/upload', {
+                    await fetch('/api/upload', {
                         method: 'POST',
                         body: formData
                     });
@@ -867,7 +931,7 @@ Type 'help' or '??' for available commands.
                 list.innerHTML = files.map(f => `
                     <div class="file-item">
                         <span>📄 ${f.name} (${formatBytes(f.size)})</span>
-                        <a href="/api/download/${f.name}" class="send-button" style="padding: 5px 15px; font-size: 0.8em;">Download</a>
+                        <a href="/api/download/${f.name}" class="send-button" style="padding: 4px 12px; font-size: 0.75em; text-decoration: none;">Download</a>
                     </div>
                 `).join('');
             } catch (e) {}
@@ -881,9 +945,7 @@ Type 'help' or '??' for available commands.
         
         // Terminal
         function handleTerminalKeyPress(e) {
-            if (e.key === 'Enter') {
-                executeCommand();
-            }
+            if (e.key === 'Enter') executeCommand();
         }
         
         async function executeCommand() {
@@ -925,7 +987,7 @@ Type 'help' or '??' for available commands.
             if (!capturing) {
                 capturing = true;
                 btn.textContent = '⏸️ STOP CAPTURE';
-                list.innerHTML = '<div style="color: #00ddff; margin-bottom: 10px;">📡 Capturing quantum packets...</div>';
+                list.innerHTML = '<div style="color: #00ddff; margin-bottom: 8px;">📡 Capturing quantum packets...</div>';
                 
                 const interval = setInterval(() => {
                     if (!capturing) {
@@ -986,7 +1048,7 @@ Type 'help' or '??' for available commands.
                 
                 document.getElementById('quantumMetrics').innerHTML = `
                     <div class="metric-card">
-                        <div class="metric-label">Qubits Active</div>
+                        <div class="metric-label">Qubits</div>
                         <div class="metric-value">${d.qubits_active}</div>
                     </div>
                     <div class="metric-card">
@@ -1012,72 +1074,4 @@ Type 'help' or '??' for available commands.
         setInterval(loadFiles, 5000);
     </script>
 </body>
-</html>""")
-
-@app.get("/", response_class=HTMLResponse)
-async def splash():
-    return SPLASH_HTML
-
-@app.get("/metrics", response_class=HTMLResponse)
-async def metrics():
-    with open('/app/metrics.html', 'r') as f:
-        return f.read()
-
-@app.get("/api/quantum-metrics")
-async def get_quantum_metrics():
-    return JSONResponse(network_metrics.get_metrics())
-
-@app.post("/api/run-speed-test")
-async def run_speed_test(background_tasks: BackgroundTasks):
-    background_tasks.add_task(network_metrics.run_full_test)
-    return {"status": "test_started"}
-
-@app.post("/api/qsh-query")
-async def qsh_query(query: QSHQuery):
-    result = process_qsh_query(query.query)
-    return JSONResponse(result)
-
-@app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...)):
-    file_path = UPLOAD_DIR / file.filename
-    with open(file_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
-    return {"filename": file.filename, "size": len(content)}
-
-@app.post("/api/upload-test")
-async def upload_test(file: UploadFile = File(...)):
-    """Endpoint for upload speed testing"""
-    content = await file.read()
-    return {"size": len(content)}
-
-@app.get("/api/files")
-async def list_files():
-    files = []
-    for file_path in UPLOAD_DIR.iterdir():
-        if file_path.is_file():
-            files.append({
-                "name": file_path.name,
-                "size": file_path.stat().st_size
-            })
-    return files
-
-@app.get("/api/download/{filename}")
-async def download_file(filename: str):
-    file_path = UPLOAD_DIR / filename
-    if file_path.exists():
-        return FileResponse(file_path)
-    return JSONResponse({"error": "File not found"}, status_code=404)
-
-@app.post("/api/shell")
-async def shell_command(command: ShellCommand):
-    result = execute_shell_command(command.command)
-    return JSONResponse(result)
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+</html>
