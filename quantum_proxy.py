@@ -41,9 +41,9 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 class NetworkMetrics:
     def __init__(self):
         self.start_time = time.time()
-        self.last_download_speed = 0.0
-        self.last_upload_speed = 0.0
-        self.last_ping = 0.0
+        self.last_download_speed = round(random.uniform(50, 200), 2)
+        self.last_upload_speed = round(random.uniform(20, 100), 2)
+        self.last_ping = round(random.uniform(10, 50), 2)
         self.testing = False
         
     async def test_download_speed(self):
@@ -915,7 +915,7 @@ Type 'help' or '??' for available commands.
                         Monitoring quantum foam network traffic across computational substrate
                     </p>
                 </div>
-                <button class="test-button" onclick="capturePackets()" style="margin-bottom: 12px;">📡 START CAPTURE</button>
+                <button class="test-button" onclick="capturePackets(event)" style="margin-bottom: 12px;">📡 START CAPTURE</button>
                 <div class="packet-list" id="packetList">
                     <div style="color: #888; text-align: center; padding: 30px;">
                         Click "START CAPTURE" to begin monitoring quantum packets
@@ -1086,7 +1086,7 @@ Type 'help' or '??' for available commands.
         }
         
         // Wireshark
-        function capturePackets() {
+        function capturePackets(event) {
             const list = document.getElementById('packetList');
             const btn = event.target;
             
@@ -1166,7 +1166,9 @@ Type 'help' or '??' for available commands.
                         <div class="metric-value">${d.transfer_rate_qbps}<span class="metric-unit">Qbps</span></div>
                     </div>
                 `;
-            } catch (e) {}
+            } catch (e) {
+                console.error('Metrics update failed:', e);
+            }
         }
         
         function escapeHtml(text) {
