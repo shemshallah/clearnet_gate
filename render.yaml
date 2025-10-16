@@ -4,15 +4,8 @@ services:
     env: docker
     dockerfilePath: ./Dockerfile
     repo: https://github.com/yourusername/qu-tip-proxy  # Your GitHub repo
-    plan: free  # Or 'starter' for $7/month
-    envVars:
-      - key: REDIS_URL
-        fromDatabase:
-          name: qu-tip-redis
-          property: connectionString
-        generateValue: true
-
-databases:
-  - name: qu-tip-redis
-    databaseName: qu-tip-db
-    plan: starter  # $7/month for Redis
+    plan: free
+    # The application runs on port 8000, which is the default for uvicorn 
+    # and is automatically detected by Render.
+    # Optional: Set the command explicitly if not using CMD in Dockerfile
+    # command: uvicorn quantum_proxy:app --host 0.0.0.0 --port 8000
