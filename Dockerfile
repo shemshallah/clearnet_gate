@@ -25,8 +25,11 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application files
 COPY --from=builder /app .
 
-# Create upload directory (for local fallback, though proxy uses holo storage)
+# Create upload directory (for local fallback)
 RUN mkdir -p /opt/render/project/data/uploads
+
+# Expose volume for persistent local storage (pull files from mounted /opt/render/project/data/uploads)
+VOLUME ["/opt/render/project/data/uploads"]
 
 # Expose port
 EXPOSE 8000
