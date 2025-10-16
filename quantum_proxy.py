@@ -1,4 +1,5 @@
 
+```python
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 import logging
@@ -100,6 +101,34 @@ SPLASH_HTML = """
             left: 0;
         }
         
+        .quantum-button {
+            display: inline-block;
+            margin: 20px auto;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #00ff88, #00ddff);
+            color: #0a0a0a;
+            border: none;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+            text-align: center;
+        }
+        
+        .quantum-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.8);
+        }
+        
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
         .team {
             margin-top: 40px;
             padding-top: 30px;
@@ -151,7 +180,6 @@ SPLASH_HTML = """
             text-shadow: 0 0 5px #00ff88;
         }
         
-        /* Scrollbar styling */
         ::-webkit-scrollbar {
             width: 12px;
         }
@@ -187,6 +215,10 @@ SPLASH_HTML = """
                 including Bell state pairs, GHZ states, quantum teleportation, and quantum key distribution 
                 (BB84 & E91) to create a bridge between quantum and classical computing realms.
             </p>
+        </div>
+        
+        <div class="button-container">
+            <a href="/metrics" class="quantum-button">📊 NETWORK METRICS & SPEEDTEST</a>
         </div>
         
         <div class="features">
@@ -231,9 +263,197 @@ SPLASH_HTML = """
 </html>
 """
 
+METRICS_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quantum Network Metrics</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+            color: #00ff88;
+            font-family: 'Courier New', monospace;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            padding: 20px;
+            background: rgba(10, 10, 10, 0.9);
+            border-bottom: 2px solid #00ff88;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 1.8em;
+            text-shadow: 0 0 10px #00ff88;
+        }
+        
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .nav-button {
+            padding: 10px 20px;
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+        
+        .nav-button:hover {
+            background: rgba(0, 255, 136, 0.4);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+        
+        .nav-button.active {
+            background: rgba(0, 221, 255, 0.3);
+            border-color: #00ddff;
+            color: #00ddff;
+        }
+        
+        .browser-controls {
+            padding: 10px 20px;
+            background: rgba(10, 10, 10, 0.95);
+            border-bottom: 1px solid #00ff88;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .url-bar {
+            flex: 1;
+            padding: 8px 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            font-family: 'Courier New', monospace;
+            border-radius: 5px;
+            outline: none;
+        }
+        
+        .control-btn {
+            padding: 8px 15px;
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .control-btn:hover {
+            background: rgba(0, 255, 136, 0.4);
+        }
+        
+        .browser-frame {
+            flex: 1;
+            border: none;
+            background: white;
+        }
+        
+        .back-link {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 20px;
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            border-radius: 5px;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        
+        .back-link:hover {
+            background: rgba(0, 255, 136, 0.4);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Quantum Network Metrics</h1>
+        <div class="nav-buttons">
+            <a href="/" class="nav-button">⬅️ Back to Main</a>
+        </div>
+    </div>
+    
+    <div class="browser-controls">
+        <button class="control-btn" onclick="navigateTo('https://www.speedtest.net/')">⚡ Speedtest</button>
+        <button class="control-btn" onclick="navigateTo('https://fast.com/')">🚀 Fast.com</button>
+        <button class="control-btn" onclick="navigateTo('https://www.google.com/search?q=my+ip')">🌐 My IP</button>
+        <button class="control-btn" onclick="navigateTo('https://www.cloudflare.com/cdn-cgi/trace')">📡 CF Trace</button>
+        <input type="text" class="url-bar" id="urlBar" placeholder="Enter URL..." onkeypress="handleKeyPress(event)">
+        <button class="control-btn" onclick="navigateToUrl()">GO</button>
+        <button class="control-btn" onclick="reloadFrame()">🔄</button>
+    </div>
+    
+    <iframe id="browserFrame" class="browser-frame" src="https://www.speedtest.net/"></iframe>
+    
+    <script>
+        function navigateTo(url) {
+            document.getElementById('browserFrame').src = url;
+            document.getElementById('urlBar').value = url;
+        }
+        
+        function navigateToUrl() {
+            let url = document.getElementById('urlBar').value;
+            if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+            }
+            if (url) {
+                navigateTo(url);
+            }
+        }
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                navigateToUrl();
+            }
+        }
+        
+        function reloadFrame() {
+            document.getElementById('browserFrame').src = document.getElementById('browserFrame').src;
+        }
+        
+        // Update URL bar when iframe navigates (if same-origin)
+        setInterval(() => {
+            try {
+                const iframe = document.getElementById('browserFrame');
+                if (iframe.contentWindow.location.href !== 'about:blank') {
+                    document.getElementById('urlBar').value = iframe.contentWindow.location.href;
+                }
+            } catch(e) {
+                // Cross-origin restriction - ignore
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
+"""
+
 @app.get("/", response_class=HTMLResponse)
 async def splash():
     return SPLASH_HTML
+
+@app.get("/metrics", response_class=HTMLResponse)
+async def metrics():
+    return METRICS_HTML
 
 @app.get("/health")
 async def health():
@@ -242,3 +462,4 @@ async def health():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+```
