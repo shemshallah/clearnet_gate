@@ -1,24 +1,69 @@
-__pycache__
-*.pyc
-*.pyo
-*.pyd
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
 env/
 venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs
+*.log
+
+# Runtime data
+.pytest_cache/
 .coverage
-.coverage.*
+htmlcov/
 .cache
 nosetests.xml
 coverage.xml
 *.cover
-*.log
-.git
-.gitignore
-README.md
-Dockerfile
-.dockerignore
-
+*.py,cover
+.hypothesis/
+.profile
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
