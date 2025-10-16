@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Metrics | QFN</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+            color: #00ff88;
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px;
+            background: rgba(10, 10, 10, 0.9);
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+        }
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-shadow: 0 0 10px #00ff88;
+        }
+        .back-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+            border-radius: 5px;
+            color: #00ff88;
+            text-decoration: none;
+            margin-bottom: 20px;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .metric-card {
+            padding: 20px;
+            background: rgba(0, 136, 255, 0.1);
+            border: 1px solid #0088ff;
+            border-radius: 8px;
+        }
+        .metric-title {
+            font-size: 1.3em;
+            color: #00ddff;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        .metric-value {
+            font-size: 2em;
+            color: #00ff88;
+            font-weight: bold;
+        }
+        .metric-label {
+            color: #888;
+            margin-top: 5px;
+        }
+        .speed-test-btn {
+            padding: 10px 20px;
+            background: #00ff88;
+            color: #0a0a0a;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .speed-test-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .speed-result {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 255, 136, 0.1);
+            border-radius: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-btn">← Back to Home</a>
+        <h1>📊 REAL-TIME METRICS</h1>
+        
+        <div class="metrics-grid" id="metricsGrid">
+            <!-- Metrics populated by JS -->
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px;">
+            <button class="speed-test-btn" onclick="runSpeedTest()">🚀 Run Network Speed Test</button>
+            <div class="speed-result" id="speedResult"></div>
+        </div>
+    </div>
+    
+    <script>
+        async function updateMetrics() {
+            try {
+                const response = await fetch('/api/metrics');
+                const metrics = await response.json();
+                
+                const grid = document.getElementById('metricsGrid');
+                grid.innerHTML = `
+                    <div class="metric-card">
+                        <div class="metric-title">🌐 Network Throughput</div>
+                        <div class="metric-value">${metrics.network_throughput} Mbps</div>
+                        <div class="metric-label">Current upload/download speed</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">⚛️ EPR Pair Rate</div>
+                        <div class="metric-value">${metrics.epr_rate}/s</div>
+                        <div class="metric-label">Entangled pairs generated per second</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">🔒 Entanglement Fidelity</div>
+                        <div class="metric-value">${metrics.entanglement_fidelity}%</div>
+                        <div class="metric-label">Quantum state preservation</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">📡 Holo Storage Latency</div>
+                        <div class="metric-value">${metrics.holo_latency} ms</div>
+                        <div class="metric-label">Round-trip to storage node</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">🛡️ QKD Key Rate</div>
+                        <div class="metric-value">${metrics.qkd_key_rate} bps</div>
+                        <div class="metric-label">Secure key generation rate</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">🌊 Foam Density</div>
+                        <div class="metric-value">${metrics.foam_density}</div>
+                        <div class="metric-label">Quantum foam perturbations</div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error updating metrics:', error);
+            }
+        }
+        
+        async function runSpeedTest() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Testing...';
+            const resultDiv = document.getElementById('speedResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = 'Running speed test...';
+            
+            try {
+                const start = performance.now();
+                const response = await fetch('/api/speed-test');
+                const end = performance.now();
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `
+                    <strong>Speed Test Results:</strong><br>
+                    Download: ${data.download} Mbps<br>
+                    Upload: ${data.upload} Mbps<br>
+                    Latency: ${(end - start).toFixed(2)} ms<br>
+                    Jitter: ${data.jitter} ms
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = 'Speed test failed: ' + error.message;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 Run Network Speed Test';
+            }
+        }
+        
+        // Update every 5 seconds
+        setInterval(updateMetrics, 5000);
+        updateMetrics(); // Initial load
+    </script>
+</body>
+</html>
