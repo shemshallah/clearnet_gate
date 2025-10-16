@@ -10,8 +10,8 @@ COPY requirements.txt .
 # Debug: Print requirements.txt content to logs (remove after fixing)
 RUN cat requirements.txt
 
-# Install dependencies (no cache to reduce image size; trusted-host for potential network issues)
-RUN pip install --no-cache-dir --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r requirements.txt
+# Install dependencies (with timeout to fix network issues; no cache to reduce size)
+RUN pip install --no-cache-dir --default-timeout=100 --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r requirements.txt
 
 # Copy the entire application code (includes main.py and all .html files)
 COPY . .
