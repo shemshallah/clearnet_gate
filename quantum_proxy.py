@@ -414,17 +414,18 @@ METRICS_HTML = """
             background: rgba(0, 255, 136, 0.4);
             box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
         }
-        .metrics-sidebar {
-            position: fixed;
-            left: 0;
-            top: 60px;
-            width: 320px;
+        .main-layout {
+            display: flex;
             height: calc(100vh - 60px);
+            position: relative;
+        }
+        .metrics-sidebar {
+            width: 320px;
             background: rgba(10, 10, 10, 0.95);
             border-right: 2px solid #00ff88;
             padding: 15px;
             overflow-y: auto;
-            z-index: 10;
+            flex-shrink: 0;
         }
         .metrics-title {
             font-size: 1em;
@@ -434,7 +435,7 @@ METRICS_HTML = """
             border-bottom: 1px solid #00ff88;
             padding-bottom: 8px;
         }
-        .test-button {
+        .test-button, .wireshark-sidebar-button {
             width: 100%;
             padding: 8px;
             background: linear-gradient(135deg, #00ff88, #00ddff);
@@ -447,7 +448,7 @@ METRICS_HTML = """
             cursor: pointer;
             margin-bottom: 12px;
         }
-        .test-button:hover {
+        .test-button:hover, .wireshark-sidebar-button:hover {
             opacity: 0.9;
         }
         .test-button:disabled {
@@ -466,10 +467,10 @@ METRICS_HTML = """
         .metric-value.real { color: #00ddff; }
         .metric-unit { font-size: 0.7em; color: #888; margin-left: 4px; }
         .main-content {
-            margin-left: 320px;
-            height: calc(100vh - 60px);
+            flex: 1;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
         .tabs {
             display: flex;
@@ -590,49 +591,6 @@ METRICS_HTML = """
             cursor: not-allowed;
         }
         
-        /* File Server Interface */
-        .file-server {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: rgba(10, 10, 10, 0.95);
-            padding: 15px;
-            overflow: hidden;
-        }
-        .upload-area {
-            border: 2px dashed #00ff88;
-            border-radius: 10px;
-            padding: 30px;
-            text-align: center;
-            margin-bottom: 15px;
-            background: rgba(0, 255, 136, 0.05);
-            flex-shrink: 0;
-        }
-        .upload-area.dragover {
-            background: rgba(0, 255, 136, 0.2);
-            border-color: #00ddff;
-        }
-        .file-list {
-            flex: 1;
-            overflow-y: auto;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid #00ff88;
-            border-radius: 5px;
-            padding: 12px;
-        }
-        .file-item {
-            padding: 8px;
-            margin-bottom: 6px;
-            background: rgba(0, 255, 136, 0.05);
-            border: 1px solid #00ff88;
-            border-radius: 5px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.85em;
-        }
-        .file-item:hover { background: rgba(0, 255, 136, 0.1); }
-        
         /* Terminal */
         .terminal {
             flex: 1;
@@ -706,6 +664,66 @@ METRICS_HTML = """
         }
         .packet:hover { background: rgba(0, 255, 136, 0.1); }
         
+        /* File Browser (Microbrowser at bottom left) */
+        .file-browser {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 320px;
+            height: 300px;
+            background: rgba(10, 10, 10, 0.98);
+            border-top: 2px solid #00ff88;
+            border-right: 2px solid #00ff88;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+        .file-browser-header {
+            padding: 8px 12px;
+            background: rgba(0, 255, 136, 0.2);
+            border-bottom: 1px solid #00ff88;
+            font-size: 0.9em;
+            color: #00ddff;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .file-browser-close {
+            cursor: pointer;
+            color: #ff4444;
+            font-weight: bold;
+        }
+        .file-browser-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+        .file-browser-item {
+            padding: 6px;
+            margin-bottom: 4px;
+            background: rgba(0, 255, 136, 0.05);
+            border: 1px solid #00ff88;
+            border-radius: 3px;
+            font-size: 0.75em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .file-browser-item:hover { background: rgba(0, 255, 136, 0.1); }
+        .file-upload-btn {
+            padding: 6px 12px;
+            background: linear-gradient(135deg, #00ff88, #00ddff);
+            color: #0a0a0a;
+            border: none;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75em;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 8px;
+        }
+        
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0a0a0a; }
         ::-webkit-scrollbar-thumb { background: #00ff88; border-radius: 4px; }
@@ -717,91 +735,88 @@ METRICS_HTML = """
         <a href="/" class="nav-button">⬅️ Back to Main</a>
     </div>
     
-    <div class="metrics-sidebar">
-        <div class="metrics-title">⚛️ LIVE METRICS</div>
-        <button type="button" class="test-button" id="speedTestButton">🚀 RUN SPEED TEST</button>
-        <div id="realMetrics"><div class="metric-card"><div class="metric-label">Loading...</div></div></div>
-        <div id="quantumMetrics"><div class="metric-card"><div class="metric-label">Loading...</div></div></div>
-    </div>
-    
-    <div class="main-content">
-        <div class="tabs">
-            <button type="button" class="tab active" data-tab="collider">⚛️ Quantum Collider</button>
-            <button type="button" class="tab" data-tab="files">📁 File Server (127.0.0.1:9999)</button>
-            <button type="button" class="tab" data-tab="shell">🖥️ QSH::FOAM REPL (127.0.0.1:alice)</button>
-            <button type="button" class="tab" data-tab="wireshark">🔍 Wireshark (*.computer)</button>
+    <div class="main-layout">
+        <div class="metrics-sidebar">
+            <div class="metrics-title">⚛️ LIVE METRICS</div>
+            <button type="button" class="test-button" id="speedTestButton">🚀 RUN SPEED TEST</button>
+            <button type="button" class="wireshark-sidebar-button" id="wiresharkSidebarButton">🔍 WIRESHARK</button>
+            <div id="realMetrics"><div class="metric-card"><div class="metric-label">Loading...</div></div></div>
+            <div id="quantumMetrics"><div class="metric-card"><div class="metric-label">Loading...</div></div></div>
         </div>
         
-        <!-- Quantum Collider Tab -->
-        <div id="collider-tab" class="tab-content active">
-            <div class="collider-interface">
-                <div class="collider-header">
-                    <h2>⚛️ QUANTUM COLLIDER & QSH QUERY</h2>
-                    <div class="collider-domain">quantum.realm.domain.dominion.foam.computer.collider</div>
-                </div>
-                <div class="chat-output" id="chatOutput">
-                    <div class="message system">
-                        <div class="message-label">SYSTEM</div>
-                        <div class="message-content">Welcome to the Quantum Collider interface. Enter your query below.</div>
+        <div class="main-content">
+            <div class="tabs">
+                <button type="button" class="tab active" data-tab="collider">⚛️ Quantum Collider</button>
+                <button type="button" class="tab" data-tab="shell">🖥️ QSH::FOAM REPL</button>
+                <button type="button" class="tab" data-tab="wireshark">🔍 Wireshark</button>
+            </div>
+            
+            <!-- Quantum Collider Tab -->
+            <div id="collider-tab" class="tab-content active">
+                <div class="collider-interface">
+                    <div class="collider-header">
+                        <h2>⚛️ QUANTUM COLLIDER & QSH QUERY</h2>
+                        <div class="collider-domain">quantum.realm.domain.dominion.foam.computer.collider</div>
+                    </div>
+                    <div class="chat-output" id="chatOutput">
+                        <div class="message system">
+                            <div class="message-label">SYSTEM</div>
+                            <div class="message-content">Welcome to the Quantum Collider interface. Enter your query below.</div>
+                        </div>
+                    </div>
+                    <div class="chat-input-container">
+                        <input type="text" class="chat-input" id="chatInput" placeholder="Enter QSH query...">
+                        <button type="button" class="send-button" id="sendButton">SEND</button>
                     </div>
                 </div>
-                <div class="chat-input-container">
-                    <input type="text" class="chat-input" id="chatInput" placeholder="Enter QSH query...">
-                    <button type="button" class="send-button" id="sendButton">SEND</button>
-                </div>
             </div>
-        </div>
-        
-        <!-- File Server Tab -->
-        <div id="files-tab" class="tab-content">
-            <div class="file-server">
-                <div class="collider-header">
-                    <h2>📁 FILE SERVER</h2>
-                    <div class="collider-domain">127.0.0.1:9999</div>
-                </div>
-                <div class="upload-area" id="uploadArea">
-                    <h3 style="color: #00ddff; margin-bottom: 12px;">📤 Upload Files</h3>
-                    <p style="margin-bottom: 12px;">Drag & drop files here or click to browse</p>
-                    <input type="file" id="fileInput" multiple style="display:none">
-                    <button type="button" class="send-button" id="fileSelectButton">SELECT FILES</button>
-                </div>
-                <h3 style="color: #00ddff; margin-bottom: 8px;">📂 Uploaded Files</h3>
-                <div class="file-list" id="fileList"></div>
-            </div>
-        </div>
-        
-        <!-- Shell Tab -->
-        <div id="shell-tab" class="tab-content">
-            <div class="terminal">
-                <div class="terminal-output" id="terminalOutput">QSH::FOAM REPL v1.0.0 (127.0.0.1:alice)
+            
+            <!-- Shell Tab -->
+            <div id="shell-tab" class="tab-content">
+                <div class="terminal">
+                    <div class="terminal-output" id="terminalOutput">QSH::FOAM REPL v1.0.0 (127.0.0.1:alice)
 Connected to quantum.realm.domain.dominion.foam.computer.networking
 Type 'help' or '??' for available commands.
 
 </div>
-                <div class="terminal-input-line">
-                    <span class="terminal-prompt">foam@alice:~$</span>
-                    <input type="text" class="terminal-input" id="terminalInput" autofocus>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Wireshark Tab -->
-        <div id="wireshark-tab" class="tab-content">
-            <div class="wireshark-container">
-                <div class="wireshark-header">
-                    <h2>🔍 WIRESHARK QUANTUM PACKET ANALYZER</h2>
-                    <div class="collider-domain">*.computer domain</div>
-                    <p style="margin-top: 8px; color: #888; font-size: 0.8em;">
-                        Monitoring quantum foam network traffic across computational substrate
-                    </p>
-                </div>
-                <button type="button" class="test-button" id="captureButton" style="margin-bottom: 12px;">📡 START CAPTURE</button>
-                <div class="packet-list" id="packetList">
-                    <div style="color: #888; text-align: center; padding: 30px;">
-                        Click "START CAPTURE" to begin monitoring quantum packets
+                    <div class="terminal-input-line">
+                        <span class="terminal-prompt">foam@alice:~$</span>
+                        <input type="text" class="terminal-input" id="terminalInput" autofocus>
                     </div>
                 </div>
             </div>
+            
+            <!-- Wireshark Tab -->
+            <div id="wireshark-tab" class="tab-content">
+                <div class="wireshark-container">
+                    <div class="wireshark-header">
+                        <h2>🔍 WIRESHARK QUANTUM PACKET ANALYZER</h2>
+                        <div class="collider-domain">*.computer domain</div>
+                        <p style="margin-top: 8px; color: #888; font-size: 0.8em;">
+                            Monitoring quantum foam network traffic across computational substrate
+                        </p>
+                    </div>
+                    <button type="button" class="test-button" id="captureButton" style="margin-bottom: 12px;">📡 START CAPTURE</button>
+                    <div class="packet-list" id="packetList">
+                        <div style="color: #888; text-align: center; padding: 30px;">
+                            Click "START CAPTURE" to begin monitoring quantum packets
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- File Browser Microbrowser (Bottom Left) -->
+    <div class="file-browser" id="fileBrowser">
+        <div class="file-browser-header">
+            📁 FILE BROWSER (127.0.0.1:9999)
+            <span class="file-browser-close" id="fileBrowserClose">✕</span>
+        </div>
+        <input type="file" id="fileInput" multiple style="display:none">
+        <button type="button" class="file-upload-btn" id="fileSelectButton">📤 UPLOAD FILES</button>
+        <div class="file-browser-content" id="fileBrowserContent">
+            <div style="color: #888; text-align: center; padding: 20px; font-size: 0.8em;">No files uploaded</div>
         </div>
     </div>
     
@@ -821,7 +836,6 @@ Type 'help' or '??' for available commands.
             });
             
             function switchTab(tabName) {
-                console.log('Switching to tab:', tabName); // Debug
                 // Hide all tab contents
                 document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
                 // Deactivate all tabs
@@ -839,14 +853,20 @@ Type 'help' or '??' for available commands.
                 }
             }
             
+            // Wireshark sidebar button
+            document.getElementById('wiresharkSidebarButton').addEventListener('click', function() {
+                switchTab('wireshark');
+            });
+            
             // Quantum Collider
             const chatInput = document.getElementById('chatInput');
             const sendButton = document.getElementById('sendButton');
-            function handleChatKeyPress(e) {
+            
+            chatInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     sendQuery();
                 }
-            }
+            });
             
             async function sendQuery() {
                 const query = chatInput.value.trim();
@@ -898,27 +918,23 @@ Type 'help' or '??' for available commands.
                 output.scrollTop = output.scrollHeight;
             }
             
-            // File Server
-            const uploadArea = document.getElementById('uploadArea');
+            sendButton.addEventListener('click', sendQuery);
+            
+            // File Browser
+            const fileBrowser = document.getElementById('fileBrowser');
+            const fileBrowserClose = document.getElementById('fileBrowserClose');
             const fileInput = document.getElementById('fileInput');
             
-            uploadArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                uploadArea.classList.add('dragover');
-            });
-            
-            uploadArea.addEventListener('dragleave', () => {
-                uploadArea.classList.remove('dragover');
-            });
-            
-            uploadArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                uploadArea.classList.remove('dragover');
-                handleFiles(e.dataTransfer.files);
+            fileBrowserClose.addEventListener('click', () => {
+                fileBrowser.style.display = 'none';
             });
             
             fileInput.addEventListener('change', (e) => {
                 handleFiles(e.target.files);
+            });
+            
+            document.getElementById('fileSelectButton').addEventListener('click', () => {
+                fileInput.click();
             });
             
             async function handleFiles(files) {
@@ -948,20 +964,20 @@ Type 'help' or '??' for available commands.
                         throw new Error(`HTTP error! status: ${res.status}`);
                     }
                     const files = await res.json();
-                    const list = document.getElementById('fileList');
+                    const content = document.getElementById('fileBrowserContent');
                     
                     if (files.length === 0) {
-                        list.innerHTML = '<div style="color: #888; text-align: center; padding: 20px;">No files uploaded yet</div>';
+                        content.innerHTML = '<div style="color: #888; text-align: center; padding: 20px; font-size: 0.8em;">No files uploaded</div>';
                     } else {
-                        list.innerHTML = files.map(f => `
-                            <div class="file-item">
-                                <span>📄 ${escapeHtml(f.name)} (${formatBytes(f.size)})</span>
-                                <a href="/api/download/${encodeURIComponent(f.name)}" class="send-button" style="padding: 4px 12px; font-size: 0.75em; text-decoration: none;">Download</a>
+                        content.innerHTML = files.map(f => `
+                            <div class="file-browser-item">
+                                <span>📄 ${escapeHtml(f.name)}<br><small style="color: #888;">${formatBytes(f.size)}</small></span>
+                                <a href="/api/download/${encodeURIComponent(f.name)}" class="send-button" style="padding: 4px 8px; font-size: 0.7em; text-decoration: none;">⬇️</a>
                             </div>
                         `).join('');
                     }
                 } catch (e) {
-                    document.getElementById('fileList').innerHTML = '<div style="color: #888; text-align: center; padding: 20px;">Failed to load files: ' + e.message + '</div>';
+                    document.getElementById('fileBrowserContent').innerHTML = '<div style="color: #888; text-align: center; padding: 20px; font-size: 0.8em;">Failed to load</div>';
                     console.error('Failed to load files:', e);
                 }
             }
@@ -974,11 +990,12 @@ Type 'help' or '??' for available commands.
             
             // Terminal
             const terminalInput = document.getElementById('terminalInput');
-            function handleTerminalKeyPress(e) {
+            
+            terminalInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     executeCommand();
                 }
-            }
+            });
             
             async function executeCommand() {
                 const input = terminalInput;
@@ -1015,7 +1032,7 @@ Type 'help' or '??' for available commands.
             }
             
             // Wireshark
-            function capturePackets(e) {
+            document.getElementById('captureButton').addEventListener('click', function(e) {
                 e.preventDefault();
                 const list = document.getElementById('packetList');
                 const btn = e.target;
@@ -1062,10 +1079,10 @@ Type 'help' or '??' for available commands.
                         captureInterval = null;
                     }
                 }
-            }
+            });
             
             // Metrics
-            async function runSpeedTest(e) {
+            document.getElementById('speedTestButton').addEventListener('click', async function(e) {
                 e.preventDefault();
                 const btn = e.target;
                 btn.disabled = true;
@@ -1084,7 +1101,7 @@ Type 'help' or '??' for available commands.
                     btn.disabled = false;
                     btn.textContent = '🚀 RUN SPEED TEST';
                 }
-            }
+            });
             
             async function updateMetrics() {
                 try {
@@ -1093,7 +1110,6 @@ Type 'help' or '??' for available commands.
                         throw new Error(`HTTP error! status: ${res.status}`);
                     }
                     const d = await res.json();
-                    console.log('Metrics updated:', d); // Debug
                     
                     document.getElementById('realMetrics').innerHTML = `
                         <div class="metric-card">
@@ -1150,8 +1166,6 @@ Type 'help' or '??' for available commands.
                     `;
                 } catch (e) {
                     console.error('Metrics update failed:', e);
-                    document.getElementById('realMetrics').innerHTML = '<div class="metric-card"><div class="metric-label">Error</div><div class="metric-value">Failed to load real metrics</div></div>';
-                    document.getElementById('quantumMetrics').innerHTML = '<div class="metric-card"><div class="metric-label">Error</div><div class="metric-value">Failed to load quantum metrics</div></div>';
                 }
             }
             
@@ -1168,13 +1182,6 @@ Type 'help' or '??' for available commands.
             }
             
             // Initialize
-            document.getElementById('speedTestButton').addEventListener('click', runSpeedTest);
-            sendButton.addEventListener('click', sendQuery);
-            chatInput.addEventListener('keypress', handleChatKeyPress);
-            terminalInput.addEventListener('keypress', handleTerminalKeyPress);
-            document.getElementById('captureButton').addEventListener('click', capturePackets);
-            document.getElementById('fileSelectButton').addEventListener('click', () => fileInput.click());
-            
             updateMetrics();
             setInterval(updateMetrics, 3000);
             loadFiles();
@@ -1254,5 +1261,5 @@ if __name__ == "__main__":
     logger.info("Quantum Foam Network starting...")
     
     import uvicorn
-    port = int(os.getenv("PORT", 8000))  # Use Railway's PORT env var, fallback to 8000 locally
+    port = int(os.getenv("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
