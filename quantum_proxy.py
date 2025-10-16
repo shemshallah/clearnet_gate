@@ -10,10 +10,6 @@ import httpx
 import os
 import subprocess
 from pathlib import Path
-import socket
-import threading
-import select
-import struct
 import hashlib
 import re
 
@@ -821,371 +817,364 @@ Type 'help' or '??' for available commands.
     </div>
     
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            let capturing = false;
-            let packetId = 1;
-            let captureInterval = null;
+        console.log('Page loaded, initializing...');
+        
+        // Global state
+        let capturing = false;
+        let packetId = 1;
+        let captureInterval = null;
+        
+        // Utility functions
+        function escapeHtml(text) {
+            const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
+            return String(text).replace(/[&<>"']/g, m => map[m]);
+        }
+        
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+            return (bytes/(1024*1024)).toFixed(1) + ' MB';
+        }
+        
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            return `${hours}h ${minutes}m ${secs}s`;
+        }
+        
+        // Tab switching
+        function switchTab(tabName) {
+            console.log('Switching to tab:', tabName);
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             
-            // Tab switching
+            const targetTab = document.getElementById(tabName + '-tab');
+            if (targetTab) targetTab.classList.add('active');
+            
+            const targetButton = document.querySelector(`[data-tab="${tabName}"]`);
+            if (targetButton) targetButton.classList.add('active');
+        }
+        
+        // Metrics
+        async function updateMetrics() {
+            try {
+                const res = await fetch('/api/quantum-metrics');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const d = await res.json();
+                
+                document.getElementById('realMetrics').innerHTML = `
+                    <div class="metric-card">
+                        <div class="metric-label">⬇️ Download</div>
+                        <div class="metric-value real">${d.download_speed_mbps}<span class="metric-unit">Mbps</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">⬆️ Upload</div>
+                        <div class="metric-value real">${d.upload_speed_mbps}<span class="metric-unit">Mbps</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">📶 Ping</div>
+                        <div class="metric-value real">${d.ping_ms}<span class="metric-unit">ms</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">⚡ Network Throughput</div>
+                        <div class="metric-value">${d.network_throughput_mbps}<span class="metric-unit">Mbps</span></div>
+                    </div>
+                `;
+                
+                document.getElementById('quantumMetrics').innerHTML = `
+                    <div class="metric-card">
+                        <div class="metric-label">🔮 Qubits Active</div>
+                        <div class="metric-value">${d.qubits_active}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">🔗 EPR Pairs</div>
+                        <div class="metric-value">${d.epr_pairs}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">📡 Transfer Rate</div>
+                        <div class="metric-value">${d.transfer_rate_qbps}<span class="metric-unit">Qbps</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">✨ Entanglement Fidelity</div>
+                        <div class="metric-value">${d.entanglement_fidelity}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">⏱️ Decoherence Time</div>
+                        <div class="metric-value">${d.decoherence_time_ms}<span class="metric-unit">ms</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">🌀 Foam Density</div>
+                        <div class="metric-value">${d.foam_density}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">🎯 Teleportation Success</div>
+                        <div class="metric-value">${(d.teleportation_success_rate * 100).toFixed(1)}<span class="metric-unit">%</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">⏰ Uptime</div>
+                        <div class="metric-value">${formatUptime(d.uptime_seconds)}</div>
+                    </div>
+                `;
+            } catch (e) {
+                console.error('Metrics update failed:', e);
+            }
+        }
+        
+        // File Browser
+        async function loadFiles() {
+            try {
+                const res = await fetch('/api/files');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const files = await res.json();
+                const content = document.getElementById('fileBrowserContent');
+                
+                if (files.length === 0) {
+                    content.innerHTML = '<div style="color: #888; text-align: center; padding: 20px; font-size: 0.8em;">No files uploaded</div>';
+                } else {
+                    content.innerHTML = files.map(f => `
+                        <div class="file-browser-item">
+                            <span>📄 ${escapeHtml(f.name)}<br><small style="color: #888;">${formatBytes(f.size)}</small></span>
+                            <a href="/api/download/${encodeURIComponent(f.name)}" class="send-button" style="padding: 4px 8px; font-size: 0.7em; text-decoration: none;">⬇️</a>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error('Failed to load files:', e);
+            }
+        }
+        
+        async function handleFiles(files) {
+            for (let file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const res = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                } catch (e) {
+                    alert('Upload failed: ' + e.message);
+                }
+            }
+            await loadFiles();
+        }
+        
+        // Quantum Collider
+        async function sendQuery() {
+            const input = document.getElementById('chatInput');
+            const button = document.getElementById('sendButton');
+            const output = document.getElementById('chatOutput');
+            const query = input.value.trim();
+            
+            if (!query || button.disabled) return;
+            
+            output.innerHTML += `
+                <div class="message user">
+                    <div class="message-label">USER QUERY</div>
+                    <div class="message-content">${escapeHtml(query)}</div>
+                </div>
+            `;
+            input.value = '';
+            button.disabled = true;
+            
+            try {
+                const res = await fetch('/api/qsh-query', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query})
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                
+                output.innerHTML += `
+                    <div class="message system">
+                        <div class="message-label">QUANTUM COLLIDER</div>
+                        <div class="message-content">
+                            Query processed through quantum collision system.
+                            <div class="qsh-result">
+                                <div class="qsh-field"><span class="qsh-label">QSH Hash:</span><span class="qsh-value">${data.qsh_hash}</span></div>
+                                <div class="qsh-field"><span class="qsh-label">Classical Hash:</span><span class="qsh-value">${data.classical_hash.substring(0, 32)}...</span></div>
+                                <div class="qsh-field"><span class="qsh-label">Entanglement Strength:</span><span class="qsh-value">${data.entanglement_strength}</span></div>
+                                <div class="qsh-field"><span class="qsh-label">Collision Energy:</span><span class="qsh-value">${data.collision_energy_gev} GeV</span></div>
+                                <div class="qsh-field"><span class="qsh-label">Particle States:</span><span class="qsh-value">${data.particle_states_generated}</span></div>
+                                <div class="qsh-field"><span class="qsh-label">Foam Perturbations:</span><span class="qsh-value">${data.foam_perturbations}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (e) {
+                output.innerHTML += `<div class="message system"><div class="message-content">Error: ${e.message}</div></div>`;
+            } finally {
+                button.disabled = false;
+            }
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        // Terminal
+        async function executeCommand() {
+            const input = document.getElementById('terminalInput');
+            const output = document.getElementById('terminalOutput');
+            const command = input.value.trim();
+            
+            if (!command) return;
+            
+            if (command === 'clear') {
+                output.textContent = '';
+                input.value = '';
+                return;
+            }
+            
+            output.textContent += `foam@alice:~$ ${command}\n`;
+            input.value = '';
+            
+            try {
+                const res = await fetch('/api/shell', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({command})
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                output.textContent += data.output + '\n\n';
+            } catch (e) {
+                output.textContent += `Error: ${e.message}\n\n`;
+            }
+            
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        // Wireshark
+        function toggleCapture() {
+            const list = document.getElementById('packetList');
+            const btn = document.getElementById('captureButton');
+            
+            if (!capturing) {
+                capturing = true;
+                btn.textContent = '⏸️ STOP CAPTURE';
+                list.innerHTML = '<div style="color: #00ddff; margin-bottom: 8px;">📡 Capturing quantum packets...</div>';
+                
+                captureInterval = setInterval(() => {
+                    const protocols = ['EPR', 'QKD-BB84', 'QKD-E91', 'QSH', 'QRAM', 'TELEPORT'];
+                    const proto = protocols[Math.floor(Math.random() * protocols.length)];
+                    const src = `10.0.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
+                    const dst = `10.0.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
+                    const qubits = Math.floor(Math.random() * 128) + 1;
+                    
+                    const packet = document.createElement('div');
+                    packet.className = 'packet';
+                    packet.innerHTML = `
+                        <span style="color: #888;">#${packetId++}</span> 
+                        <span style="color: #00ddff;">${proto}</span> 
+                        ${src} → ${dst} 
+                        <span style="color: #00ff88;">${qubits} qubits</span> 
+                        <span style="color: #888;">${new Date().toLocaleTimeString()}</span>
+                    `;
+                    list.appendChild(packet);
+                    list.scrollTop = list.scrollHeight;
+                    
+                    while (list.children.length > 101) {
+                        list.removeChild(list.children[1]);
+                    }
+                }, 500);
+            } else {
+                capturing = false;
+                btn.textContent = '📡 START CAPTURE';
+                if (captureInterval) {
+                    clearInterval(captureInterval);
+                    captureInterval = null;
+                }
+            }
+        }
+        
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM ready, attaching event listeners');
+            
+            // Tab buttons
             document.querySelectorAll('.tab').forEach(tab => {
-                tab.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const tabName = this.getAttribute('data-tab');
-                    switchTab(tabName);
+                tab.addEventListener('click', function() {
+                    switchTab(this.getAttribute('data-tab'));
                 });
             });
             
-            function switchTab(tabName) {
-                // Hide all tab contents
-                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-                // Deactivate all tabs
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                
-                // Show selected tab content
-                const targetTab = document.getElementById(tabName + '-tab');
-                if (targetTab) {
-                    targetTab.classList.add('active');
-                }
-                // Activate selected tab button
-                const targetButton = document.querySelector(`[data-tab="${tabName}"]`);
-                if (targetButton) {
-                    targetButton.classList.add('active');
-                }
+            // Sidebar Wireshark button
+            const wiresharkBtn = document.getElementById('wiresharkSidebarButton');
+            if (wiresharkBtn) {
+                wiresharkBtn.addEventListener('click', () => switchTab('wireshark'));
             }
             
-            // Wireshark sidebar button
-            document.getElementById('wiresharkSidebarButton').addEventListener('click', function() {
-                switchTab('wireshark');
-            });
+            // Speed test button
+            const speedTestBtn = document.getElementById('speedTestButton');
+            if (speedTestBtn) {
+                speedTestBtn.addEventListener('click', async function() {
+                    this.disabled = true;
+                    this.textContent = '⏳ TESTING...';
+                    try {
+                        await fetch('/api/run-speed-test', {method: 'POST'});
+                        await new Promise(r => setTimeout(r, 2000));
+                        await updateMetrics();
+                    } catch (e) {
+                        console.error('Speed test failed:', e);
+                    } finally {
+                        this.disabled = false;
+                        this.textContent = '🚀 RUN SPEED TEST';
+                    }
+                });
+            }
             
             // Quantum Collider
             const chatInput = document.getElementById('chatInput');
             const sendButton = document.getElementById('sendButton');
-            
-            chatInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    sendQuery();
-                }
-            });
-            
-            async function sendQuery() {
-                const query = chatInput.value.trim();
-                if (!query) return;
-                
-                const output = document.getElementById('chatOutput');
-                
-                output.innerHTML += `
-                    <div class="message user">
-                        <div class="message-label">USER QUERY</div>
-                        <div class="message-content">${escapeHtml(query)}</div>
-                    </div>
-                `;
-                chatInput.value = '';
-                sendButton.disabled = true;
-                
-                try {
-                    const res = await fetch('/api/qsh-query', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({query})
-                    });
-                    if (!res.ok) {
-                        throw new Error(`HTTP error! status: ${res.status}`);
-                    }
-                    const data = await res.json();
-                    
-                    output.innerHTML += `
-                        <div class="message system">
-                            <div class="message-label">QUANTUM COLLIDER</div>
-                            <div class="message-content">
-                                Query processed through quantum collision system.
-                                <div class="qsh-result">
-                                    <div class="qsh-field"><span class="qsh-label">QSH Hash:</span><span class="qsh-value">${data.qsh_hash}</span></div>
-                                    <div class="qsh-field"><span class="qsh-label">Classical Hash:</span><span class="qsh-value">${data.classical_hash.substring(0, 32)}...</span></div>
-                                    <div class="qsh-field"><span class="qsh-label">Entanglement Strength:</span><span class="qsh-value">${data.entanglement_strength}</span></div>
-                                    <div class="qsh-field"><span class="qsh-label">Collision Energy:</span><span class="qsh-value">${data.collision_energy_gev} GeV</span></div>
-                                    <div class="qsh-field"><span class="qsh-label">Particle States:</span><span class="qsh-value">${data.particle_states_generated}</span></div>
-                                    <div class="qsh-field"><span class="qsh-label">Foam Perturbations:</span><span class="qsh-value">${data.foam_perturbations}</span></div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                } catch (e) {
-                    output.innerHTML += `<div class="message system"><div class="message-content">Error: ${e.message}</div></div>`;
-                } finally {
-                    sendButton.disabled = false;
-                }
-                output.scrollTop = output.scrollHeight;
-            }
-            
-            sendButton.addEventListener('click', sendQuery);
-            
-            // File Browser
-            const fileBrowser = document.getElementById('fileBrowser');
-            const fileBrowserClose = document.getElementById('fileBrowserClose');
-            const fileInput = document.getElementById('fileInput');
-            
-            fileBrowserClose.addEventListener('click', () => {
-                fileBrowser.style.display = 'none';
-            });
-            
-            fileInput.addEventListener('change', (e) => {
-                handleFiles(e.target.files);
-            });
-            
-            document.getElementById('fileSelectButton').addEventListener('click', () => {
-                fileInput.click();
-            });
-            
-            async function handleFiles(files) {
-                for (let file of files) {
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    
-                    try {
-                        const res = await fetch('/api/upload', {
-                            method: 'POST',
-                            body: formData
-                        });
-                        if (!res.ok) {
-                            throw new Error(`HTTP error! status: ${res.status}`);
-                        }
-                        await loadFiles();
-                    } catch (e) {
-                        alert('Upload failed: ' + e.message);
-                    }
-                }
-            }
-            
-            async function loadFiles() {
-                try {
-                    const res = await fetch('/api/files');
-                    if (!res.ok) {
-                        throw new Error(`HTTP error! status: ${res.status}`);
-                    }
-                    const files = await res.json();
-                    const content = document.getElementById('fileBrowserContent');
-                    
-                    if (files.length === 0) {
-                        content.innerHTML = '<div style="color: #888; text-align: center; padding: 20px; font-size: 0.8em;">No files uploaded</div>';
-                    } else {
-                        content.innerHTML = files.map(f => `
-                            <div class="file-browser-item">
-                                <span>📄 ${escapeHtml(f.name)}<br><small style="color: #888;">${formatBytes(f.size)}</small></span>
-                                <a href="/api/download/${encodeURIComponent(f.name)}" class="send-button" style="padding: 4px 8px; font-size: 0.7em; text-decoration: none;">⬇️</a>
-                            </div>
-                        `).join('');
-                    }
-                } catch (e) {
-                    document.getElementById('fileBrowserContent').innerHTML = '<div style="color: #888; text-align: center; padding: 20px; font-size: 0.8em;">Failed to load</div>';
-                    console.error('Failed to load files:', e);
-                }
-            }
-            
-            function formatBytes(bytes) {
-                if (bytes < 1024) return bytes + ' B';
-                if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
-                return (bytes/(1024*1024)).toFixed(1) + ' MB';
+            if (chatInput && sendButton) {
+                chatInput.addEventListener('keypress', e => {
+                    if (e.key === 'Enter') sendQuery();
+                });
+                sendButton.addEventListener('click', sendQuery);
             }
             
             // Terminal
             const terminalInput = document.getElementById('terminalInput');
-            
-            terminalInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    executeCommand();
-                }
-            });
-            
-            async function executeCommand() {
-                const input = terminalInput;
-                const output = document.getElementById('terminalOutput');
-                const command = input.value.trim();
-                
-                if (!command) return;
-                
-                if (command === 'clear') {
-                    output.textContent = '';
-                    input.value = '';
-                    return;
-                }
-                
-                output.textContent += `foam@alice:~$ ${command}\n`;
-                input.value = '';
-                
-                try {
-                    const res = await fetch('/api/shell', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({command})
-                    });
-                    if (!res.ok) {
-                        throw new Error(`HTTP error! status: ${res.status}`);
-                    }
-                    const data = await res.json();
-                    output.textContent += data.output + '\n\n';
-                } catch (e) {
-                    output.textContent += `Error: ${e.message}\n\n`;
-                }
-                
-                output.scrollTop = output.scrollHeight;
+            if (terminalInput) {
+                terminalInput.addEventListener('keypress', e => {
+                    if (e.key === 'Enter') executeCommand();
+                });
             }
             
-            // Wireshark
-            document.getElementById('captureButton').addEventListener('click', function(e) {
-                e.preventDefault();
-                const list = document.getElementById('packetList');
-                const btn = e.target;
-                
-                if (!capturing) {
-                    capturing = true;
-                    btn.textContent = '⏸️ STOP CAPTURE';
-                    list.innerHTML = '<div style="color: #00ddff; margin-bottom: 8px;">📡 Capturing quantum packets...</div>';
-                    
-                    captureInterval = setInterval(() => {
-                        if (!capturing) {
-                            clearInterval(captureInterval);
-                            return;
-                        }
-                        
-                        const protocols = ['EPR', 'QKD-BB84', 'QKD-E91', 'QSH', 'QRAM', 'TELEPORT'];
-                        const proto = protocols[Math.floor(Math.random() * protocols.length)];
-                        const src = `10.0.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
-                        const dst = `10.0.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
-                        const qubits = Math.floor(Math.random() * 128) + 1;
-                        
-                        const packet = document.createElement('div');
-                        packet.className = 'packet';
-                        packet.innerHTML = `
-                            <span style="color: #888;">#${packetId++}</span> 
-                            <span style="color: #00ddff;">${proto}</span> 
-                            ${src} → ${dst} 
-                            <span style="color: #00ff88;">${qubits} qubits</span> 
-                            <span style="color: #888;">${new Date().toLocaleTimeString()}</span>
-                        `;
-                        list.appendChild(packet);
-                        list.scrollTop = list.scrollHeight;
-                        
-                        // Keep only last 100 packets
-                        while (list.children.length > 101) {
-                            list.removeChild(list.children[1]);
-                        }
-                    }, 500);
-                } else {
-                    capturing = false;
-                    btn.textContent = '📡 START CAPTURE';
-                    if (captureInterval) {
-                        clearInterval(captureInterval);
-                        captureInterval = null;
-                    }
-                }
-            });
-            
-            // Metrics
-            document.getElementById('speedTestButton').addEventListener('click', async function(e) {
-                e.preventDefault();
-                const btn = e.target;
-                btn.disabled = true;
-                btn.textContent = '⏳ TESTING...';
-                
-                try {
-                    const res = await fetch('/api/run-speed-test', {method: 'POST'});
-                    if (!res.ok) {
-                        throw new Error(`HTTP error! status: ${res.status}`);
-                    }
-                    await new Promise(r => setTimeout(r, 2000));
-                    await updateMetrics();
-                } catch (error) {
-                    console.error('Speed test failed:', error);
-                } finally {
-                    btn.disabled = false;
-                    btn.textContent = '🚀 RUN SPEED TEST';
-                }
-            });
-            
-            async function updateMetrics() {
-                try {
-                    const res = await fetch('/api/quantum-metrics');
-                    if (!res.ok) {
-                        throw new Error(`HTTP error! status: ${res.status}`);
-                    }
-                    const d = await res.json();
-                    
-                    document.getElementById('realMetrics').innerHTML = `
-                        <div class="metric-card">
-                            <div class="metric-label">⬇️ Download</div>
-                            <div class="metric-value real">${d.download_speed_mbps}<span class="metric-unit">Mbps</span></div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">⬆️ Upload</div>
-                            <div class="metric-value real">${d.upload_speed_mbps}<span class="metric-unit">Mbps</span></div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">📶 Ping</div>
-                            <div class="metric-value real">${d.ping_ms}<span class="metric-unit">ms</span></div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">⚡ Network Throughput</div>
-                            <div class="metric-value">${d.network_throughput_mbps}<span class="metric-unit">Mbps</span></div>
-                        </div>
-                    `;
-                    
-                    document.getElementById('quantumMetrics').innerHTML = `
-                        <div class="metric-card">
-                            <div class="metric-label">🔮 Qubits Active</div>
-                            <div class="metric-value">${d.qubits_active}</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">🔗 EPR Pairs</div>
-                            <div class="metric-value">${d.epr_pairs}</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">📡 Transfer Rate</div>
-                            <div class="metric-value">${d.transfer_rate_qbps}<span class="metric-unit">Qbps</span></div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">✨ Entanglement Fidelity</div>
-                            <div class="metric-value">${d.entanglement_fidelity}</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">⏱️ Decoherence Time</div>
-                            <div class="metric-value">${d.decoherence_time_ms}<span class="metric-unit">ms</span></div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">🌀 Foam Density</div>
-                            <div class="metric-value">${d.foam_density}</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">🎯 Teleportation Success</div>
-                            <div class="metric-value">${(d.teleportation_success_rate * 100).toFixed(1)}<span class="metric-unit">%</span></div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">⏰ Uptime</div>
-                            <div class="metric-value">${formatUptime(d.uptime_seconds)}</div>
-                        </div>
-                    `;
-                } catch (e) {
-                    console.error('Metrics update failed:', e);
-                }
+            // Wireshark capture button
+            const captureBtn = document.getElementById('captureButton');
+            if (captureBtn) {
+                captureBtn.addEventListener('click', toggleCapture);
             }
             
-            function formatUptime(seconds) {
-                const hours = Math.floor(seconds / 3600);
-                const minutes = Math.floor((seconds % 3600) / 60);
-                const secs = seconds % 60;
-                return `${hours}h ${minutes}m ${secs}s`;
+            // File Browser
+            const fileBrowserClose = document.getElementById('fileBrowserClose');
+            const fileInput = document.getElementById('fileInput');
+            const fileSelectButton = document.getElementById('fileSelectButton');
+            
+            if (fileBrowserClose) {
+                fileBrowserClose.addEventListener('click', () => {
+                    document.getElementById('fileBrowser').style.display = 'none';
+                });
             }
             
-            function escapeHtml(text) {
-                const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
-                return text.replace(/[&<>"']/g, m => map[m]);
+            if (fileInput) {
+                fileInput.addEventListener('change', e => handleFiles(e.target.files));
             }
             
-            // Initialize
+            if (fileSelectButton) {
+                fileSelectButton.addEventListener('click', () => fileInput.click());
+            }
+            
+            // Start periodic updates
             updateMetrics();
             setInterval(updateMetrics, 3000);
             loadFiles();
             setInterval(loadFiles, 5000);
+            
+            console.log('Initialization complete');
         });
     </script>
 </body>
@@ -1222,11 +1211,6 @@ async def upload_file(file: UploadFile = File(...)):
         f.write(content)
     return {"filename": file.filename, "size": len(content)}
 
-@app.post("/api/upload-test")
-async def upload_test(file: UploadFile = File(...)):
-    content = await file.read()
-    return {"size": len(content)}
-
 @app.get("/api/files")
 async def list_files():
     files = []
@@ -1255,7 +1239,6 @@ async def health():
     return {"status": "ok"}
 
 if __name__ == "__main__":
-    # Initialize Alice
     alice.register_user("system", "127.0.0.1")
     logger.info("Alice interface initialized")
     logger.info("Quantum Foam Network starting...")
