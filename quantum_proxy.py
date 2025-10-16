@@ -691,9 +691,9 @@ METRICS_HTML = """
     
     <div class="metrics-sidebar">
         <div class="metrics-title">⚛️ LIVE METRICS</div>
-        <button class="test-button" onclick="runSpeedTest(event)">🚀 RUN SPEED TEST</button>
-        <div id="realMetrics"></div>
-        <div id="quantumMetrics"></div>
+        <button type="button" class="test-button" id="speedTestButton">🚀 RUN SPEED TEST</button>
+        <div id="realMetrics"><div class="metric-card"><div class="metric-label">Loading...</div></div></div>
+        <div id="quantumMetrics"><div class="metric-card"><div class="metric-label">Loading...</div></div></div>
     </div>
     
     <div class="main-content">
@@ -718,8 +718,8 @@ METRICS_HTML = """
                     </div>
                 </div>
                 <div class="chat-input-container">
-                    <input type="text" class="chat-input" id="chatInput" placeholder="Enter QSH query..." onkeypress="handleChatKeyPress(event)">
-                    <button class="send-button" onclick="sendQuery()">SEND</button>
+                    <input type="text" class="chat-input" id="chatInput" placeholder="Enter QSH query...">
+                    <button type="button" class="send-button" id="sendButton">SEND</button>
                 </div>
             </div>
         </div>
@@ -735,7 +735,7 @@ METRICS_HTML = """
                     <h3 style="color: #00ddff; margin-bottom: 12px;">📤 Upload Files</h3>
                     <p style="margin-bottom: 12px;">Drag & drop files here or click to browse</p>
                     <input type="file" id="fileInput" multiple style="display:none">
-                    <button class="send-button" onclick="document.getElementById('fileInput').click()">SELECT FILES</button>
+                    <button type="button" class="send-button" id="fileSelectButton">SELECT FILES</button>
                 </div>
                 <h3 style="color: #00ddff; margin-bottom: 8px;">📂 Uploaded Files</h3>
                 <div class="file-list" id="fileList"></div>
@@ -752,7 +752,7 @@ Type 'help' or '??' for available commands.
 </div>
                 <div class="terminal-input-line">
                     <span class="terminal-prompt">foam@alice:~$</span>
-                    <input type="text" class="terminal-input" id="terminalInput" onkeypress="handleTerminalKeyPress(event)" autofocus>
+                    <input type="text" class="terminal-input" id="terminalInput" autofocus>
                 </div>
             </div>
         </div>
@@ -767,7 +767,7 @@ Type 'help' or '??' for available commands.
                         Monitoring quantum foam network traffic across computational substrate
                     </p>
                 </div>
-                <button class="test-button" onclick="capturePackets(event)" style="margin-bottom: 12px;">📡 START CAPTURE</button>
+                <button type="button" class="test-button" id="captureButton" style="margin-bottom: 12px;">📡 START CAPTURE</button>
                 <div class="packet-list" id="packetList">
                     <div style="color: #888; text-align: center; padding: 30px;">
                         Click "START CAPTURE" to begin monitoring quantum packets
@@ -778,328 +778,360 @@ Type 'help' or '??' for available commands.
     </div>
     
     <script>
-        let capturing = false;
-        let packetId = 1;
-        let captureInterval = null;
-        
-        // Tab switching
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', function() {
-                const tabName = this.getAttribute('data-tab');
-                switchTab(tabName);
-            });
-        });
-        
-        function switchTab(tabName) {
-            // Hide all tab contents
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            // Deactivate all tabs
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.addEventListener('DOMContentLoaded', () => {
+            let capturing = false;
+            let packetId = 1;
+            let captureInterval = null;
             
-            // Show selected tab content
-            document.getElementById(tabName + '-tab').classList.add('active');
-            // Activate selected tab button
-            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-        }
-        
-        // Quantum Collider
-        function handleChatKeyPress(e) {
-            if (e.key === 'Enter') sendQuery();
-        }
-        
-        async function sendQuery() {
-            const input = document.getElementById('chatInput');
-            const query = input.value.trim();
-            if (!query) return;
-            
-            const output = document.getElementById('chatOutput');
-            
-            output.innerHTML += `
-                <div class="message user">
-                    <div class="message-label">USER QUERY</div>
-                    <div class="message-content">${escapeHtml(query)}</div>
-                </div>
-            `;
-            input.value = '';
-            
-            try {
-                const res = await fetch('/api/qsh-query', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({query})
+            // Tab switching
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabName = this.getAttribute('data-tab');
+                    switchTab(tabName);
                 });
-                const data = await res.json();
+            });
+            
+            function switchTab(tabName) {
+                // Hide all tab contents
+                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                // Deactivate all tabs
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                
+                // Show selected tab content
+                document.getElementById(tabName + '-tab').classList.add('active');
+                // Activate selected tab button
+                document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            }
+            
+            // Quantum Collider
+            function handleChatKeyPress(e) {
+                if (e.key === 'Enter') sendQuery();
+            }
+            
+            async function sendQuery() {
+                const input = document.getElementById('chatInput');
+                const query = input.value.trim();
+                if (!query) return;
+                
+                const output = document.getElementById('chatOutput');
                 
                 output.innerHTML += `
-                    <div class="message system">
-                        <div class="message-label">QUANTUM COLLIDER</div>
-                        <div class="message-content">
-                            Query processed through quantum collision system.
-                            <div class="qsh-result">
-                                <div class="qsh-field"><span class="qsh-label">QSH Hash:</span><span class="qsh-value">${data.qsh_hash}</span></div>
-                                <div class="qsh-field"><span class="qsh-label">Classical Hash:</span><span class="qsh-value">${data.classical_hash.substring(0, 32)}...</span></div>
-                                <div class="qsh-field"><span class="qsh-label">Entanglement Strength:</span><span class="qsh-value">${data.entanglement_strength}</span></div>
-                                <div class="qsh-field"><span class="qsh-label">Collision Energy:</span><span class="qsh-value">${data.collision_energy_gev} GeV</span></div>
-                                <div class="qsh-field"><span class="qsh-label">Particle States:</span><span class="qsh-value">${data.particle_states_generated}</span></div>
-                                <div class="qsh-field"><span class="qsh-label">Foam Perturbations:</span><span class="qsh-value">${data.foam_perturbations}</span></div>
-                            </div>
-                        </div>
+                    <div class="message user">
+                        <div class="message-label">USER QUERY</div>
+                        <div class="message-content">${escapeHtml(query)}</div>
                     </div>
                 `;
-            } catch (e) {
-                output.innerHTML += `<div class="message system"><div class="message-content">Error: ${e.message}</div></div>`;
-            }
-            output.scrollTop = output.scrollHeight;
-        }
-        
-        // File Server
-        const uploadArea = document.getElementById('uploadArea');
-        const fileInput = document.getElementById('fileInput');
-        
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-        
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
-        
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            handleFiles(e.dataTransfer.files);
-        });
-        
-        fileInput.addEventListener('change', (e) => {
-            handleFiles(e.target.files);
-        });
-        
-        async function handleFiles(files) {
-            for (let file of files) {
-                const formData = new FormData();
-                formData.append('file', file);
+                input.value = '';
                 
                 try {
-                    await fetch('/api/upload', {
+                    const res = await fetch('/api/qsh-query', {
                         method: 'POST',
-                        body: formData
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({query})
                     });
-                    await loadFiles();
-                } catch (e) {
-                    alert('Upload failed: ' + e.message);
-                }
-            }
-        }
-        
-        async function loadFiles() {
-            try {
-                const res = await fetch('/api/files');
-                const files = await res.json();
-                const list = document.getElementById('fileList');
-                
-                if (files.length === 0) {
-                    list.innerHTML = '<div style="color: #888; text-align: center; padding: 20px;">No files uploaded yet</div>';
-                } else {
-                    list.innerHTML = files.map(f => `
-                        <div class="file-item">
-                            <span>📄 ${f.name} (${formatBytes(f.size)})</span>
-                            <a href="/api/download/${f.name}" class="send-button" style="padding: 4px 12px; font-size: 0.75em; text-decoration: none;">Download</a>
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    const data = await res.json();
+                    
+                    output.innerHTML += `
+                        <div class="message system">
+                            <div class="message-label">QUANTUM COLLIDER</div>
+                            <div class="message-content">
+                                Query processed through quantum collision system.
+                                <div class="qsh-result">
+                                    <div class="qsh-field"><span class="qsh-label">QSH Hash:</span><span class="qsh-value">${data.qsh_hash}</span></div>
+                                    <div class="qsh-field"><span class="qsh-label">Classical Hash:</span><span class="qsh-value">${data.classical_hash.substring(0, 32)}...</span></div>
+                                    <div class="qsh-field"><span class="qsh-label">Entanglement Strength:</span><span class="qsh-value">${data.entanglement_strength}</span></div>
+                                    <div class="qsh-field"><span class="qsh-label">Collision Energy:</span><span class="qsh-value">${data.collision_energy_gev} GeV</span></div>
+                                    <div class="qsh-field"><span class="qsh-label">Particle States:</span><span class="qsh-value">${data.particle_states_generated}</span></div>
+                                    <div class="qsh-field"><span class="qsh-label">Foam Perturbations:</span><span class="qsh-value">${data.foam_perturbations}</span></div>
+                                </div>
+                            </div>
                         </div>
-                    `).join('');
-                }
-            } catch (e) {
-                console.error('Failed to load files:', e);
-            }
-        }
-        
-        function formatBytes(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
-            return (bytes/(1024*1024)).toFixed(1) + ' MB';
-        }
-        
-        // Terminal
-        function handleTerminalKeyPress(e) {
-            if (e.key === 'Enter') executeCommand();
-        }
-        
-        async function executeCommand() {
-            const input = document.getElementById('terminalInput');
-            const output = document.getElementById('terminalOutput');
-            const command = input.value.trim();
-            
-            if (!command) return;
-            
-            if (command === 'clear') {
-                output.textContent = '';
-                input.value = '';
-                return;
-            }
-            
-            output.textContent += `foam@alice:~$ ${command}\n`;
-            input.value = '';
-            
-            try {
-                const res = await fetch('/api/shell', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({command})
-                });
-                const data = await res.json();
-                output.textContent += data.output + '\n\n';
-            } catch (e) {
-                output.textContent += `Error: ${e.message}\n\n`;
-            }
-            
-            output.scrollTop = output.scrollHeight;
-        }
-        
-        // Wireshark
-        function capturePackets(event) {
-            const list = document.getElementById('packetList');
-            const btn = event.target;
-            
-            if (!capturing) {
-                capturing = true;
-                btn.textContent = '⏸️ STOP CAPTURE';
-                list.innerHTML = '<div style="color: #00ddff; margin-bottom: 8px;">📡 Capturing quantum packets...</div>';
-                
-                captureInterval = setInterval(() => {
-                    if (!capturing) {
-                        clearInterval(captureInterval);
-                        return;
-                    }
-                    
-                    const protocols = ['EPR', 'QKD-BB84', 'QKD-E91', 'QSH', 'QRAM', 'TELEPORT'];
-                    const proto = protocols[Math.floor(Math.random() * protocols.length)];
-                    const src = `10.0.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
-                    const dst = `10.0.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
-                    const qubits = Math.floor(Math.random() * 128) + 1;
-                    
-                    const packet = document.createElement('div');
-                    packet.className = 'packet';
-                    packet.innerHTML = `
-                        <span style="color: #888;">#${packetId++}</span> 
-                        <span style="color: #00ddff;">${proto}</span> 
-                        ${src} → ${dst} 
-                        <span style="color: #00ff88;">${qubits} qubits</span> 
-                        <span style="color: #888;">${new Date().toLocaleTimeString()}</span>
                     `;
-                    list.appendChild(packet);
-                    list.scrollTop = list.scrollHeight;
+                } catch (e) {
+                    output.innerHTML += `<div class="message system"><div class="message-content">Error: ${e.message}</div></div>`;
+                }
+                output.scrollTop = output.scrollHeight;
+            }
+            
+            // File Server
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+            
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+            
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+            
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+            
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+            
+            async function handleFiles(files) {
+                for (let file of files) {
+                    const formData = new FormData();
+                    formData.append('file', file);
                     
-                    // Keep only last 100 packets
-                    while (list.children.length > 101) {
-                        list.removeChild(list.children[1]);
+                    try {
+                        const res = await fetch('/api/upload', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        if (!res.ok) {
+                            throw new Error(`HTTP error! status: ${res.status}`);
+                        }
+                        await loadFiles();
+                    } catch (e) {
+                        alert('Upload failed: ' + e.message);
                     }
-                }, 500);
-            } else {
-                capturing = false;
-                btn.textContent = '📡 START CAPTURE';
-                if (captureInterval) {
-                    clearInterval(captureInterval);
-                    captureInterval = null;
                 }
             }
-        }
-        
-        // Metrics
-        async function runSpeedTest(event) {
-            const btn = event.target;
-            btn.disabled = true;
-            btn.textContent = '⏳ TESTING...';
             
-            try {
-                await fetch('/api/run-speed-test', {method: 'POST'});
-                await new Promise(r => setTimeout(r, 2000));
-                await updateMetrics();
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '🚀 RUN SPEED TEST';
+            async function loadFiles() {
+                try {
+                    const res = await fetch('/api/files');
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    const files = await res.json();
+                    const list = document.getElementById('fileList');
+                    
+                    if (files.length === 0) {
+                        list.innerHTML = '<div style="color: #888; text-align: center; padding: 20px;">No files uploaded yet</div>';
+                    } else {
+                        list.innerHTML = files.map(f => `
+                            <div class="file-item">
+                                <span>📄 ${f.name} (${formatBytes(f.size)})</span>
+                                <a href="/api/download/${f.name}" class="send-button" style="padding: 4px 12px; font-size: 0.75em; text-decoration: none;">Download</a>
+                            </div>
+                        `).join('');
+                    }
+                } catch (e) {
+                    document.getElementById('fileList').innerHTML = '<div style="color: #888; text-align: center; padding: 20px;">Failed to load files: ' + e.message + '</div>';
+                    console.error('Failed to load files:', e);
+                }
             }
-        }
-        
-        async function updateMetrics() {
-            try {
-                const res = await fetch('/api/quantum-metrics');
-                const d = await res.json();
-                
-                document.getElementById('realMetrics').innerHTML = `
-                    <div class="metric-card">
-                        <div class="metric-label">⬇️ Download</div>
-                        <div class="metric-value real">${d.download_speed_mbps}<span class="metric-unit">Mbps</span></div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">⬆️ Upload</div>
-                        <div class="metric-value real">${d.upload_speed_mbps}<span class="metric-unit">Mbps</span></div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">📶 Ping</div>
-                        <div class="metric-value real">${d.ping_ms}<span class="metric-unit">ms</span></div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">⚡ Network Throughput</div>
-                        <div class="metric-value">${d.network_throughput_mbps}<span class="metric-unit">Mbps</span></div>
-                    </div>
-                `;
-                
-                document.getElementById('quantumMetrics').innerHTML = `
-                    <div class="metric-card">
-                        <div class="metric-label">🔮 Qubits Active</div>
-                        <div class="metric-value">${d.qubits_active}</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">🔗 EPR Pairs</div>
-                        <div class="metric-value">${d.epr_pairs}</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">📡 Transfer Rate</div>
-                        <div class="metric-value">${d.transfer_rate_qbps}<span class="metric-unit">Qbps</span></div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">✨ Entanglement Fidelity</div>
-                        <div class="metric-value">${d.entanglement_fidelity}</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">⏱️ Decoherence Time</div>
-                        <div class="metric-value">${d.decoherence_time_ms}<span class="metric-unit">ms</span></div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">🌀 Foam Density</div>
-                        <div class="metric-value">${d.foam_density}</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">🎯 Teleportation Success</div>
-                        <div class="metric-value">${(d.teleportation_success_rate * 100).toFixed(1)}<span class="metric-unit">%</span></div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-label">⏰ Uptime</div>
-                        <div class="metric-value">${formatUptime(d.uptime_seconds)}</div>
-                    </div>
-                `;
-            } catch (e) {
-                console.error('Metrics update failed:', e);
+            
+            function formatBytes(bytes) {
+                if (bytes < 1024) return bytes + ' B';
+                if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+                return (bytes/(1024*1024)).toFixed(1) + ' MB';
             }
-        }
-        
-        function formatUptime(seconds) {
-            const hours = Math.floor(seconds / 3600);
-            const minutes = Math.floor((seconds % 3600) / 60);
-            const secs = seconds % 60;
-            return `${hours}h ${minutes}m ${secs}s`;
-        }
-        
-        function escapeHtml(text) {
-            const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
-            return text.replace(/[&<>"']/g, m => map[m]);
-        }
-        
-        // Initialize
-        updateMetrics();
-        setInterval(updateMetrics, 3000);
-        loadFiles();
-        setInterval(loadFiles, 5000);
+            
+            // Terminal
+            function handleTerminalKeyPress(e) {
+                if (e.key === 'Enter') executeCommand();
+            }
+            
+            async function executeCommand() {
+                const input = document.getElementById('terminalInput');
+                const output = document.getElementById('terminalOutput');
+                const command = input.value.trim();
+                
+                if (!command) return;
+                
+                if (command === 'clear') {
+                    output.textContent = '';
+                    input.value = '';
+                    return;
+                }
+                
+                output.textContent += `foam@alice:~$ ${command}\n`;
+                input.value = '';
+                
+                try {
+                    const res = await fetch('/api/shell', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({command})
+                    });
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    const data = await res.json();
+                    output.textContent += data.output + '\n\n';
+                } catch (e) {
+                    output.textContent += `Error: ${e.message}\n\n`;
+                }
+                
+                output.scrollTop = output.scrollHeight;
+            }
+            
+            // Wireshark
+            function capturePackets(e) {
+                const list = document.getElementById('packetList');
+                const btn = e.target;
+                
+                if (!capturing) {
+                    capturing = true;
+                    btn.textContent = '⏸️ STOP CAPTURE';
+                    list.innerHTML = '<div style="color: #00ddff; margin-bottom: 8px;">📡 Capturing quantum packets...</div>';
+                    
+                    captureInterval = setInterval(() => {
+                        if (!capturing) {
+                            clearInterval(captureInterval);
+                            return;
+                        }
+                        
+                        const protocols = ['EPR', 'QKD-BB84', 'QKD-E91', 'QSH', 'QRAM', 'TELEPORT'];
+                        const proto = protocols[Math.floor(Math.random() * protocols.length)];
+                        const src = `10.0.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
+                        const dst = `10.0.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
+                        const qubits = Math.floor(Math.random() * 128) + 1;
+                        
+                        const packet = document.createElement('div');
+                        packet.className = 'packet';
+                        packet.innerHTML = `
+                            <span style="color: #888;">#${packetId++}</span> 
+                            <span style="color: #00ddff;">${proto}</span> 
+                            ${src} → ${dst} 
+                            <span style="color: #00ff88;">${qubits} qubits</span> 
+                            <span style="color: #888;">${new Date().toLocaleTimeString()}</span>
+                        `;
+                        list.appendChild(packet);
+                        list.scrollTop = list.scrollHeight;
+                        
+                        // Keep only last 100 packets
+                        while (list.children.length > 101) {
+                            list.removeChild(list.children[1]);
+                        }
+                    }, 500);
+                } else {
+                    capturing = false;
+                    btn.textContent = '📡 START CAPTURE';
+                    if (captureInterval) {
+                        clearInterval(captureInterval);
+                        captureInterval = null;
+                    }
+                }
+            }
+            
+            // Metrics
+            async function runSpeedTest(e) {
+                const btn = e.target;
+                btn.disabled = true;
+                btn.textContent = '⏳ TESTING...';
+                
+                try {
+                    const res = await fetch('/api/run-speed-test', {method: 'POST'});
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    await new Promise(r => setTimeout(r, 2000));
+                    await updateMetrics();
+                } catch (error) {
+                    console.error('Speed test failed:', error);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = '🚀 RUN SPEED TEST';
+                }
+            }
+            
+            async function updateMetrics() {
+                try {
+                    const res = await fetch('/api/quantum-metrics');
+                    if (!res.ok) {
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    const d = await res.json();
+                    
+                    document.getElementById('realMetrics').innerHTML = `
+                        <div class="metric-card">
+                            <div class="metric-label">⬇️ Download</div>
+                            <div class="metric-value real">${d.download_speed_mbps}<span class="metric-unit">Mbps</span></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">⬆️ Upload</div>
+                            <div class="metric-value real">${d.upload_speed_mbps}<span class="metric-unit">Mbps</span></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">📶 Ping</div>
+                            <div class="metric-value real">${d.ping_ms}<span class="metric-unit">ms</span></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">⚡ Network Throughput</div>
+                            <div class="metric-value">${d.network_throughput_mbps}<span class="metric-unit">Mbps</span></div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('quantumMetrics').innerHTML = `
+                        <div class="metric-card">
+                            <div class="metric-label">🔮 Qubits Active</div>
+                            <div class="metric-value">${d.qubits_active}</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">🔗 EPR Pairs</div>
+                            <div class="metric-value">${d.epr_pairs}</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">📡 Transfer Rate</div>
+                            <div class="metric-value">${d.transfer_rate_qbps}<span class="metric-unit">Qbps</span></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">✨ Entanglement Fidelity</div>
+                            <div class="metric-value">${d.entanglement_fidelity}</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">⏱️ Decoherence Time</div>
+                            <div class="metric-value">${d.decoherence_time_ms}<span class="metric-unit">ms</span></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">🌀 Foam Density</div>
+                            <div class="metric-value">${d.foam_density}</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">🎯 Teleportation Success</div>
+                            <div class="metric-value">${(d.teleportation_success_rate * 100).toFixed(1)}<span class="metric-unit">%</span></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">⏰ Uptime</div>
+                            <div class="metric-value">${formatUptime(d.uptime_seconds)}</div>
+                        </div>
+                    `;
+                } catch (e) {
+                    console.error('Metrics update failed:', e);
+                    document.getElementById('realMetrics').innerHTML = '<div class="metric-card"><div class="metric-label">Error</div><div class="metric-value">Failed to load real metrics</div></div>';
+                    document.getElementById('quantumMetrics').innerHTML = '<div class="metric-card"><div class="metric-label">Error</div><div class="metric-value">Failed to load quantum metrics</div></div>';
+                }
+            }
+            
+            function formatUptime(seconds) {
+                const hours = Math.floor(seconds / 3600);
+                const minutes = Math.floor((seconds % 3600) / 60);
+                const secs = seconds % 60;
+                return `${hours}h ${minutes}m ${secs}s`;
+            }
+            
+            function escapeHtml(text) {
+                const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
+                return text.replace(/[&<>"']/g, m => map[m]);
+            }
+            
+            // Initialize
+            document.getElementById('speedTestButton').addEventListener('click', runSpeedTest);
+            document.getElementById('sendButton').addEventListener('click', sendQuery);
+            document.getElementById('chatInput').addEventListener('keypress', handleChatKeyPress);
+            document.getElementById('terminalInput').addEventListener('keypress', handleTerminalKeyPress);
+            document.getElementById('captureButton').addEventListener('click', capturePackets);
+            document.getElementById('fileSelectButton').addEventListener('click', () => document.getElementById('fileInput').click());
+            
+            updateMetrics();
+            setInterval(updateMetrics, 3000);
+            loadFiles();
+            setInterval(loadFiles, 5000);
+        });
     </script>
 </body>
 </html>
