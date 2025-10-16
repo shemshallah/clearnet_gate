@@ -1,2 +1,2 @@
 # clearnet_gate
-Clearness gate to quantum domain.
+Clearnet gate to quantum domain.
