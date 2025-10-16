@@ -1,1 +1,11 @@
+```yaml
+version: '3.8'
 
+services:
+  quantum-proxy:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+```
