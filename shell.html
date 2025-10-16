@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>QSH Terminal | QFN</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0a;
+            color: #00ff88;
+            font-family: 'Courier New', monospace;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .terminal {
+            height: 100vh;
+            padding: 20px;
+            overflow-y: auto;
+            background: #000;
+            border: 2px solid #00ff88;
+        }
+        .prompt {
+            color: #00ff88;
+            display: flex;
+            align-items: center;
+        }
+        .prompt-symbol {
+            margin-right: 5px;
+        }
+        .input-line {
+            display: flex;
+            width: 100%;
+        }
+        .input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #00ff88;
+            font-family: inherit;
+            font-size: inherit;
+            outline: none;
+        }
+        .output {
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
+        .output.ai {
+            color: #ff00ff;
+        }
+        .history {
+            margin-bottom: 10px;
+        }
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px;
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            text-decoration: none;
+            border-radius: 5px;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-btn">← Back to Home</a>
+    <div class="terminal" id="terminal">
+        <div class="history" id="history"></div>
+        <div class="prompt">
+            <span class="prompt-symbol">QFN:~# </span>
+            <div class="input-line">
+                <input type="text" class="input" id="commandInput" autofocus placeholder="Enter QSH command..." onkeypress="handleKeyPress(event)">
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let commandHistory = [];
+        let historyIndex = -1;
+        
+        const terminal = document.getElementById('terminal');
+        const historyDiv = document.getElementById('history');
+        const input = document.getElementById('commandInput');
+        
+        function addOutput(text, isAI = false) {
+            const outputDiv = document.createElement('div');
+            outputDiv.className = `output ${isAI ? 'ai' : ''}`;
+            outputDiv.textContent = text;
+            historyDiv.appendChild(outputDiv);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+        
+        async function executeCommand(cmd) {
+            if (!cmd.trim()) return;
+            
+            commandHistory.unshift(cmd);
+            if (commandHistory.length > 50) commandHistory = commandHistory.slice(0, 50);
+            historyIndex = -1;
+            
+            addOutput(`QFN:~# ${cmd}`);
+            
+            try {
+                const response = await fetch('/api/shell', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: cmd })
+                });
+                const result = await response.json();
+                addOutput(result.output);
+                
+                // Alice AI response for certain commands
+                if (result.ai_response) {
+                    setTimeout(() => {
+                        addOutput(`Alice: ${result.ai_response}`, true);
+                    }, 500);
+                }
+            } catch (error) {
+                addOutput(`Error: ${error.message}`);
+            }
+            
+            input.value = '';
+        }
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                const cmd = input.value;
+                input.value = '';
+                executeCommand(cmd);
+            } else if (event.key === 'ArrowUp') {
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    input.value = commandHistory[historyIndex];
+                }
+            } else if (event.key === 'ArrowDown') {
+                if (historyIndex > -1) {
+                    historyIndex--;
+                    input.value = historyIndex === -1 ? '' : commandHistory[historyIndex];
+                }
+            }
+        }
+        
+        // Initial welcome
+        addOutput('Welcome to Quantum Shell (QSH) v1.0');
+        addOutput('Type "help" for commands. Alice AI is online for quantum queries.');
+    </script>
+</body>
+</html>
