@@ -1,6 +1,4 @@
-Here's the fixed single-file version with working tabs and visible metrics:
 
-```python
 #!/usr/bin/env python3
 """
 Quantum Foam Network - Complete Fixed Implementation with Alice TCP Proxy
