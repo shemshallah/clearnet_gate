@@ -1,22 +1,23 @@
-# Use an official lightweight Python image
+# Use official Python runtime as base image (slim for smaller size)
 FROM python:3.11-slim
 
-# Set the working directory in the container
+# Set working directory in container
 WORKDIR /app
 
-# Copy the requirements file into the container at /app
-# This step is essential and resolves the "requirements.txt: not found" error.
-COPY requirements.txt /app/
+# Copy requirements first for better Docker layer caching
+COPY requirements.txt .
 
-# Install the Python dependencies
+# Install dependencies (no cache to reduce image size)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the main application file
-COPY quantum_proxy.py /app/
+# Copy the entire application code (includes main.py and all .html files)
+COPY . .
 
-# Expose the port the FastAPI application runs on (default 8000 in your code)
+# Create uploads directory if it doesn't exist
+RUN mkdir -p uploads
+
+# Expose the port the app runs on
 EXPOSE 8000
 
-# Command to run the application using Uvicorn
-# Format: uvicorn <module_name>:<app_object_name> --host <ip> --port <port>
-CMD ["uvicorn", "quantum_proxy:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application with uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
