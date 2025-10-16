@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quantum Collider | QFN</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+            color: #00ff88;
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 30px;
+            background: rgba(10, 10, 10, 0.9);
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+        }
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-shadow: 0 0 10px #00ff88;
+        }
+        .back-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+            border-radius: 5px;
+            color: #00ff88;
+            text-decoration: none;
+            margin-bottom: 20px;
+        }
+        .info-section {
+            padding: 20px;
+            background: rgba(0, 136, 255, 0.1);
+            border: 1px solid #0088ff;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .info-title {
+            font-size: 1.3em;
+            color: #00ddff;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .query-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .query-input-wrapper {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid #00ff88;
+            color: #00ff88;
+            font-family: inherit;
+            border-radius: 5px;
+        }
+        .collide-btn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #ff0088, #ff44cc);
+            color: #0a0a0a;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .collide-btn:hover:not(:disabled) {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255, 0, 136, 0.5);
+        }
+        .collide-btn.colliding {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .results {
+            display: none;
+            margin-top: 30px;
+        }
+        .results.show {
+            display: block;
+        }
+        .result-header {
+            font-size: 1.4em;
+            color: #00ddff;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .hash-display {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+            border-radius: 5px;
+            word-break: break-all;
+        }
+        .hash-label {
+            font-weight: bold;
+            min-width: 150px;
+        }
+        .hash-value {
+            flex: 1;
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #ff00ff;
+        }
+        .result-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .result-item {
+            padding: 15px;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid #00ff88;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .result-label {
+            color: #888;
+            margin-bottom: 5px;
+        }
+        .result-value {
+            font-weight: bold;
+            color: #00ff88;
+        }
+        .history {
+            margin-top: 40px;
+        }
+        .history-title {
+            font-size: 1.3em;
+            color: #00ddff;
+            margin-bottom: 15px;
+        }
+        .history-item {
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .history-query {
+            color: #00ff88;
+            margin-bottom: 5px;
+        }
+        .history-hash {
+            font-size: 0.9em;
+            color: #888;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-btn">← Back to Home</a>
+        <h1>⚛️ QUANTUM COLLIDER</h1>
+        
+        <div class="info-section">
+            <div class="info-title">🔬 Quantum State Hasher (QSH)</div>
+            <p>
+                The Quantum Collider uses high-energy particle collisions to generate quantum-resistant 
+                hashes. By colliding particles at near-light speeds through the quantum foam, we create 
+                unique hash signatures entangled with the fabric of spacetime itself.
+            </p>
+            <br>
+            <p>
+                <strong>Features:</strong> EPR-pair generation, foam perturbation analysis, 
+                decoherence-resistant encoding, and multi-dimensional entanglement mapping.
+            </p>
+        </div>
+        
+        <div class="query-section">
+            <h2 style="margin-bottom: 15px; color: #00ddff;">🎯 Enter Query String</h2>
+            <div class="query-input-wrapper">
+                <input 
+                    type="text" 
+                    id="queryInput" 
+                    placeholder="Enter data to hash through quantum collider..."
+                    onkeypress="handleKeyPress(event)"
+                >
+                <button class="collide-btn" id="collideBtn" onclick="runCollider()">
+                    ⚡ COLLIDE
+                </button>
+            </div>
+        </div>
+        
+        <div class="results" id="results">
+            <div class="result-header">📊 COLLISION RESULTS</div>
+            
+            <div class="hash-display">
+                <div class="hash-label">🔐 QSH HASH:</div>
+                <div class="hash-value" id="qshHash">-</div>
+            </div>
+            
+            <div class="hash-display" style="border-color: #00ff88; background: rgba(0, 255, 136, 0.1);">
+                <div class="hash-label" style="color: #00ff88;">🔒 CLASSICAL HASH (SHA-256):</div>
+                <div class="hash-value" id="classicalHash">-</div>
+            </div>
+            
+            <div class="result-grid" id="resultGrid">
+                <!-- Results populated by JavaScript -->
+            </div>
+        </div>
+        
+        <div class="history" id="historySection" style="display: none;">
+            <div class="history-title">📜 Collision History</div>
+            <div id="historyList"></div>
+        </div>
+    </div>
+    
+    <script>
+        let collisionHistory = [];
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                runCollider();
+            }
+        }
+        
+        async function runCollider() {
+            const query = document.getElementById('queryInput').value.trim();
+            
+            if (!query) {
+                alert('Please enter a query string!');
+                return;
+            }
+            
+            const btn = document.getElementById('collideBtn');
+            btn.classList.add('colliding');
+            btn.textContent = '⚡ COLLIDING...';
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/qsh-query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+                
+                const result = await response.json();
+                
+                // Wait a bit for effect
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                displayResults(result);
+                addToHistory(result);
+                
+            } catch (error) {
+                console.error('Collider error:', error);
+                alert('Collision failed: ' + error.message);
+            } finally {
+                btn.classList.remove('colliding');
+                btn.textContent = '⚡ COLLIDE';
+                btn.disabled = false;
+            }
+        }
+        
+        function displayResults(result) {
+            document.getElementById('qshHash').textContent = result.qsh_hash;
+            document.getElementById('classicalHash').textContent = result.classical_hash;
+            
+            const resultGrid = document.getElementById('resultGrid');
+            resultGrid.innerHTML = `
+                <div class="result-item">
+                    <div class="result-label">Entanglement Strength</div>
+                    <div class="result-value">${result.entanglement_strength}</div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">Collision Energy</div>
+                    <div class="result-value">${result.collision_energy_gev} GeV</div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">Particle States</div>
+                    <div class="result-value">${result.particle_states_generated}</div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">Foam Perturbations</div>
+                    <div class="result-value">${result.foam_perturbations}</div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">Decoherence Time</div>
+                    <div class="result-value">${result.decoherence_time_ns} ns</div>
+                </div>
+                <div class="result-item">
+                    <div class="result-label">Status</div>
+                    <div class="result-value" style="color: #00ff88;">✓ SUCCESS</div>
+                </div>
+            `;
+            
+            document.getElementById('results').classList.add('show');
+        }
+        
+        function addToHistory(result) {
+            collisionHistory.unshift(result);
+            
+            // Keep only last 10
+            if (collisionHistory.length > 10) {
+                collisionHistory = collisionHistory.slice(0, 10);
+            }
+            
+            const historySection = document.getElementById('historySection');
+            const historyList = document.getElementById('historyList');
+            
+            historySection.style.display = 'block';
+            
+            historyList.innerHTML = collisionHistory.map((item, index) => `
+                <div class="history-item">
+                    <div class="history-query">
+                        <strong>${index + 1}.</strong> "${item.query}"
+                    </div>
+                    <div class="history-hash">
+                        QSH: ${item.qsh_hash} | Energy: ${item.collision_energy_gev} GeV | 
+                        Time: ${new Date(item.timestamp).toLocaleTimeString()}
+                    </div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
