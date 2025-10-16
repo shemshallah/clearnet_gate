@@ -20,7 +20,7 @@ import httpx
 import os
 import subprocess
 from pathlib import Path
-import json as json_lib  # Alias to avoid conflict
+import json
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -214,8 +214,7 @@ def execute_shell_command(command: str) -> dict:
             "timestamp": datetime.now().isoformat()
         }
 
-SPLASH_HTML = """
-<!DOCTYPE html>
+SPLASH_HTML = """<!DOCTYPE html>
 <html>
 <head>
     <title>Quantum Foam Network</title>
@@ -255,11 +254,7 @@ SPLASH_HTML = """
             color: #00ddff;
             margin-bottom: 30px;
         }
-        .content {
-            line-height: 1.8;
-            margin: 30px 0;
-            font-size: 1.1em;
-        }
+        .content { line-height: 1.8; margin: 30px 0; font-size: 1.1em; }
         .highlight { color: #00ddff; font-weight: bold; }
         .quantum-button {
             display: inline-block;
@@ -305,4 +300,105 @@ SPLASH_HTML = """
         }
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.2
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+        a { color: #00ddff; text-decoration: none; }
+        a:hover { color: #00ff88; text-shadow: 0 0 5px #00ff88; }
+        ::-webkit-scrollbar { width: 12px; }
+        ::-webkit-scrollbar-track { background: #0a0a0a; }
+        ::-webkit-scrollbar-thumb { background: #00ff88; border-radius: 6px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚛️ QUANTUM FOAM NETWORK ⚛️</h1>
+        <p class="subtitle">World's First Quantum-Classical Internet Interface</p>
+        <div class="content">
+            <p><span class="highlight">Quantum foam enabled 6 GHz EPR Teleportation</span> mediated routed traffic 
+            enables the world's first quantum-classical internet interface. Welcome to the 
+            <span class="highlight">computational-foam space</span>.</p>
+        </div>
+        <div class="button-container">
+            <a href="/metrics" class="quantum-button">📊 NETWORK CONTROL CENTER</a>
+        </div>
+        <div class="team">
+            <div class="team-title">Built by:</div>
+            <div class="team-member">🔷 <strong>hackah::hackah</strong></div>
+            <div class="team-member">🔷 <strong>Justin Howard-Stanley</strong> - <a href="mailto:shemshallah@gmail.com">shemshallah@gmail.com</a></div>
+            <div class="team-member">🔷 <strong>Dale Cwidak</strong></div>
+        </div>
+        <div class="status">
+            <span class="status-indicator"></span>
+            <strong>QUANTUM ENTANGLEMENT ACTIVE</strong>
+            <br>
+            <small style="color: #888;">System operational | EPR pairs synchronized | QRAM initialized</small>
+        </div>
+    </div>
+</body>
+</html>"""
+
+@app.get("/", response_class=HTMLResponse)
+async def splash():
+    return SPLASH_HTML
+
+@app.get("/metrics", response_class=HTMLResponse)
+async def metrics():
+    return HTMLResponse(content=open('/app/metrics.html', 'r').read())
+
+@app.get("/api/quantum-metrics")
+async def get_quantum_metrics():
+    return JSONResponse(network_metrics.get_metrics())
+
+@app.post("/api/run-speed-test")
+async def run_speed_test(background_tasks: BackgroundTasks):
+    background_tasks.add_task(network_metrics.run_full_test)
+    return {"status": "test_started"}
+
+@app.post("/api/qsh-query")
+async def qsh_query(query: QSHQuery):
+    result = process_qsh_query(query.query)
+    return JSONResponse(result)
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...)):
+    file_path = UPLOAD_DIR / file.filename
+    with open(file_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
+    return {"filename": file.filename, "size": len(content)}
+
+@app.post("/api/upload-test")
+async def upload_test(file: UploadFile = File(...)):
+    content = await file.read()
+    return {"size": len(content)}
+
+@app.get("/api/files")
+async def list_files():
+    files = []
+    for file_path in UPLOAD_DIR.iterdir():
+        if file_path.is_file():
+            files.append({
+                "name": file_path.name,
+                "size": file_path.stat().st_size
+            })
+    return files
+
+@app.get("/api/download/{filename}")
+async def download_file(filename: str):
+    file_path = UPLOAD_DIR / filename
+    if file_path.exists():
+        return FileResponse(file_path)
+    return JSONResponse({"error": "File not found"}, status_code=404)
+
+@app.post("/api/shell")
+async def shell_command(command: ShellCommand):
+    result = execute_shell_command(command.command)
+    return JSONResponse(result)
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
