@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: qu-tip-proxy
+    env: docker
+    dockerfilePath: ./Dockerfile
+    repo: https://github.com/yourusername/qu-tip-proxy  # Your GitHub repo
+    plan: free  # Or 'starter' for $7/month
+    envVars:
+      - key: REDIS_URL
+        fromDatabase:
+          name: qu-tip-redis
+          property: connectionString
+        generateValue: true
+
+databases:
+  - name: qu-tip-redis
+    databaseName: qu-tip-db
+    plan: starter  # $7/month for Redis
