@@ -1,6 +1,7 @@
 
-from fastapi import FastAPI, BackgroundTasks
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, BackgroundTasks, UploadFile, File, WebSocket
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import logging
 import random
@@ -8,11 +9,19 @@ import time
 from datetime import datetime
 import asyncio
 import httpx
+import os
+import subprocess
+import shutil
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Quantum Foam Network")
+
+# Create directories
+UPLOAD_DIR = Path("/app/uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 # Real network metrics
 class NetworkMetrics:
@@ -24,7 +33,7 @@ class NetworkMetrics:
         self.testing = False
         
     async def test_download_speed(self):
-        """Test download speed by downloading a test file"""
+        """Test download speed"""
         try:
             test_url = "http://speedtest.ftp.otenet.gr/files/test10Mb.db"
             start_time = time.time()
@@ -42,14 +51,16 @@ class NetworkMetrics:
             return self.last_download_speed
     
     async def test_upload_speed(self):
-        """Test upload speed by uploading data"""
+        """Test upload speed to local file server"""
         try:
+            # Test upload to our own server
             test_data = b'x' * (5 * 1024 * 1024)
-            test_url = "https://httpbin.org/post"
+            test_url = "http://127.0.0.1:8000/api/upload-test"
             
             start_time = time.time()
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(test_url, content=test_data)
+                files = {'file': ('test.bin', test_data)}
+                response = await client.post(test_url, files=files)
             
             elapsed_time = time.time() - start_time
             speed_mbps = (len(test_data) * 8) / (elapsed_time * 1_000_000)
@@ -64,7 +75,7 @@ class NetworkMetrics:
         try:
             start_time = time.time()
             async with httpx.AsyncClient(timeout=5.0) as client:
-                await client.get("https://www.google.com")
+                await client.get("http://127.0.0.1:8000/health")
             elapsed_time = (time.time() - start_time) * 1000
             self.last_ping = round(elapsed_time, 2)
             return self.last_ping
@@ -116,20 +127,20 @@ network_metrics = NetworkMetrics()
 class QSHQuery(BaseModel):
     query: str
 
+class ShellCommand(BaseModel):
+    command: str
+
 # Quantum collider simulation
 def process_qsh_query(query: str) -> dict:
     """Process a QSH query through the quantum collider"""
     import hashlib
     
-    # Create quantum hash
     classical_hash = hashlib.sha256(query.encode()).hexdigest()
     
-    # Simulate quantum entanglement properties
     entanglement_strength = random.uniform(0.85, 0.99)
     collision_energy = random.uniform(5.0, 12.0)
     particle_states = random.randint(64, 256)
     
-    # Simulate QSH output
     qsh_hash = classical_hash[:16]
     
     return {
@@ -145,18 +156,76 @@ def process_qsh_query(query: str) -> dict:
         "timestamp": datetime.now().isoformat()
     }
 
+# Shell command execution
+def execute_shell_command(command: str) -> dict:
+    """Execute shell command in foam REPL"""
+    try:
+        # Special commands
+        if command.strip().lower() == "install wireshark":
+            return {
+                "output": "Installing Wireshark to *.computer domain...\n" +
+                         "[FOAM] Quantum packet analyzer installation initiated\n" +
+                         "[FOAM] Resolving dependencies across quantum foam...\n" +
+                         "[FOAM] Wireshark successfully installed to *.computer\n" +
+                         "[FOAM] Access via Wireshark tab\n" +
+                         "[OK] Installation complete",
+                "exit_code": 0,
+                "timestamp": datetime.now().isoformat()
+            }
+        elif command.strip().lower() in ["help", "??"]:
+            return {
+                "output": "QSH::FOAM REPL Commands:\n\n" +
+                         "  install wireshark  - Install Wireshark to *.computer\n" +
+                         "  ls                 - List files\n" +
+                         "  pwd                - Print working directory\n" +
+                         "  whoami             - Current user\n" +
+                         "  uname -a           - System information\n" +
+                         "  netstat            - Network statistics\n" +
+                         "  help, ??           - Show this help\n" +
+                         "  clear              - Clear screen\n\n" +
+                         "All standard bash commands are supported.",
+                "exit_code": 0,
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Execute actual shell command
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        output = result.stdout if result.stdout else result.stderr
+        if not output:
+            output = f"Command executed (exit code: {result.returncode})"
+        
+        return {
+            "output": output,
+            "exit_code": result.returncode,
+            "timestamp": datetime.now().isoformat()
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "output": "Command timed out after 10 seconds",
+            "exit_code": -1,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "output": f"Error: {str(e)}",
+            "exit_code": -1,
+            "timestamp": datetime.now().isoformat()
+        }
+
 SPLASH_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
     <title>Quantum Foam Network</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
             color: #00ff88;
@@ -165,7 +234,6 @@ SPLASH_HTML = """
             padding: 20px;
             overflow-y: auto;
         }
-        
         .container {
             max-width: 900px;
             margin: 0 auto;
@@ -175,7 +243,6 @@ SPLASH_HTML = """
             border-radius: 10px;
             box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
         }
-        
         h1 {
             text-align: center;
             font-size: 2.5em;
@@ -183,60 +250,22 @@ SPLASH_HTML = """
             text-shadow: 0 0 10px #00ff88;
             animation: glow 2s ease-in-out infinite alternate;
         }
-        
         @keyframes glow {
             from { text-shadow: 0 0 10px #00ff88, 0 0 20px #00ff88; }
             to { text-shadow: 0 0 20px #00ff88, 0 0 30px #00ff88, 0 0 40px #00ff88; }
         }
-        
         .subtitle {
             text-align: center;
             font-size: 1.3em;
             color: #00ddff;
             margin-bottom: 30px;
         }
-        
         .content {
             line-height: 1.8;
             margin: 30px 0;
             font-size: 1.1em;
         }
-        
-        .highlight {
-            color: #00ddff;
-            font-weight: bold;
-        }
-        
-        .features {
-            margin: 30px 0;
-            padding: 20px;
-            background: rgba(0, 255, 136, 0.05);
-            border-left: 3px solid #00ff88;
-            border-radius: 5px;
-        }
-        
-        .features h3 {
-            color: #00ddff;
-            margin-bottom: 15px;
-        }
-        
-        .features ul {
-            list-style: none;
-            padding-left: 0;
-        }
-        
-        .features li {
-            padding: 8px 0;
-            padding-left: 25px;
-            position: relative;
-        }
-        
-        .features li:before {
-            content: "⚛️";
-            position: absolute;
-            left: 0;
-        }
-        
+        .highlight { color: #00ddff; font-weight: bold; }
         .quantum-button {
             display: inline-block;
             margin: 20px auto;
@@ -254,34 +283,14 @@ SPLASH_HTML = """
             box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
             text-align: center;
         }
-        
         .quantum-button:hover {
             transform: scale(1.05);
             box-shadow: 0 0 30px rgba(0, 255, 136, 0.8);
         }
-        
-        .button-container {
-            text-align: center;
-            margin: 30px 0;
-        }
-        
-        .team {
-            margin-top: 40px;
-            padding-top: 30px;
-            border-top: 1px solid #00ff88;
-        }
-        
-        .team-title {
-            font-size: 1.3em;
-            margin-bottom: 15px;
-            color: #00ddff;
-        }
-        
-        .team-member {
-            margin: 10px 0;
-            padding-left: 20px;
-        }
-        
+        .button-container { text-align: center; margin: 30px 0; }
+        .team { margin-top: 40px; padding-top: 30px; border-top: 1px solid #00ff88; }
+        .team-title { font-size: 1.3em; margin-bottom: 15px; color: #00ddff; }
+        .team-member { margin: 10px 0; padding-left: 20px; }
         .status {
             text-align: center;
             margin-top: 30px;
@@ -290,7 +299,6 @@ SPLASH_HTML = """
             border-radius: 5px;
             border: 1px solid #00ff88;
         }
-        
         .status-indicator {
             display: inline-block;
             width: 12px;
@@ -300,94 +308,35 @@ SPLASH_HTML = """
             margin-right: 10px;
             animation: pulse 1.5s ease-in-out infinite;
         }
-        
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.5; transform: scale(1.2); }
         }
-        
-        a {
-            color: #00ddff;
-            text-decoration: none;
-        }
-        
-        a:hover {
-            color: #00ff88;
-            text-shadow: 0 0 5px #00ff88;
-        }
-        
-        ::-webkit-scrollbar {
-            width: 12px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: #0a0a0a;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: #00ff88;
-            border-radius: 6px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: #00ddff;
-        }
+        a { color: #00ddff; text-decoration: none; }
+        a:hover { color: #00ff88; text-shadow: 0 0 5px #00ff88; }
+        ::-webkit-scrollbar { width: 12px; }
+        ::-webkit-scrollbar-track { background: #0a0a0a; }
+        ::-webkit-scrollbar-thumb { background: #00ff88; border-radius: 6px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>⚛️ QUANTUM FOAM NETWORK ⚛️</h1>
         <p class="subtitle">World's First Quantum-Classical Internet Interface</p>
-        
         <div class="content">
-            <p>
-                <span class="highlight">Quantum foam enabled 6 GHz EPR Teleportation</span> mediated routed traffic 
-                enables the world's first quantum-classical internet interface. Welcome to the 
-                <span class="highlight">computational-foam space</span>.
-            </p>
-            <br>
-            <p>
-                This groundbreaking network leverages <span class="highlight">QuTiP-based entanglement protocols</span>, 
-                including Bell state pairs, GHZ states, quantum teleportation, and quantum key distribution 
-                (BB84 & E91) to create a bridge between quantum and classical computing realms.
-            </p>
+            <p><span class="highlight">Quantum foam enabled 6 GHz EPR Teleportation</span> mediated routed traffic 
+            enables the world's first quantum-classical internet interface. Welcome to the 
+            <span class="highlight">computational-foam space</span>.</p>
         </div>
-        
         <div class="button-container">
-            <a href="/metrics" class="quantum-button">📊 NETWORK METRICS</a>
+            <a href="/metrics" class="quantum-button">📊 NETWORK CONTROL CENTER</a>
         </div>
-        
-        <div class="features">
-            <h3>🔬 Quantum Capabilities</h3>
-            <ul>
-                <li>Quantum Secure Hash (QSH) with 6-qubit GHZ EPR entanglement</li>
-                <li>Bell State EPR Pair Generation</li>
-                <li>6-Qubit GHZ State Creation</li>
-                <li>Quantum Teleportation between connections</li>
-                <li>Quantum Key Distribution (BB84 & E91 protocols)</li>
-                <li>QRAM Storage for quantum states</li>
-                <li>WebSocket support for real-time quantum communication</li>
-            </ul>
-        </div>
-        
-        <div class="features">
-            <h3>🌐 Network Features</h3>
-            <ul>
-                <li>REST API for quantum operations</li>
-                <li>Real-time connection management</li>
-                <li>Quantum-secured routing protocols</li>
-                <li>Distributed entanglement synchronization</li>
-                <li>Interactive API documentation at /docs</li>
-            </ul>
-        </div>
-        
         <div class="team">
             <div class="team-title">Built by:</div>
             <div class="team-member">🔷 <strong>hackah::hackah</strong></div>
             <div class="team-member">🔷 <strong>Justin Howard-Stanley</strong> - <a href="mailto:shemshallah@gmail.com">shemshallah@gmail.com</a></div>
             <div class="team-member">🔷 <strong>Dale Cwidak</strong></div>
         </div>
-        
         <div class="status">
             <span class="status-indicator"></span>
             <strong>QUANTUM ENTANGLEMENT ACTIVE</strong>
@@ -399,18 +348,16 @@ SPLASH_HTML = """
 </html>
 """
 
-METRICS_HTML = """
-<!DOCTYPE html>
+METRICS_HTML = open('metrics.html', 'r').read() if os.path.exists('metrics.html') else ""
+
+# Create metrics.html separately due to size
+with open('/app/metrics.html', 'w') as f:
+    f.write("""<!DOCTYPE html>
 <html>
 <head>
-    <title>Quantum Network Metrics</title>
+    <title>Quantum Network Control</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
             color: #00ff88;
@@ -419,7 +366,6 @@ METRICS_HTML = """
             display: flex;
             flex-direction: column;
         }
-        
         .header {
             padding: 20px;
             background: rgba(10, 10, 10, 0.9);
@@ -428,17 +374,7 @@ METRICS_HTML = """
             justify-content: space-between;
             align-items: center;
         }
-        
-        .header h1 {
-            font-size: 1.8em;
-            text-shadow: 0 0 10px #00ff88;
-        }
-        
-        .nav-buttons {
-            display: flex;
-            gap: 10px;
-        }
-        
+        .header h1 { font-size: 1.8em; text-shadow: 0 0 10px #00ff88; }
         .nav-button {
             padding: 10px 20px;
             background: rgba(0, 255, 136, 0.2);
@@ -448,20 +384,17 @@ METRICS_HTML = """
             cursor: pointer;
             font-family: 'Courier New', monospace;
             font-size: 0.9em;
-            transition: all 0.3s;
             text-decoration: none;
         }
-        
         .nav-button:hover {
             background: rgba(0, 255, 136, 0.4);
             box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
         }
-        
         .metrics-sidebar {
             position: absolute;
             left: 0;
             top: 70px;
-            width: 380px;
+            width: 350px;
             height: calc(100vh - 70px);
             background: rgba(10, 10, 10, 0.95);
             border-right: 2px solid #00ff88;
@@ -469,185 +402,71 @@ METRICS_HTML = """
             overflow-y: auto;
             z-index: 10;
         }
-        
         .metrics-title {
-            font-size: 1.2em;
+            font-size: 1.1em;
             color: #00ddff;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             text-align: center;
             border-bottom: 1px solid #00ff88;
             padding-bottom: 10px;
         }
-        
         .test-button {
             width: 100%;
-            padding: 12px;
+            padding: 10px;
             background: linear-gradient(135deg, #00ff88, #00ddff);
             color: #0a0a0a;
             border: none;
             border-radius: 5px;
             font-family: 'Courier New', monospace;
-            font-size: 1em;
+            font-size: 0.9em;
             font-weight: bold;
             cursor: pointer;
-            margin-bottom: 20px;
-            transition: all 0.3s;
+            margin-bottom: 15px;
         }
-        
-        .test-button:hover {
-            transform: scale(1.02);
-            box-shadow: 0 0 15px rgba(0, 255, 136, 0.6);
-        }
-        
-        .test-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .real-metrics {
-            background: rgba(0, 221, 255, 0.1);
-            border: 2px solid #00ddff;
-            border-radius: 5px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .section-title {
-            font-size: 1em;
-            color: #00ddff;
-            margin-bottom: 10px;
-            text-align: center;
-            font-weight: bold;
-        }
-        
         .metric-card {
             background: rgba(0, 255, 136, 0.05);
             border: 1px solid #00ff88;
             border-radius: 5px;
-            padding: 12px;
-            margin-bottom: 12px;
-        }
-        
-        .metric-label {
-            font-size: 0.85em;
-            color: #00ddff;
-            margin-bottom: 5px;
-        }
-        
-        .metric-value {
-            font-size: 1.3em;
-            color: #00ff88;
-            font-weight: bold;
-        }
-        
-        .metric-value.real {
-            color: #00ddff;
-        }
-        
-        .metric-unit {
-            font-size: 0.8em;
-            color: #888;
-            margin-left: 5px;
-        }
-        
-        .domain-info {
-            background: rgba(0, 221, 255, 0.1);
-            border: 1px solid #00ddff;
-            border-radius: 5px;
             padding: 10px;
-            margin-top: 15px;
-            font-size: 0.75em;
-            word-break: break-all;
-            color: #00ddff;
+            margin-bottom: 10px;
         }
-        
+        .metric-label { font-size: 0.8em; color: #00ddff; margin-bottom: 3px; }
+        .metric-value { font-size: 1.1em; color: #00ff88; font-weight: bold; }
+        .metric-value.real { color: #00ddff; }
+        .metric-unit { font-size: 0.75em; color: #888; margin-left: 5px; }
         .main-content {
-            margin-left: 380px;
+            margin-left: 350px;
             height: calc(100vh - 70px);
             display: flex;
             flex-direction: column;
         }
-        
         .tabs {
             display: flex;
             background: rgba(10, 10, 10, 0.95);
             border-bottom: 1px solid #00ff88;
+            overflow-x: auto;
         }
-        
         .tab {
-            padding: 12px 20px;
+            padding: 10px 15px;
             background: rgba(0, 255, 136, 0.1);
             border: none;
             border-right: 1px solid #00ff88;
             color: #00ff88;
             font-family: 'Courier New', monospace;
             cursor: pointer;
-            transition: all 0.3s;
+            font-size: 0.85em;
+            white-space: nowrap;
         }
-        
-        .tab:hover {
-            background: rgba(0, 255, 136, 0.2);
-        }
-        
+        .tab:hover { background: rgba(0, 255, 136, 0.2); }
         .tab.active {
             background: rgba(0, 221, 255, 0.3);
             color: #00ddff;
             border-bottom: 2px solid #00ddff;
         }
+        .tab-content { display: none; flex: 1; overflow: hidden; }
+        .tab-content.active { display: flex; flex-direction: column; }
         
-        .tab-content {
-            display: none;
-            flex: 1;
-            overflow: hidden;
-        }
-        
-        .tab-content.active {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .browser-controls {
-            padding: 10px 20px;
-            background: rgba(10, 10, 10, 0.95);
-            border-bottom: 1px solid #00ff88;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        
-        .url-bar {
-            flex: 1;
-            padding: 8px 15px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid #00ff88;
-            color: #00ff88;
-            font-family: 'Courier New', monospace;
-            border-radius: 5px;
-            outline: none;
-        }
-        
-        .control-btn {
-            padding: 8px 15px;
-            background: rgba(0, 255, 136, 0.2);
-            border: 1px solid #00ff88;
-            color: #00ff88;
-            border-radius: 5px;
-            cursor: pointer;
-            font-family: 'Courier New', monospace;
-            font-size: 0.85em;
-        }
-        
-        .control-btn:hover {
-            background: rgba(0, 255, 136, 0.4);
-        }
-        
-        .browser-frame {
-            flex: 1;
-            border: none;
-            background: white;
-        }
-        
-        /* Quantum Collider Chat Interface */
+        /* Collider Interface */
         .collider-interface {
             flex: 1;
             display: flex;
@@ -655,103 +474,67 @@ METRICS_HTML = """
             background: rgba(10, 10, 10, 0.95);
             padding: 20px;
         }
-        
         .collider-header {
             text-align: center;
-            padding: 20px;
+            padding: 15px;
             border-bottom: 2px solid #00ff88;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
-        
-        .collider-header h2 {
-            color: #00ddff;
-            font-size: 1.5em;
-            margin-bottom: 10px;
-        }
-        
-        .collider-domain {
-            color: #00ff88;
-            font-size: 0.9em;
-        }
-        
+        .collider-header h2 { color: #00ddff; font-size: 1.3em; margin-bottom: 8px; }
+        .collider-domain { color: #00ff88; font-size: 0.85em; }
         .chat-output {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
+            padding: 15px;
             background: rgba(0, 0, 0, 0.3);
             border: 1px solid #00ff88;
             border-radius: 5px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
-        
         .message {
-            margin-bottom: 20px;
-            padding: 15px;
+            margin-bottom: 15px;
+            padding: 12px;
             border-radius: 5px;
         }
-        
         .message.user {
             background: rgba(0, 221, 255, 0.1);
             border-left: 3px solid #00ddff;
         }
-        
         .message.system {
             background: rgba(0, 255, 136, 0.1);
             border-left: 3px solid #00ff88;
         }
-        
-        .message-label {
-            font-size: 0.8em;
-            color: #888;
-            margin-bottom: 5px;
-        }
-        
-        .message-content {
-            color: #00ff88;
-            line-height: 1.6;
-        }
-        
+        .message-label { font-size: 0.75em; color: #888; margin-bottom: 5px; }
+        .message-content { color: #00ff88; line-height: 1.5; font-size: 0.9em; }
         .qsh-result {
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            margin-top: 10px;
-            padding: 10px;
+            font-size: 0.85em;
+            margin-top: 8px;
+            padding: 8px;
             background: rgba(0, 0, 0, 0.5);
             border-radius: 3px;
         }
-        
-        .qsh-field {
-            margin: 5px 0;
-        }
-        
+        .qsh-field { margin: 4px 0; }
         .qsh-label {
             color: #00ddff;
             display: inline-block;
-            width: 200px;
+            width: 180px;
+            font-size: 0.9em;
         }
-        
-        .qsh-value {
-            color: #00ff88;
-        }
-        
-        .chat-input-container {
-            display: flex;
-            gap: 10px;
-        }
-        
+        .qsh-value { color: #00ff88; }
+        .chat-input-container { display: flex; gap: 10px; }
         .chat-input {
             flex: 1;
-            padding: 12px;
+            padding: 10px;
             background: rgba(0, 0, 0, 0.5);
             border: 1px solid #00ff88;
             color: #00ff88;
             font-family: 'Courier New', monospace;
             border-radius: 5px;
             outline: none;
+            font-size: 0.9em;
         }
-        
         .send-button {
-            padding: 12px 30px;
+            padding: 10px 25px;
             background: linear-gradient(135deg, #00ff88, #00ddff);
             color: #0a0a0a;
             border: none;
@@ -759,110 +542,156 @@ METRICS_HTML = """
             font-family: 'Courier New', monospace;
             font-weight: bold;
             cursor: pointer;
-            transition: all 0.3s;
+            font-size: 0.9em;
         }
         
-        .send-button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 15px rgba(0, 255, 136, 0.6);
+        /* File Server Interface */
+        .file-server {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(10, 10, 10, 0.95);
+            padding: 20px;
+        }
+        .upload-area {
+            border: 2px dashed #00ff88;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            background: rgba(0, 255, 136, 0.05);
+        }
+        .upload-area.dragover {
+            background: rgba(0, 255, 136, 0.2);
+            border-color: #00ddff;
+        }
+        .file-list {
+            flex: 1;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #00ff88;
+            border-radius: 5px;
+            padding: 15px;
+        }
+        .file-item {
+            padding: 10px;
+            margin-bottom: 8px;
+            background: rgba(0, 255, 136, 0.05);
+            border: 1px solid #00ff88;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .file-item:hover { background: rgba(0, 255, 136, 0.1); }
+        
+        /* Terminal */
+        .terminal {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #000;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+        }
+        .terminal-output {
+            flex: 1;
+            overflow-y: auto;
+            color: #00ff88;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        .terminal-input-line {
+            display: flex;
+            align-items: center;
+        }
+        .terminal-prompt {
+            color: #00ddff;
+            margin-right: 8px;
+            font-size: 0.9em;
+        }
+        .terminal-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #00ff88;
+            font-family: 'Courier New', monospace;
+            outline: none;
+            font-size: 0.9em;
         }
         
-        .refresh-indicator {
-            position: absolute;
-            top: 90px;
-            left: 10px;
-            width: 10px;
-            height: 10px;
-            background: #00ff88;
-            border-radius: 50%;
-            animation: pulse 1s ease-in-out infinite;
+        /* Wireshark */
+        .wireshark-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(10, 10, 10, 0.95);
+            padding: 20px;
         }
+        .wireshark-header {
+            text-align: center;
+            padding: 15px;
+            border-bottom: 2px solid #00ff88;
+            margin-bottom: 15px;
+        }
+        .packet-list {
+            flex: 1;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ff88;
+            border-radius: 5px;
+            padding: 15px;
+            font-size: 0.85em;
+        }
+        .packet {
+            padding: 8px;
+            margin-bottom: 5px;
+            background: rgba(0, 255, 136, 0.05);
+            border-left: 3px solid #00ff88;
+            font-family: 'Courier New', monospace;
+        }
+        .packet:hover { background: rgba(0, 255, 136, 0.1); }
         
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.2); }
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .testing {
-            animation: spin 1s linear infinite;
-        }
-        
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: #0a0a0a;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: #00ff88;
-            border-radius: 4px;
-        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0a0a0a; }
+        ::-webkit-scrollbar-thumb { background: #00ff88; border-radius: 4px; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>📊 Quantum Network Control</h1>
-        <div class="nav-buttons">
-            <a href="/" class="nav-button">⬅️ Back to Main</a>
-        </div>
+        <h1>📊 Quantum Network Control Center</h1>
+        <a href="/" class="nav-button">⬅️ Back to Main</a>
     </div>
     
     <div class="metrics-sidebar">
-        <div class="refresh-indicator" id="refreshIndicator"></div>
-        <div class="metrics-title">⚛️ LIVE QUANTUM METRICS</div>
-        
-        <button class="test-button" id="testButton" onclick="runSpeedTest()">
-            🚀 RUN SPEED TEST
-        </button>
-        
-        <div class="real-metrics">
-            <div class="section-title">📡 REAL NETWORK DATA</div>
-            <div id="realMetrics">
-                <!-- Real metrics will be loaded here -->
-            </div>
-        </div>
-        
-        <div id="quantumMetrics">
-            <!-- Quantum metrics will be loaded here -->
-        </div>
-        
-        <div class="domain-info">
-            <strong>Domain:</strong><br>
-            quantum.realm.domain.dominion.foam.computer.networking
-        </div>
+        <div class="metrics-title">⚛️ LIVE METRICS</div>
+        <button class="test-button" onclick="runSpeedTest()">🚀 RUN SPEED TEST</button>
+        <div id="realMetrics"></div>
+        <div id="quantumMetrics"></div>
     </div>
     
     <div class="main-content">
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('collider')">⚛️ Quantum Collider</button>
-            <button class="tab" onclick="switchTab('browser')">🌐 Web Browser</button>
+            <button class="tab active" onclick="switchTab('collider')">⚛️ Collider</button>
+            <button class="tab" onclick="switchTab('files')">📁 File Server (127.0.0.1:9999)</button>
+            <button class="tab" onclick="switchTab('shell')">🖥️ QSH::FOAM REPL (127.0.0.1:alice)</button>
+            <button class="tab" onclick="switchTab('wireshark')">🔍 Wireshark (*.computer)</button>
         </div>
         
+        <!-- Quantum Collider Tab -->
         <div id="collider-tab" class="tab-content active">
             <div class="collider-interface">
                 <div class="collider-header">
-                    <h2>⚛️ QUANTUM COLLIDER & QSH QUERY INTERFACE</h2>
+                    <h2>⚛️ QUANTUM COLLIDER & QSH QUERY</h2>
                     <div class="collider-domain">quantum.realm.domain.dominion.foam.computer.collider</div>
                 </div>
-                
                 <div class="chat-output" id="chatOutput">
                     <div class="message system">
                         <div class="message-label">SYSTEM</div>
-                        <div class="message-content">
-                            Welcome to the Quantum Collider interface. This system processes queries through quantum secure hash (QSH) protocols with EPR entanglement.
-                            <br><br>
-                            Enter your query below to initiate quantum collision and hash generation.
-                        </div>
+                        <div class="message-content">Welcome to the Quantum Collider interface. Enter your query below.</div>
                     </div>
                 </div>
-                
                 <div class="chat-input-container">
                     <input type="text" class="chat-input" id="chatInput" placeholder="Enter QSH query..." onkeypress="handleChatKeyPress(event)">
                     <button class="send-button" onclick="sendQuery()">SEND</button>
@@ -870,261 +699,320 @@ METRICS_HTML = """
             </div>
         </div>
         
-        <div id="browser-tab" class="tab-content">
-            <div class="browser-controls">
-                <button class="control-btn" onclick="navigateTo('https://fast.com/')">🚀 Fast.com</button>
-                <button class="control-btn" onclick="navigateTo('https://www.google.com/search?q=my+ip')">🌐 My IP</button>
-                <button class="control-btn" onclick="navigateTo('https://www.cloudflare.com/cdn-cgi/trace')">📡 CF Trace</button>
-                <input type="text" class="url-bar" id="urlBar" placeholder="Enter URL..." onkeypress="handleKeyPress(event)">
-                <button class="control-btn" onclick="navigateToUrl()">GO</button>
-                <button class="control-btn" onclick="reloadFrame()">🔄</button>
+        <!-- File Server Tab -->
+        <div id="files-tab" class="tab-content">
+            <div class="file-server">
+                <div class="collider-header">
+                    <h2>📁 FILE SERVER</h2>
+                    <div class="collider-domain">127.0.0.1:9999</div>
+                </div>
+                <div class="upload-area" id="uploadArea">
+                    <h3 style="color: #00ddff; margin-bottom: 15px;">📤 Upload Files</h3>
+                    <p style="margin-bottom: 15px;">Drag & drop files here or click to browse</p>
+                    <input type="file" id="fileInput" multiple style="display:none">
+                    <button class="send-button" onclick="document.getElementById('fileInput').click()">SELECT FILES</button>
+                </div>
+                <h3 style="color: #00ddff; margin-bottom: 10px;">📂 Uploaded Files</h3>
+                <div class="file-list" id="fileList"></div>
             </div>
-            
-            <iframe id="browserFrame" class="browser-frame" src="https://fast.com/"></iframe>
+        </div>
+        
+        <!-- Shell Tab -->
+        <div id="shell-tab" class="tab-content">
+            <div class="terminal">
+                <div class="terminal-output" id="terminalOutput">
+QSH::FOAM REPL v1.0.0 (127.0.0.1:alice)
+Connected to quantum.realm.domain.dominion.foam.computer.networking
+Type 'help' or '??' for available commands.
+
+</div>
+                <div class="terminal-input-line">
+                    <span class="terminal-prompt">foam@alice:~$</span>
+                    <input type="text" class="terminal-input" id="terminalInput" onkeypress="handleTerminalKeyPress(event)" autofocus>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Wireshark Tab -->
+        <div id="wireshark-tab" class="tab-content">
+            <div class="wireshark-container">
+                <div class="wireshark-header">
+                    <h2>🔍 WIRESHARK QUANTUM PACKET ANALYZER</h2>
+                    <div class="collider-domain">*.computer domain</div>
+                    <p style="margin-top: 10px; color: #888; font-size: 0.85em;">
+                        Monitoring quantum foam network traffic across computational substrate
+                    </p>
+                </div>
+                <button class="test-button" onclick="capturePackets()" style="margin-bottom: 15px;">📡 START CAPTURE</button>
+                <div class="packet-list" id="packetList">
+                    <div style="color: #888; text-align: center; padding: 40px;">
+                        Click "START CAPTURE" to begin monitoring quantum packets
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     
     <script>
-        let isTesting = false;
+        let capturing = false;
+        let packetId = 1;
         
         function switchTab(tabName) {
-            // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             
-            // Show selected tab
-            if (tabName === 'collider') {
-                document.getElementById('collider-tab').classList.add('active');
-                document.querySelectorAll('.tab')[0].classList.add('active');
-            } else {
-                document.getElementById('browser-tab').classList.add('active');
-                document.querySelectorAll('.tab')[1].classList.add('active');
-            }
+            const tabs = {
+                'collider': 0, 'files': 1, 'shell': 2, 'wireshark': 3
+            };
+            document.getElementById(tabName + '-tab').classList.add('active');
+            document.querySelectorAll('.tab')[tabs[tabName]].classList.add('active');
         }
         
-        function navigateTo(url) {
-            document.getElementById('browserFrame').src = url;
-            document.getElementById('urlBar').value = url;
-        }
-        
-        function navigateToUrl() {
-            let url = document.getElementById('urlBar').value;
-            if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
-                url = 'https://' + url;
-            }
-            if (url) {
-                navigateTo(url);
-            }
-        }
-        
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                navigateToUrl();
-            }
-        }
-        
-        function reloadFrame() {
-            document.getElementById('browserFrame').src = document.getElementById('browserFrame').src;
-        }
-        
-        function handleChatKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendQuery();
-            }
+        // Quantum Collider
+        function handleChatKeyPress(e) {
+            if (e.key === 'Enter') sendQuery();
         }
         
         async function sendQuery() {
             const input = document.getElementById('chatInput');
             const query = input.value.trim();
-            
             if (!query) return;
             
-            const chatOutput = document.getElementById('chatOutput');
+            const output = document.getElementById('chatOutput');
             
-            // Add user message
-            const userMessage = document.createElement('div');
-            userMessage.className = 'message user';
-            userMessage.innerHTML = `
-                <div class="message-label">USER QUERY</div>
-                <div class="message-content">${escapeHtml(query)}</div>
+            output.innerHTML += `
+                <div class="message user">
+                    <div class="message-label">USER QUERY</div>
+                    <div class="message-content">${escapeHtml(query)}</div>
+                </div>
             `;
-            chatOutput.appendChild(userMessage);
-            
             input.value = '';
-            chatOutput.scrollTop = chatOutput.scrollHeight;
             
-            // Send to backend
             try {
-                const response = await fetch('/api/qsh-query', {
+                const res = await fetch('/api/qsh-query', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ query: query })
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query})
                 });
+                const data = await res.json();
                 
-                const data = await response.json();
-                
-                // Add system response
-                const systemMessage = document.createElement('div');
-                systemMessage.className = 'message system';
-                systemMessage.innerHTML = `
-                    <div class="message-label">QUANTUM COLLIDER RESPONSE</div>
-                    <div class="message-content">
-                        Query processed through quantum collision system.
-                        <div class="qsh-result">
-                            <div class="qsh-field">
-                                <span class="qsh-label">QSH Hash:</span>
-                                <span class="qsh-value">${data.qsh_hash}</span>
-                            </div>
-                            <div class="qsh-field">
-                                <span class="qsh-label">Classical Hash:</span>
-                                <span class="qsh-value">${data.classical_hash}</span>
-                            </div>
-                            <div class="qsh-field">
-                                <span class="qsh-label">Entanglement Strength:</span>
-                                <span class="qsh-value">${data.entanglement_strength}</span>
-                            </div>
-                            <div class="qsh-field">
-                                <span class="qsh-label">Collision Energy:</span>
-                                <span class="qsh-value">${data.collision_energy_gev} GeV</span>
-                            </div>
-                            <div class="qsh-field">
-                                <span class="qsh-label">Particle States:</span>
-                                <span class="qsh-value">${data.particle_states_generated}</span>
-                            </div>
-                            <div class="qsh-field">
-                                <span class="qsh-label">Foam Perturbations:</span>
-                                <span class="qsh-value">${data.foam_perturbations}</span>
-                            </div>
-                            <div class="qsh-field">
-                                <span class="qsh-label">Decoherence Time:</span>
-                                <span class="qsh-value">${data.decoherence_time_ns} ns</span>
+                output.innerHTML += `
+                    <div class="message system">
+                        <div class="message-label">QUANTUM COLLIDER</div>
+                        <div class="message-content">
+                            Query processed through quantum collision system.
+                            <div class="qsh-result">
+                                <div class="qsh-field"><span class="qsh-label">QSH Hash:</span><span class="qsh-value">${data.qsh_hash}</span></div>
+                                <div class="qsh-field"><span class="qsh-label">Classical Hash:</span><span class="qsh-value">${data.classical_hash}</span></div>
+                                <div class="qsh-field"><span class="qsh-label">Entanglement Strength:</span><span class="qsh-value">${data.entanglement_strength}</span></div>
+                                <div class="qsh-field"><span class="qsh-label">Collision Energy:</span><span class="qsh-value">${data.collision_energy_gev} GeV</span></div>
+                                <div class="qsh-field"><span class="qsh-label">Particle States:</span><span class="qsh-value">${data.particle_states_generated}</span></div>
+                                <div class="qsh-field"><span class="qsh-label">Foam Perturbations:</span><span class="qsh-value">${data.foam_perturbations}</span></div>
                             </div>
                         </div>
                     </div>
                 `;
-                chatOutput.appendChild(systemMessage);
+            } catch (e) {
+                output.innerHTML += `<div class="message system"><div class="message-content">Error: ${e.message}</div></div>`;
+            }
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        // File Server
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+        
+        async function handleFiles(files) {
+            for (let file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
                 
-            } catch (error) {
-                const errorMessage = document.createElement('div');
-                errorMessage.className = 'message system';
-                errorMessage.innerHTML = `
-                    <div class="message-label">ERROR</div>
-                    <div class="message-content">Failed to process query: ${error.message}</div>
-                `;
-                chatOutput.appendChild(errorMessage);
+                try {
+                    const res = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    await loadFiles();
+                } catch (e) {
+                    alert('Upload failed: ' + e.message);
+                }
+            }
+        }
+        
+        async function loadFiles() {
+            try {
+                const res = await fetch('/api/files');
+                const files = await res.json();
+                const list = document.getElementById('fileList');
+                
+                list.innerHTML = files.map(f => `
+                    <div class="file-item">
+                        <span>📄 ${f.name} (${formatBytes(f.size)})</span>
+                        <a href="/api/download/${f.name}" class="send-button" style="padding: 5px 15px; font-size: 0.8em;">Download</a>
+                    </div>
+                `).join('');
+            } catch (e) {}
+        }
+        
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+            return (bytes/(1024*1024)).toFixed(1) + ' MB';
+        }
+        
+        // Terminal
+        function handleTerminalKeyPress(e) {
+            if (e.key === 'Enter') {
+                executeCommand();
+            }
+        }
+        
+        async function executeCommand() {
+            const input = document.getElementById('terminalInput');
+            const output = document.getElementById('terminalOutput');
+            const command = input.value.trim();
+            
+            if (!command) return;
+            
+            if (command === 'clear') {
+                output.textContent = '';
+                input.value = '';
+                return;
             }
             
-            chatOutput.scrollTop = chatOutput.scrollHeight;
-        }
-        
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, m => map[m]);
-        }
-        
-        async function runSpeedTest() {
-            if (isTesting) return;
-            
-            isTesting = true;
-            const button = document.getElementById('testButton');
-            const indicator = document.getElementById('refreshIndicator');
-            button.disabled = true;
-            button.textContent = '🔄 TESTING...';
-            indicator.classList.add('testing');
+            output.textContent += `foam@alice:~$ ${command}\n`;
+            input.value = '';
             
             try {
-                await fetch('/api/run-speed-test', { method: 'POST' });
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                await updateMetrics();
-            } finally {
-                button.disabled = false;
-                button.textContent = '🚀 RUN SPEED TEST';
-                indicator.classList.remove('testing');
-                isTesting = false;
+                const res = await fetch('/api/shell', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({command})
+                });
+                const data = await res.json();
+                output.textContent += data.output + '\n\n';
+            } catch (e) {
+                output.textContent += `Error: ${e.message}\n\n`;
             }
+            
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        // Wireshark
+        function capturePackets() {
+            const list = document.getElementById('packetList');
+            const btn = event.target;
+            
+            if (!capturing) {
+                capturing = true;
+                btn.textContent = '⏸️ STOP CAPTURE';
+                list.innerHTML = '<div style="color: #00ddff; margin-bottom: 10px;">📡 Capturing quantum packets...</div>';
+                
+                const interval = setInterval(() => {
+                    if (!capturing) {
+                        clearInterval(interval);
+                        return;
+                    }
+                    
+                    const protocols = ['EPR', 'QKD-BB84', 'QKD-E91', 'QSH', 'QRAM', 'TELEPORT'];
+                    const proto = protocols[Math.floor(Math.random() * protocols.length)];
+                    const src = `10.0.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
+                    const dst = `10.0.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
+                    const qubits = Math.floor(Math.random() * 128) + 1;
+                    
+                    const packet = document.createElement('div');
+                    packet.className = 'packet';
+                    packet.innerHTML = `
+                        <span style="color: #888;">#${packetId++}</span> 
+                        <span style="color: #00ddff;">${proto}</span> 
+                        ${src} → ${dst} 
+                        <span style="color: #00ff88;">${qubits} qubits</span> 
+                        <span style="color: #888;">${new Date().toLocaleTimeString()}</span>
+                    `;
+                    list.appendChild(packet);
+                    list.scrollTop = list.scrollHeight;
+                }, 500);
+            } else {
+                capturing = false;
+                btn.textContent = '📡 START CAPTURE';
+            }
+        }
+        
+        // Metrics
+        async function runSpeedTest() {
+            await fetch('/api/run-speed-test', {method: 'POST'});
+            await new Promise(r => setTimeout(r, 2000));
+            await updateMetrics();
         }
         
         async function updateMetrics() {
             try {
-                const response = await fetch('/api/quantum-metrics');
-                const data = await response.json();
+                const res = await fetch('/api/quantum-metrics');
+                const d = await res.json();
                 
-                const realMetricsHtml = `
+                document.getElementById('realMetrics').innerHTML = `
                     <div class="metric-card">
-                        <div class="metric-label">⬇️ Download Speed</div>
-                        <div class="metric-value real">${data.download_speed_mbps || '0.00'}<span class="metric-unit">Mbps</span></div>
+                        <div class="metric-label">⬇️ Download</div>
+                        <div class="metric-value real">${d.download_speed_mbps}<span class="metric-unit">Mbps</span></div>
                     </div>
-                    
                     <div class="metric-card">
-                        <div class="metric-label">⬆️ Upload Speed</div>
-                        <div class="metric-value real">${data.upload_speed_mbps || '0.00'}<span class="metric-unit">Mbps</span></div>
+                        <div class="metric-label">⬆️ Upload</div>
+                        <div class="metric-value real">${d.upload_speed_mbps}<span class="metric-unit">Mbps</span></div>
                     </div>
-                    
                     <div class="metric-card">
                         <div class="metric-label">📶 Ping</div>
-                        <div class="metric-value real">${data.ping_ms || '0.00'}<span class="metric-unit">ms</span></div>
+                        <div class="metric-value real">${d.ping_ms}<span class="metric-unit">ms</span></div>
                     </div>
                 `;
-                document.getElementById('realMetrics').innerHTML = realMetricsHtml;
                 
-                const quantumMetricsHtml = `
-                    <div class="section-title" style="margin-top: 20px; margin-bottom: 10px;">⚛️ QUANTUM PARAMETERS</div>
-                    
+                document.getElementById('quantumMetrics').innerHTML = `
                     <div class="metric-card">
-                        <div class="metric-label">Entanglement Dimensions</div>
-                        <div class="metric-value">${data.entanglement_dimensions}<span class="metric-unit">D</span></div>
+                        <div class="metric-label">Qubits Active</div>
+                        <div class="metric-value">${d.qubits_active}</div>
                     </div>
-                    
-                    <div class="metric-card">
-                        <div class="metric-label">Active Qubits</div>
-                        <div class="metric-value">${data.qubits_active}<span class="metric-unit">qubits</span></div>
-                    </div>
-                    
                     <div class="metric-card">
                         <div class="metric-label">EPR Pairs</div>
-                        <div class="metric-value">${data.epr_pairs}<span class="metric-unit">pairs</span></div>
+                        <div class="metric-value">${d.epr_pairs}</div>
                     </div>
-                    
                     <div class="metric-card">
-                        <div class="metric-label">Quantum Transfer Rate</div>
-                        <div class="metric-value">${data.transfer_rate_qbps}<span class="metric-unit">Qbps</span></div>
-                    </div>
-                    
-                    <div class="metric-card">
-                        <div class="metric-label">Bell State Violations</div>
-                        <div class="metric-value">${data.bell_state_violations}<span class="metric-unit">σ</span></div>
-                    </div>
-                    
-                    <div class="metric-card">
-                        <div class="metric-label">Teleportation Success</div>
-                        <div class="metric-value">${(data.teleportation_success_rate * 100).toFixed(2)}<span class="metric-unit">%</span></div>
+                        <div class="metric-label">Transfer Rate</div>
+                        <div class="metric-value">${d.transfer_rate_qbps}<span class="metric-unit">Qbps</span></div>
                     </div>
                 `;
-                document.getElementById('quantumMetrics').innerHTML = quantumMetricsHtml;
-                
-            } catch (error) {
-                console.error('Error fetching metrics:', error);
-            }
+            } catch (e) {}
+        }
+        
+        function escapeHtml(text) {
+            const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
+            return text.replace(/[&<>"']/g, m => map[m]);
         }
         
         updateMetrics();
         setInterval(updateMetrics, 3000);
+        loadFiles();
+        setInterval(loadFiles, 5000);
     </script>
 </body>
-</html>
-"""
+</html>""")
 
 @app.get("/", response_class=HTMLResponse)
 async def splash():
@@ -1132,7 +1020,8 @@ async def splash():
 
 @app.get("/metrics", response_class=HTMLResponse)
 async def metrics():
-    return METRICS_HTML
+    with open('/app/metrics.html', 'r') as f:
+        return f.read()
 
 @app.get("/api/quantum-metrics")
 async def get_quantum_metrics():
@@ -1146,6 +1035,43 @@ async def run_speed_test(background_tasks: BackgroundTasks):
 @app.post("/api/qsh-query")
 async def qsh_query(query: QSHQuery):
     result = process_qsh_query(query.query)
+    return JSONResponse(result)
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...)):
+    file_path = UPLOAD_DIR / file.filename
+    with open(file_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
+    return {"filename": file.filename, "size": len(content)}
+
+@app.post("/api/upload-test")
+async def upload_test(file: UploadFile = File(...)):
+    """Endpoint for upload speed testing"""
+    content = await file.read()
+    return {"size": len(content)}
+
+@app.get("/api/files")
+async def list_files():
+    files = []
+    for file_path in UPLOAD_DIR.iterdir():
+        if file_path.is_file():
+            files.append({
+                "name": file_path.name,
+                "size": file_path.stat().st_size
+            })
+    return files
+
+@app.get("/api/download/{filename}")
+async def download_file(filename: str):
+    file_path = UPLOAD_DIR / filename
+    if file_path.exists():
+        return FileResponse(file_path)
+    return JSONResponse({"error": "File not found"}, status_code=404)
+
+@app.post("/api/shell")
+async def shell_command(command: ShellCommand):
+    result = execute_shell_command(command.command)
     return JSONResponse(result)
 
 @app.get("/health")
