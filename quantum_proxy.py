@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, File, UploadFile, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import json
@@ -35,6 +35,157 @@ app.add_middleware(
     allow_origins=["*"],  # Restrict in prod
     allow_credentials=True,
     allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount static if needed (e.g., for future assets)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Directory for uploads (safe creation)
+UPLOAD_DIR = "./uploads"
+try:
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    logger.info(f"Uploads dir ready: {UPLOAD_DIR}")
+except PermissionError as e:
+    logger.error(f"Permission denied for uploads dir: {e}. Using temp dir.")
+    UPLOAD_DIR = "/tmp/uploads"
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+except Exception as e:
+    logger.error(f"Failed to create uploads dir: {e}")
+
+# Config file (env override)
+CONFIG_FILE = os.getenv("CONFIG_FILE", "config.json")
+
+# Load/Save config (with env overrides)
+def load_config():
+    default_config = {
+        "holo_storage_ip": os.getenv("HOLO_STORAGE_IP", "138.0.0.1"),
+        "holo_dns_enabled": os.getenv("HOLO_DNS_ENABLED", "true").lower() == "true",
+        "upload_directory": UPLOAD_DIR,
+        "default_interface": os.getenv("DEFAULT_INTERFACE", "wlan0"),
+        "default_rf_mode": os.getenv("DEFAULT_RF_MODE", "quantum"),
+        "epr_rate": int(os.getenv("EPR_RATE", "2500")),
+        "entanglement_threshold": float(os.getenv("ENTANGLEMENT_THRESHOLD", "0.975")),
+    }
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                loaded = json.load(f)
+                default_config.update(loaded)
+                logger.info("Config loaded from file")
+        except Exception as e:
+            logger.warning(f"Failed to load config: {e}, using defaults")
+    else:
+        logger.info("No config file, using defaults")
+    return default_config
+
+def save_config(config):
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+        logger.info("Config saved")
+    except Exception as e:
+        logger.error(f"Failed to save config: {e}")
+
+config = load_config()
+
+# Global error handler
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    logger.error(f"HTTP {exc.status_code} error: {exc.detail} from {request.client.host}")
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+# 1. Root Page (/)
+@app.get("/", response_class=HTMLResponse)
+async def root_page():
+    try:
+        return FileResponse("root.html", media_type="text/html")
+    except FileNotFoundError:
+        logger.error("root.html not found - ensure in repo")
+        raise HTTPException(status_code=404, detail="Root page not found")
+
+# 2. Metrics Page (/metrics)
+@app.get("/metrics", response_class=HTMLResponse)
+async def metrics_page():
+    try:
+        return FileResponse("metrics.html", media_type="text/html")
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Metrics page not found")
+
+# API for metrics
+@app.get("/api/metrics")
+async def get_metrics():
+    try:
+        return {
+            "network_throughput": round(random.uniform(50, 1000), 2),
+            "epr_rate": config["epr_rate"],
+            "entanglement_threshold": config["entanglement_threshold"],
+            "holo_dns_enabled": config["holo_dns_enabled"],
+            "timestamp": datetime.now().isoformat(),
+            "upload_count": len([f for f in os.listdir(config["upload_directory"]) if os.path.isfile(os.path.join(config["upload_directory"], f))])
+        }
+    except Exception as e:
+        logger.error(f"Metrics fetch failed: {e}")
+        raise HTTPException(status_code=500, detail="Metrics unavailable")
+
+# 3. File Upload Endpoint
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+    
+    # Generate hash for secure naming
+    file_hash = hashlib.md5(file.filename.encode()).hexdigest()
+    file_path = os.path.join(config["upload_directory"], f"{file_hash}_{file.filename}")
+    
+    try:
+        content = await file.read()
+        with open(file_path, "wb") as buffer:
+            buffer.write(content)
+        logger.info(f"File uploaded: {file.filename} -> {file_path}")
+        return {
+            "filename": file.filename,
+            "hash": file_hash,
+            "size_bytes": len(content),
+            "path": file_path
+        }
+    except Exception as e:
+        logger.error(f"Upload failed for {file.filename}: {e}")
+        raise HTTPException(status_code=500, detail="Upload failed")
+
+# 4. File List Endpoint
+@app.get("/api/files")
+async def list_files():
+    try:
+        files = [
+            {
+                "name": f,
+                "size_bytes": os.path.getsize(os.path.join(config["upload_directory"], f)),
+                "modified": datetime.fromtimestamp(os.path.getmtime(os.path.join(config["upload_directory"], f))).isoformat()
+            }
+            for f in os.listdir(config["upload_directory"])
+            if os.path.isfile(os.path.join(config["upload_directory"], f))
+        ]
+        return {"files": files, "total_count": len(files)}
+    except Exception as e:
+        logger.error(f"File list failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list files")
+
+# 5. File Download Endpoint
+@app.get("/download/{filename:path}")
+async def download_file(filename: str):
+    file_path = os.path.join(config["upload_directory"], filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        path=file_path,
+        filename=filename,
+        media_type="application/octet-stream"
+    )
+
+# Run the app
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")    allow_methods=["*"],
     allow_headers=["*"],
 )
 
