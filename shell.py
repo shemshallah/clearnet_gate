@@ -1,3 +1,4 @@
+<!-- shell.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -35,6 +36,19 @@
                 fetch('/api/shell', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({command: cmd})
+                }).then(r => r.json()).then(data => {
+                    terminal.innerHTML += `${data.output}<br>${data.ai_response ? data.ai_response + '<br>' : ''}`;
+                }).catch(err => {
+                    terminal.innerHTML += `Error: ${err}<br>`;
+                });
+            }
+            input.value = '';
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+    </script>
+</body>
+</html>                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({command: cmd})
                 }).then(r => r.json()).then(data => {
                     terminal.innerHTML += `${data.output}<br>${data.ai_response ? data.ai_response + '<br>' : ''}`;
