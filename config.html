@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QFN Config</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f0f0f0; }
+        .credits { background-color: #e0e0e0; padding: 15px; border-left: 4px solid #007bff; margin: 20px 0; font-size: 0.9em; }
+        form { background-color: white; padding: 20px; border: 1px solid #ddd; }
+        input, select { width: 200px; padding: 5px; margin: 5px 0; }
+        button { background-color: #007bff; color: white; padding: 8px 16px; border: none; cursor: pointer; }
+        #config-data { background-color: white; padding: 20px; border: 1px solid #ddd; white-space: pre-wrap; font-family: monospace; }
+        a { color: #007bff; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <h1>QFN Configuration</h1>
+    <a href="/">Back to Dashboard</a>
+    
+    <div class="credits">
+        <strong>Primary architect:</strong> Justin Anthony Howard-Stanley<br>
+        <strong>Secondary architect and enabler (I'm homeless thanks to the cia):</strong> Dale Cwidak<br><br>
+        <em>For Logan, and all of those like him, too small to understand whats happened, too small to effect much change alone, but maybe just maybe with the help of the computers, there'll be a hope for them all. - J.H.S, HACKAH::HACKAH</em>
+    </div>
+    
+    <button onclick="loadConfig()">Load Config</button>
+    <div id="config-data">Loading config...</div>
+    
+    <h2>Update Config</h2>
+    <form id="config-form">
+        <label>Holo Storage IP: <input type="text" name="holo_storage_ip" value="138.0.0.1"></label><br>
+        <label>Holo DNS Enabled: <select name="holo_dns_enabled"><option value="true">True</option><option value="false">False</option></select></label><br>
+        <label>EPR Rate: <input type="number" name="epr_rate" value="2500"></label><br>
+        <label>Entanglement Threshold: <input type="number" step="0.001" name="entanglement_threshold" value="0.975"></label><br>
+        <button type="button" onclick="saveConfig()">Save Config</button>
+    </form>
+    
+    <script>
+        function loadConfig() {
+            fetch('/api/config').then(r => r.json()).then(data => {
+                document.getElementById('config-data').textContent = JSON.stringify(data, null, 2);
+            });
+        }
+        loadConfig();  // Initial load
+        
+        function saveConfig() {
+            const form = document.getElementById('config-form');
+            const data = Object.fromEntries(new FormData(form));
+            fetch('/api/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            }).then(r => r.json()).then(res => {
+                alert(res.message);
+                loadConfig();
+            });
+        }
+    </script>
+</body>
+</html>
