@@ -1,3 +1,4 @@
+<!-- config.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -35,6 +36,30 @@
         <label>Entanglement Threshold: <input type="number" step="0.001" name="entanglement_threshold" value="0.975"></label><br>
         <button type="button" onclick="saveConfig()">Save Config</button>
     </form>
+    
+    <script>
+        function loadConfig() {
+            fetch('/api/config').then(r => r.json()).then(data => {
+                document.getElementById('config-data').textContent = JSON.stringify(data, null, 2);
+            });
+        }
+        loadConfig();  // Initial load
+        
+        function saveConfig() {
+            const form = document.getElementById('config-form');
+            const data = Object.fromEntries(new FormData(form));
+            fetch('/api/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            }).then(r => r.json()).then(res => {
+                alert(res.message);
+                loadConfig();
+            });
+        }
+    </script>
+</body>
+</html>    </form>
     
     <script>
         function loadConfig() {
