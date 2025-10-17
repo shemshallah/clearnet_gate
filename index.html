@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Inbox</title>
+    <style> /* Dark theme with folders */ </style>
+</head>
+<body>
+    <h1>{{ user.email }} Inbox</h1>
+    <select id="folderSelect">
+        <option>Inbox</option>
+        <option>Sent</option>
+        <option>Custom Folder</option>
+    </select>
+    <div id="emailsList"></div>
+    <form action="/api/emails" method="post">
+        <input type="email" name="receiver_email" placeholder="To">
+        <input type="text" name="subject" placeholder="Subject">
+        <textarea name="body" placeholder="Body"></textarea>
+        <button type="submit">Send</button>
+    </form>
+    <script>
+        fetch('/api/emails').then(r => r.json()).then(emails => {
+            document.getElementById('emailsList').innerHTML = emails.map(e => `<div>${e.subject} - ${e.body.substring(0,50)} <button onclick="star(${e.id})">Star</button></div>`).join('');
+        });
+        function star(id) {
+            fetch(`/api/emails/${id}/star`, {method: 'POST'});
+        }
+    </script>
+</body>
+</html>
