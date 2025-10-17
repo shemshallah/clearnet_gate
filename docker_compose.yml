@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  qfn_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quantum_file_network
+    restart: unless-stopped
+    ports:
+      - "8000:8000" # Map host port 8000 to container port 8000
+    volumes:
+      # Named volume for persistent storage of uploaded files
+      - qfn_uploads:/app/uploads
+      # Bind mount for logs (Optional, remove if not needed)
+      - ./logs:/app/logs
+    environment:
+      # --- CRITICAL CONFIGURATION ---
+      # MUST be set for your SecurityManager and authentication
+      SECRET_KEY: a_very_secure_random_secret_key_12345
+      ADMIN_PASSWORD: your_strong_admin_password
+      CORS_ORIGINS: "*" 
+      
+      # --- MODULE CONFIGURATION (used by the Config class in your app) ---
+      UPLOAD_DIR: ./uploads
+      HOLO_STORAGE_IP: 138.0.0.1
+      EPR_RATE: 3000
+      ENTANGLEMENT_THRESHOLD: 0.98
+      QUANTUM_FIDELITY_TARGET: 0.99
+      P2P_PORT: 9000
+      
+volumes:
+  qfn_uploads:
+    driver: local
