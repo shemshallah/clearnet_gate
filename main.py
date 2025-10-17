@@ -26,6 +26,9 @@ TEMPLATES_DIR = Path("templates")
 UPLOAD_DIR.mkdir(exist_ok=True)
 TEMPLATES_DIR.mkdir(exist_ok=True)
 
+# Env var for redirect URL (fallback to hardcoded)
+CLEARNET_CHAT_URL = os.getenv("CLEARNET_CHAT_URL", "https://clearnet_chat.onrender.com")
+
 # Create FastAPI app
 app = FastAPI(
     title="Quantum Foam Network",
@@ -59,7 +62,7 @@ quantum_state = {
 EPR_DNS = {
     "alice": {
         "node_id": "ALICE-QFN-01",
-        "entangled_domain": "clearnet_chat.onrender.com",
+        "entangled_domain": CLEARNET_CHAT_URL,
         "routing_protocol": "EPR-DNS-v1",
         "fidelity": 0.998,
         "latency_ns": round(random.uniform(1.2, 5.0), 2)
@@ -93,7 +96,7 @@ def get_network_stats() -> dict:
             "packets_sent": net_io.packets_sent,
             "packets_recv": net_io.packets_recv
         }
-    except:
+    except Exception:
         return {
             "bytes_sent_gb": 0.0,
             "bytes_recv_gb": 0.0,
@@ -111,45 +114,54 @@ def resolve_epr_dns(node: str = "alice") -> dict:
     else:
         raise HTTPException(status_code=404, detail=f"EPR DNS node '{node}' not found")
 
+def iter_file_content(content: bytes):
+    """Generator for StreamingResponse to handle large files"""
+    yield content
+
 # Routes
 @app.get("/")
 async def root():
     """Redirect root to clearnet chat service via EPR routing"""
-    return RedirectResponse(url="https://clearnet_chat.onrender.com", status_code=302)
+    return RedirectResponse(url=CLEARNET_CHAT_URL, status_code=302)
 
 @app.get("/collider")
 async def collider_page(request: Request):
     """Serve collider page with dynamic data"""
-    collider_data = {
-        "black_hole": {
-            "address": "138.0.0.100",
-            "mass_solar": 4.31e6,
-            "event_horizon_km": 1.27e7,
-            "status": "ACTIVE"
-        },
-        "white_hole": {
-            "address": "138.0.0.200",
-            "outflow_rate": 3.84e33,
-            "status": "EMITTING"
-        },
-        "interface": {
-            "qsh_link": "ESTABLISHED",
-            "data_rate_gbps": 1.23e15,
-            "entanglement_pairs": 47283
-        },
-        "energies_ev": [random.uniform(100, 13000) for _ in range(10)],  # Sample for chart
-        "timestamp": datetime.now().isoformat()
-    }
-    return templates.TemplateResponse("collider.html", {"request": request, "collider": collider_data})
+    try:
+        collider_data = {
+            "black_hole": {
+                "address": "138.0.0.100",
+                "mass_solar": 4.31e6,
+                "event_horizon_km": 1.27e7,
+                "status": "ACTIVE"
+            },
+            "white_hole": {
+                "address": "138.0.0.200",
+                "outflow_rate": 3.84e33,
+                "status": "EMITTING"
+            },
+            "interface": {
+                "qsh_link": "ESTABLISHED",
+                "data_rate_gbps": 1.23e15,
+                "entanglement_pairs": 47283
+            },
+            "energies_ev": [random.uniform(100, 13000) for _ in range(10)],  # Sample for chart
+            "timestamp": datetime.now().isoformat()
+        }
+        return templates.TemplateResponse("collider.html", {"request": request, "collider": collider_data})
+    except Exception as e:
+        logger.error(f"Template rendering error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    uptime = time.time() - getattr(app.state, 'start_time', time.time())
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "version": "2.0.0",
-        "uptime_seconds": time.time() - app.state.start_time if hasattr(app.state, 'start_time') else 0
+        "uptime_seconds": uptime
     }
 
 @app.get("/api/quantum/state")
@@ -201,7 +213,7 @@ async def scan_network():
     try:
         hostname = socket.gethostname()
         local_ip = socket.gethostbyname(hostname)
-    except:
+    except Exception:
         hostname = "unknown"
         local_ip = "127.0.0.1"
     
@@ -219,7 +231,10 @@ async def scan_network():
 @app.get("/api/network/tcp_proxy")
 async def tcp_proxy_status(request: Request):
     """Get TCP proxy status with EPR routing"""
-    client_ip = request.client.host if request.client else "unknown"
+    # Better client IP detection (handles proxies)
+    client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
+    if client_ip == "unknown":
+        client_ip = "127.0.0.1"
     epr_routing = resolve_epr_dns("alice")
     return {
         "user_ip": client_ip,
@@ -298,7 +313,7 @@ async def list_files(page: int = 1, limit: int = 50):
             {
                 "id": f["id"],
                 "filename": f["filename"],
-                "size_gb": f["size"] / (1024**3),
+                "size_gb": round(f["size"] / (1024**3), 3),
                 "timestamp": f["timestamp"]
             }
             for f in files[start:end]
@@ -317,7 +332,7 @@ async def download_file(file_id: str):
     file_data = files_db[file_id]
     
     return StreamingResponse(
-        iter([file_data["content"]]),
+        iter_file_content(file_data["content"]),
         media_type="application/octet-stream",
         headers={
             "Content-Disposition": f'attachment; filename="{file_data["filename"]}"'
@@ -406,12 +421,13 @@ async def collider_spectrum():
 @app.get("/api/metrics")
 async def system_metrics():
     """Get comprehensive system metrics"""
+    total_size_gb = sum(f["size"] for f in files_db.values()) / (1024**3) if files_db else 0
     return {
         "quantum": get_quantum_state(),
         "network": get_network_stats(),
         "storage": {
             "total_files": len(files_db),
-            "total_size_gb": sum(f["size"] for f in files_db.values()) / (1024**3) if files_db else 0
+            "total_size_gb": round(total_size_gb, 3)
         },
         "timestamp": datetime.now().isoformat()
     }
