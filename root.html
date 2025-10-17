@@ -1,3 +1,4 @@
+<!-- root.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -35,6 +36,26 @@
     
     <h2>Upload a File</h2>
     <form action="/api/upload" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" required>
+        <button type="submit">Upload</button>
+    </form>
+    
+    <h2>Recent Files</h2>
+    <div id="file-list"></div>
+    <script>
+        fetch('/api/files').then(r => r.json()).then(data => {
+            const list = document.getElementById('file-list');
+            if (data.total_count === 0) {
+                list.innerHTML = '<p>No files uploaded yet.</p>';
+            } else {
+                data.files.forEach(f => {
+                    list.innerHTML += `<p><a href="/api/download/${f.name}">${f.name}</a> (${f.size_bytes} bytes, modified: ${f.modified})</p>`;
+                });
+            }
+        });
+    </script>
+</body>
+</html>    <form action="/api/upload" method="post" enctype="multipart/form-data">
         <input type="file" name="file" required>
         <button type="submit">Upload</button>
     </form>
