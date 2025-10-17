@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, File, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, StreamingResponse
+from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import hashlib
@@ -31,6 +32,9 @@ app = FastAPI(
     description="Advanced quantum-inspired networking platform",
     version="2.0.0"
 )
+
+# Jinja2 Templates
+templates = Jinja2Templates(directory="templates")
 
 # Add CORS middleware
 app.add_middleware(
@@ -87,21 +91,53 @@ def get_network_stats() -> dict:
         }
 
 # Routes
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    """Serve main dashboard"""
-    html_file = TEMPLATES_DIR / "dashboard.html"
-    if html_file.exists():
-        return FileResponse(html_file)
-    return HTMLResponse("<h1>QFN System - Dashboard template not found</h1>")
+@app.get("/")
+async def root(request: Request):
+    """Serve main dashboard with dynamic data"""
+    quantum_data = {
+        "active_entanglements": quantum_state["active_pairs"],
+        "average_fidelity": quantum_state["fidelity"],
+        "epr_generation_rate": quantum_state["epr_rate"],
+        "decoherence_events": quantum_state["decoherence_count"],
+        "foam_density": quantum_state["foam_density"],
+        "timestamp": datetime.now().isoformat()
+    }
+    network_data = get_network_stats()
+    storage_data = {
+        "total_files": len(files_db),
+        "total_size_gb": sum(f["size"] for f in files_db.values()) / (1024**3) if files_db else 0
+    }
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request,
+        "quantum": quantum_data,
+        "network": network_data,
+        "storage": storage_data
+    })
 
-@app.get("/collider", response_class=HTMLResponse)
-async def collider_page():
-    """Serve collider page"""
-    html_file = TEMPLATES_DIR / "collider.html"
-    if html_file.exists():
-        return FileResponse(html_file)
-    return HTMLResponse("<h1>Collider page not found</h1>")
+@app.get("/collider")
+async def collider_page(request: Request):
+    """Serve collider page with dynamic data"""
+    collider_data = {
+        "black_hole": {
+            "address": "138.0.0.100",
+            "mass_solar": 4.31e6,
+            "event_horizon_km": 1.27e7,
+            "status": "ACTIVE"
+        },
+        "white_hole": {
+            "address": "138.0.0.200",
+            "outflow_rate": 3.84e33,
+            "status": "EMITTING"
+        },
+        "interface": {
+            "qsh_link": "ESTABLISHED",
+            "data_rate_gbps": 1.23e15,
+            "entanglement_pairs": 47283
+        },
+        "energies_ev": [random.uniform(100, 13000) for _ in range(10)],  # Sample for chart
+        "timestamp": datetime.now().isoformat()
+    }
+    return templates.TemplateResponse("collider.html", {"request": request, "collider": collider_data})
 
 @app.get("/health")
 async def health_check():
@@ -356,7 +392,7 @@ async def collider_spectrum():
 async def system_metrics():
     """Get comprehensive system metrics"""
     return {
-        "quantum": await get_quantum_state(),
+        "quantum": get_quantum_state(),
         "network": get_network_stats(),
         "storage": {
             "total_files": len(files_db),
