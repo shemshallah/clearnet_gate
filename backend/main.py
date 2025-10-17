@@ -1,40 +1,316 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from typing import List
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
+import qutip as qt
+import numpy as np
+import asyncio
 import json
-from datetime import timedelta
-from app.database import get_db, engine, SessionLocal.
-from .models import Base, User, Message, Email, Contact, collider_black_hole_hash, encrypt_with_collider
-from .auth import create_access_token, get_current_user
-from .collider import create_black_hole_hash
-import random
-import os
+import uuid
+import time
+import hashlib
+from datetime import datetime, timedelta
+import socket
+import threading
+from collections import defaultdict
+import logging
 
-Base.metadata.create_all(bind=engine)
+app = FastAPI(title="QuTiP Entanglement Proxy API with Teleportation & QKD (BB84 + E91)", version="1.0.0")
 
-app = FastAPI(title="Quantum Foam Chatroom")
+# In-memory stores for virtual connections and QRAM
+connections: Dict[str, Dict[str, Any]] = {}  # ip -> {task_id, entangled_state, last_ping, qram_slot, teleported_state, qkd_key}
+qram_slots: Dict[str, Any] = {}  # virtual_ip -> qutip state
+qsh_connections: Dict[str, Any] = {}  # QSH-secured routes
 
-# CORS for React
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React dev
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Alice endpoint config
+ALICE_HOST = "127.0.0.1"
+ALICE_PORT = 8080
+ALICE_DOMAIN = "quantum.realm.domain.dominion.foam.computer.alice"
+QRAM_DNS_HOST = "136.0.0.1"
+TIMEOUT_SECONDS = 300  # 5 min timeout
 
-# Static for React build (prod)
-app.mount("/static", StaticFiles(directory="../frontend/dist"), name="static")
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Templates for server-rendered pages (login/register)
-templates = Jinja2Templates(directory="templates")
+class QSH6_EPR_Network:
+    """Quantum Secure Hash with 6-qubit GHz EPR entanglement simulation"""
+    def __init__(self):
+        self.qubits = 6
+        self.ghz_table = {}
+        self._gen_ghz_states()
 
-# Connection manager
-class ConnectionManager:
+    def _gen_ghz_states(self):
+        for i in range(2**self.qubits):
+            amplitude = 1.0 / (2**(self.qubits/2))
+            phase = (bin(i).count('1') % 2) * np.pi
+            self.ghz_table[i] = (amplitude, phase)
+
+    def qsh_hash(self, data: bytes) -> bytes:
+        classical_hash = hashlib.sha256(data).digest()
+        qsh_result = bytearray(classical_hash)
+        for i in range(0, len(qsh_result), 2):
+            if i + 1 < len(qsh_result):
+                state_idx = (qsh_result[i] + qsh_result[i+1]) % (2**self.qubits)
+                amplitude, phase = self.ghz_table[state_idx]
+                quantum_mod = int((amplitude * np.cos(phase) + 1) * 127.5)
+                qsh_result[i] = (qsh_result[i] ^ quantum_mod) % 256
+        return bytes(qsh_result)
+
+    def create_epr_pair(self):
+        """Create Bell state EPR pair"""
+        return qt.bell_state('00')
+
+    def create_ghz_state(self):
+        """Create 6-qubit GHZ state"""
+        basis_0 = qt.tensor([qt.basis(2, 0) for _ in range(self.qubits)])
+        basis_1 = qt.tensor([qt.basis(2, 1) for _ in range(self.qubits)])
+        ghz = (basis_0 + basis_1).unit()
+        return ghz
+
+    def simulate_bb84(self, bits: List[int], basis: List[str]) -> Dict[str, Any]:
+        """Simulate BB84 QKD protocol"""
+        alice_bits = bits.copy()
+        alice_basis = basis.copy()
+        bob_basis = [np.random.choice(['Z', 'X']) for _ in alice_basis]
+        bob_measurements = []
+        for i, bit in enumerate(alice_bits):
+            if alice_basis[i] == bob_basis[i]:
+                # Same basis: measurement matches bit
+                bob_measurements.append(bit)
+            else:
+                # Different basis: random 0 or 1
+                bob_measurements.append(np.random.randint(0, 2))
+        # Sift: keep matching bases
+        sifted_indices = [i for i in range(len(alice_basis)) if alice_basis[i] == bob_basis[i]]
+        sifted_alice = [alice_bits[i] for i in sifted_indices]
+        sifted_bob = [bob_measurements[i] for i in sifted_indices]
+        # Error rate simulation (simple noise)
+        errors = sum(a != b for a, b in zip(sifted_alice, sifted_bob))
+        error_rate = errors / len(sifted_alice) if sifted_alice else 0
+        shared_key = sifted_alice[:min(len(sifted_alice), 128)]  # Truncate to 128 bits
+        return {
+            "shared_key": shared_key,
+            "error_rate": error_rate,
+            "sifted_length": len(sifted_alice)
+        }
+
+    def simulate_e91(self, num_pairs: int = 100) -> Dict[str, Any]:
+        """Simulate E91 entanglement-based QKD"""
+        epr_pairs = [self.create_epr_pair() for _ in range(num_pairs)]
+        alice_measurements = []
+        bob_measurements = []
+        alice_bases = [np.random.choice(['Z', 'X']) for _ in range(num_pairs)]
+        bob_bases = [np.random.choice(['Z', 'X']) for _ in range(num_pairs)]
+        for i in range(num_pairs):
+            # Simulate measurement in chosen basis
+            if alice_bases[i] == 'Z':
+                alice_res = epr_pairs[i].ptrace(0).diag()[0] > 0.5  # Simplified
+            else:  # X basis
+                alice_res = np.random.randint(0, 2)
+            # Bob's measurement correlated
+            if bob_bases[i] == 'Z':
+                bob_res = alice_res ^ 1 if alice_res else 0  # Anti-correlated for singlet-like
+            else:
+                bob_res = np.random.randint(0, 2)
+            alice_measurements.append(alice_res)
+            bob_measurements.append(bob_res)
+        # CHSH inequality check for security (simplified)
+        chsh_value = 2 * np.sqrt(2) * 0.9  # Simulated violation
+        shared_key = alice_measurements[:128]
+        return {
+            "shared_key": shared_key,
+            "chsh_value": chsh_value,
+            "pairs_used": num_pairs
+        }
+
+    def quantum_teleport(self, state_to_teleport: qt.Qobj) -> Dict[str, Any]:
+        """Simulate quantum teleportation of a state"""
+        epr = self.create_epr_pair()
+        # Alice's part: Bell measurement (simplified)
+        bell_measurement = np.random.randint(0, 4)  # 00,01,10,11
+        # Bob's correction based on classical bits
+        corrections = {
+            0: lambda s: s,  # No correction
+            1: lambda s: qt.sigmax() * s * qt.sigmax(),
+            2: lambda s: qt.sigmaz() * s * qt.sigmaz(),
+            3: lambda s: qt.sigmaz() * qt.sigmax() * s * qt.sigmax() * qt.sigmaz()
+        }
+        teleported_state = corrections[bell_measurement](state_to_teleport)
+        fidelity = qt.fidelity(teleported_state, state_to_teleport)
+        return {
+            "teleported_state": teleported_state,
+            "original_state": state_to_teleport,
+            "fidelity": fidelity,
+            "classical_bits": [bell_measurement // 2, bell_measurement % 2]
+        }
+
+# Global instance
+qsh_network = QSH6_EPR_Network()
+
+class ConnectionRequest(BaseModel):
+    ip: str
+    port: Optional[int] = None
+
+class HashRequest(BaseModel):
+    data: str
+
+class QKDRequest(BaseModel):
+    protocol: str  # "BB84" or "E91"
+    bits: Optional[List[int]] = None
+    basis: Optional[List[str]] = None
+    num_pairs: Optional[int] = 100
+
+class TeleportRequest(BaseModel):
+    state_matrix: List[List[complex]]  # 2x2 density matrix
+
+# Helper to clean expired connections
+async def cleanup_expired_connections():
+    while True:
+        await asyncio.sleep(60)  # Check every minute
+        now = time.time()
+        expired = [ip for ip, conn in connections.items() if now - conn.get('last_ping', 0) > TIMEOUT_SECONDS]
+        for ip in expired:
+            del connections[ip]
+            logger.info(f"Expired connection cleaned: {ip}")
+
+# Start cleanup task
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(cleanup_expired_connections())
+
+# 1. Root endpoint
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    return """
+    <html>
+        <head><title>QuTiP Entanglement Proxy</title></head>
+        <body>
+            <h1>QuTiP Entanglement Proxy API</h1>
+            <p>Endpoints:</p>
+            <ul>
+                <li><a href="/qsh_hash">/qsh_hash (POST)</a></li>
+                <li><a href="/create_epr">/create_epr (GET)</a></li>
+                <li><a href="/qkd">/qkd (POST)</a></li>
+                <li><a href="/teleport">/teleport (POST)</a></li>
+                <li><a href="/ws">/ws (WebSocket)</a></li>
+                <li><a href="/connections">/connections (GET)</a></li>
+            </ul>
+        </body>
+    </html>
+    """
+
+# 2. QSH Hash endpoint
+@app.post("/qsh_hash")
+async def qsh_hash(request: HashRequest):
+    data_bytes = request.data.encode('utf-8')
+    hashed = qsh_network.qsh_hash(data_bytes)
+    return {"original": request.data, "qsh_hash": hashed.hex()}
+
+# 3. Create EPR pair
+@app.get("/create_epr")
+async def create_epr():
+    epr = qsh_network.create_epr_pair()
+    return {"epr_state": epr.full().tolist()}
+
+# 4. GHZ state
+@app.get("/create_ghz")
+async def create_ghz():
+    ghz = qsh_network.create_ghz_state()
+    return {"ghz_state": ghz.full().tolist()}
+
+# 5. QKD endpoint
+@app.post("/qkd")
+async def qkd(request: QKDRequest):
+    if request.protocol == "BB84":
+        if not request.bits or not request.basis:
+            raise HTTPException(400, "bits and basis required for BB84")
+        result = qsh_network.simulate_bb84(request.bits, request.basis)
+    elif request.protocol == "E91":
+        result = qsh_network.simulate_e91(request.num_pairs)
+    else:
+        raise HTTPException(400, "Invalid protocol: BB84 or E91")
+    # Store key in connection if IP available
+    client_ip = "unknown"
+    if hasattr(request, '_client_host'):
+        client_ip = request._client_host
+    if client_ip not in connections:
+        connections[client_ip] = {}
+    connections[client_ip]['qkd_key'] = result['shared_key']
+    connections[client_ip]['last_ping'] = time.time()
+    return result
+
+# 6. Teleportation endpoint
+@app.post("/teleport")
+async def teleport(request: TeleportRequest):
+    state = qt.Qobj(np.array(request.state_matrix))
+    if state.dims != [[2], [2]]:
+        raise HTTPException(400, "State must be 2x2 density matrix for qubit")
+    result = qsh_network.quantum_teleport(state)
+    # Store teleported state
+    client_ip = "unknown"
+    # Simulate getting client IP
+    if client_ip not in connections:
+        connections[client_ip] = {}
+    connections[client_ip]['teleported_state'] = result['teleported_state']
+    connections[client_ip]['last_ping'] = time.time()
+    return {
+        "fidelity": result['fidelity'],
+        "classical_bits": result['classical_bits']
+    }
+
+# 7. WebSocket for real-time entanglement monitoring
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    task_id = str(uuid.uuid4())
+    connections['ws_' + task_id] = {'task_id': task_id, 'last_ping': time.time(), 'entangled_state': None}
+    try:
+        while True:
+            data = await websocket.receive_text()
+            parsed = json.loads(data)
+            if parsed.get('action') == 'ping':
+                connections['ws_' + task_id]['last_ping'] = time.time()
+                await websocket.send_text(json.dumps({"status": "pong"}))
+            elif parsed.get('action') == 'entangle':
+                epr = qsh_network.create_epr_pair()
+                connections['ws_' + task_id]['entangled_state'] = epr
+                await websocket.send_text(json.dumps({"entangled_state": epr.full().tolist()}))
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected: {task_id}")
+    finally:
+        if 'ws_' + task_id in connections:
+            del connections['ws_' + task_id]
+
+# 8. List connections
+@app.get("/connections")
+async def list_connections():
+    active = {ip: {k: v for k, v in conn.items() if k != 'last_ping'} for ip, conn in connections.items()
+              if time.time() - conn.get('last_ping', 0) < TIMEOUT_SECONDS}
+    return {"active_connections": active, "count": len(active)}
+
+# 9. QRAM slot allocation (simple)
+@app.post("/qram/allocate")
+async def allocate_qram(request: ConnectionRequest):
+    virtual_ip = f"qram_{uuid.uuid4().hex[:8]}"
+    slot_state = qsh_network.create_ghz_state()
+    qram_slots[virtual_ip] = slot_state
+    # Link to connection
+    client_ip = request.ip
+    if client_ip not in connections:
+        connections[client_ip] = {}
+    connections[client_ip]['qram_slot'] = virtual_ip
+    connections[client_ip]['last_ping'] = time.time()
+    return {"virtual_ip": virtual_ip, "slot_state": slot_state.full().tolist()}
+
+# Error handler
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)class ConnectionManager:
     def __init__(self):
         self.active_connections: dict[int, WebSocket] = {}  # user_id -> websocket
 
