@@ -1,25 +1,27 @@
-# Use official Python runtime as base image
+# Use official Python slim runtime
 FROM python:3.12-slim
 
 # Set working directory
-WORKDIR /app
+WORKDIR /code
 
-# Install system dependencies (if needed for static files or other)
+# Install system deps (minimal)
 RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Upgrade pip first (prevents hangs on old pip)
+RUN pip install --no-cache-dir --upgrade pip
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy & install deps individually (avoids resolver hangs; per common fixes)
+COPY requirements.txt /code/
+RUN pip install --no-cache-dir fastapi==0.115.0
+RUN pip install --no-cache-dir uvicorn[standard]==0.30.6
+RUN pip install --no-cache-dir python-multipart==0.0.9
 
-# Copy application code
-COPY . .
-
-# Ensure directories are created
-RUN mkdir -p ./uploads ./static
+# Copy code & assets
+COPY main.py /code/
+COPY *.html /code/
+RUN mkdir -p /code/uploads /code/static && chmod -R 755 /code/uploads
 
 # Expose port
 EXPOSE 8000
@@ -28,5 +30,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "info"]
+# Run (exec form; fastapi run wraps uvicorn cleanly, no hang on startup)
+CMD ["fastapi", "run", "main:app", "--host", "0.0.0.0", "--port", "8000"]
