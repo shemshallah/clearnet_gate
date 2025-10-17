@@ -1,39 +1,3 @@
-# Quantum Foam Computer - Extended System Docker Container
-# Created by Justin Anthony Howard-Stanley & Dale Cwidak
-# "For Logan and all the ones like him"
-
-FROM python:3.11-slim
-
-# Set working directory
-WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Upgrade pip and setuptools first
-RUN pip install --upgrade pip setuptools wheel
-
-# Install packages one by one to avoid conflicts
-RUN pip install --no-cache-dir flask
-RUN pip install --no-cache-dir flask-socketio
-RUN pip install --no-cache-dir python-socketio
-RUN pip install --no-cache-dir eventlet
-RUN pip install --no-cache-dir psutil
-RUN pip install --no-cache-dir requests
-RUN pip install --no-cache-dir numpy
-RUN pip install --no-cache-dir scipy
-RUN pip install --no-cache-dir qutip
-RUN pip install --no-cache-dir cryptography
-
-# Create directories
-RUN mkdir -p /app/holographic_storage/{users,chat,email,files,blockchain,network_map}
-RUN mkdir -p /app/templates /app/static
-
-# Copy all files
 COPY . .
 
 # Create quantum_foam_core.py if missing
