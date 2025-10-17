@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Foam Network Dashboard</title>
+    <style>
+        body { font-family: 'Courier New', monospace; background: #000; color: #0f0; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; color: #00ff00; text-shadow: 0 0 10px #0f0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .card { background: #111; border: 1px solid #0f0; padding: 15px; border-radius: 5px; box-shadow: 0 0 10px #0f0; }
+        .metric { display: flex; justify-content: space-between; margin: 10px 0; }
+        button { background: #0f0; color: #000; border: none; padding: 10px; cursor: pointer; font-family: inherit; }
+        button:hover { background: #00ff00; box-shadow: 0 0 5px #0f0; }
+        #output { background: #111; color: #0f0; padding: 10px; height: 200px; overflow-y: scroll; border: 1px solid #0f0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚛️ Quantum Foam Network - v2.0.0</h1>
+        <div class="grid">
+            <div class="card">
+                <h2>Quantum State</h2>
+                <div id="quantum-state">Loading...</div>
+                <button onclick="fetchQuantumState()">Refresh State</button>
+            </div>
+            <div class="card">
+                <h2>Network Scan</h2>
+                <div id="network-scan">Loading...</div>
+                <button onclick="scanNetwork()">Scan</button>
+            </div>
+            <div class="card">
+                <h2>QSH Query</h2>
+                <input type="text" id="qsh-input" placeholder="Enter query...">
+                <button onclick="runQSH()">Execute</button>
+                <div id="qsh-output">Results here...</div>
+            </div>
+            <div class="card">
+                <h2>File Upload</h2>
+                <input type="file" id="file-input">
+                <button onclick="uploadFile()">Upload</button>
+                <div id="upload-status">Status: Ready</div>
+            </div>
+        </div>
+        <div class="card" style="grid-column: 1 / -1;">
+            <h2>System Metrics</h2>
+            <div id="metrics">Loading...</div>
+            <button onclick="fetchMetrics()">Refresh Metrics</button>
+        </div>
+    </div>
+
+    <script>
+        async function fetchQuantumState() {
+            const res = await fetch('/api/quantum/state');
+            const data = await res.json();
+            document.getElementById('quantum-state').innerHTML = `
+                <div class="metric"><span>Active Pairs:</span><span>${data.active_entanglements}</span></div>
+                <div class="metric"><span>Fidelity:</span><span>${data.average_fidelity}</span></div>
+                <div class="metric"><span>EPR Rate:</span><span>${data.epr_generation_rate}/s</span></div>
+            `;
+        }
+
+        async function scanNetwork() {
+            const res = await fetch('/api/network/scan');
+            const data = await res.json();
+            document.getElementById('network-scan').innerHTML = `
+                <div class="metric"><span>Hostname:</span><span>${data.hostname}</span></div>
+                <div class="metric"><span>Local IP:</span><span>${data.local_ip}</span></div>
+                <div class="metric"><span>Quantum IP:</span><span>${data.quantum_ip}</span></div>
+            `;
+        }
+
+        async function runQSH() {
+            const query = document.getElementById('qsh-input').value;
+            if (!query) return;
+            const res = await fetch('/api/qsh-query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query })
+            });
+            const data = await res.json();
+            document.getElementById('qsh-output').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            document.getElementById('upload-status').textContent = `Uploaded: ${data.filename} (ID: ${data.file_id})`;
+        }
+
+        async function fetchMetrics() {
+            const res = await fetch('/api/metrics');
+            const data = await res.json();
+            document.getElementById('metrics').innerHTML = `
+                <div class="metric"><span>Total Files:</span><span>${data.storage.total_files}</span></div>
+                <div class="metric"><span>Total Size:</span><span>${data.storage.total_size_gb.toFixed(2)} GB</span></div>
+                <div class="metric"><span>Bytes Sent:</span><span>${data.network.bytes_sent_gb.toFixed(3)} GB</span></div>
+            `;
+        }
+
+        // Load initial data
+        fetchQuantumState();
+        scanNetwork();
+        fetchMetrics();
+    </script>
+</body>
+</html>
