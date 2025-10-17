@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, File, UploadFile, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import RedirectResponse, FileResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
@@ -55,6 +55,17 @@ quantum_state = {
     "foam_density": 1.523
 }
 
+# EPR DNS Routing Configuration (from Alice node)
+EPR_DNS = {
+    "alice": {
+        "node_id": "ALICE-QFN-01",
+        "entangled_domain": "clearnet_chat.onrender.com",
+        "routing_protocol": "EPR-DNS-v1",
+        "fidelity": 0.998,
+        "latency_ns": round(random.uniform(1.2, 5.0), 2)
+    }
+}
+
 # Helper functions
 def generate_quantum_hash(data: str) -> dict:
     """Generate quantum-inspired hash"""
@@ -90,29 +101,21 @@ def get_network_stats() -> dict:
             "packets_recv": 0
         }
 
+def resolve_epr_dns(node: str = "alice") -> dict:
+    """Resolve EPR DNS routing from specified node"""
+    if node in EPR_DNS:
+        routing = EPR_DNS[node].copy()
+        routing["resolved_domain"] = EPR_DNS[node]["entangled_domain"]
+        routing["timestamp"] = datetime.now().isoformat()
+        return routing
+    else:
+        raise HTTPException(status_code=404, detail=f"EPR DNS node '{node}' not found")
+
 # Routes
 @app.get("/")
-async def root(request: Request):
-    """Serve main dashboard with dynamic data"""
-    quantum_data = {
-        "active_entanglements": quantum_state["active_pairs"],
-        "average_fidelity": quantum_state["fidelity"],
-        "epr_generation_rate": quantum_state["epr_rate"],
-        "decoherence_events": quantum_state["decoherence_count"],
-        "foam_density": quantum_state["foam_density"],
-        "timestamp": datetime.now().isoformat()
-    }
-    network_data = get_network_stats()
-    storage_data = {
-        "total_files": len(files_db),
-        "total_size_gb": sum(f["size"] for f in files_db.values()) / (1024**3) if files_db else 0
-    }
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "quantum": quantum_data,
-        "network": network_data,
-        "storage": storage_data
-    })
+async def root():
+    """Redirect root to clearnet chat service via EPR routing"""
+    return RedirectResponse(url="https://clearnet_chat.onrender.com", status_code=302)
 
 @app.get("/collider")
 async def collider_page(request: Request):
@@ -194,7 +197,7 @@ async def qsh_query(request: Request):
 
 @app.get("/api/network/scan")
 async def scan_network():
-    """Scan network topology"""
+    """Scan network topology with EPR DNS integration"""
     try:
         hostname = socket.gethostname()
         local_ip = socket.gethostbyname(hostname)
@@ -202,40 +205,52 @@ async def scan_network():
         hostname = "unknown"
         local_ip = "127.0.0.1"
     
+    epr_routing = resolve_epr_dns("alice")
+    
     return {
         "hostname": hostname,
         "local_ip": local_ip,
         "quantum_ip": f"138.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(1,254)}",
+        "epr_dns_routing": epr_routing,
         "stats": get_network_stats(),
         "timestamp": datetime.now().isoformat()
     }
 
 @app.get("/api/network/tcp_proxy")
 async def tcp_proxy_status(request: Request):
-    """Get TCP proxy status"""
+    """Get TCP proxy status with EPR routing"""
     client_ip = request.client.host if request.client else "unknown"
+    epr_routing = resolve_epr_dns("alice")
     return {
         "user_ip": client_ip,
         "quantum_ip": f"138.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(1,254)}",
         "proxy_ip": "138.0.0.1",
+        "epr_routing": epr_routing["resolved_domain"],
         "entangled": True,
         "latency_ms": round(random.uniform(5, 50), 2)
     }
 
 @app.post("/api/network/request_node")
 async def request_node(request: Request):
-    """Request network node assignment"""
+    """Request network node assignment with EPR DNS"""
     data = await request.json()
     route = data.get("route", "")
     email = data.get("email", "")
+    epr_routing = resolve_epr_dns("alice")
     
     return {
         "success": True,
         "assigned_qip": f"Q{secrets.token_hex(8).upper()}",
         "route": route,
         "email": email,
+        "epr_dns_target": epr_routing["resolved_domain"],
         "timestamp": datetime.now().isoformat()
     }
+
+@app.get("/api/epr/dns/resolve/{node}")
+async def epr_dns_resolve(node: str):
+    """Explicit EPR DNS resolution endpoint"""
+    return resolve_epr_dns(node)
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
