@@ -1,39 +1,54 @@
-COPY . .
+# Stage 1: Build Stage - Use a slim Python image
+FROM python:3.11-slim as builder
 
-# Create quantum_foam_core.py if missing
-RUN if [ ! -f quantum_foam_core.py ]; then \
-    cat > quantum_foam_core.py << 'EOF'
-#!/usr/bin/env python3
-import json
-from datetime import datetime
+# Set environment variables for non-interactive commands
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
 
-class QuantumFoamComputer:
-    def __init__(self, dimensions=6):
-        self.fidelity = 0.999
-        
-    def get_echo_state(self):
-        return {"fidelity": 0.999, "status": "active"}
-        
-    def get_system_stats(self):
-        return {"status": "ok", "timestamp": datetime.now().isoformat()}
-EOF
-    fi
+# Set the working directory
+WORKDIR /app
 
-# Make scripts executable
-RUN chmod +x start_extended.sh 2>/dev/null || echo "Script will be created at runtime"
+# Install system dependencies needed for python packages (e.g., psycopg2)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        libpq-dev \
+        gcc \
+    && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN useradd -m -u 1000 quantum && \
-    chown -R quantum:quantum /app
-USER quantum
+# Copy requirements file and install dependencies
+COPY requirements.txt /app/requirements.txt
+RUN pip install --upgrade pip
+RUN pip install -r requirements.txt
 
-# Expose port
-EXPOSE 5000
+# Stage 2: Final Image - A lighter image for production
+FROM python:3.11-slim
 
-# Environment variables
-ENV PYTHONPATH=/app
-ENV FLASK_ENV=production
+# Set the working directory
+WORKDIR /app
 
+# Copy installed packages from the builder stage
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+
+# Copy the rest of the application code
+# Assuming the modules are directly in the root directory
+COPY . /app
+
+# Ensure correct permissions for the app
+RUN chmod -R 755 /app
+
+# Expose the port defined in your docker-compose.yml
+EXPOSE 8000
+
+# Command to run the application using Gunicorn (the production standard)
+# We use uvicorn workers for asynchronous performance.
+# Assumes your fixed code is saved as 'main.py' and the FastAPI app is named 'app'.
+# If you kept the file name 'main-2.py', change 'main:app' to 'main-2:app'.
+CMD ["gunicorn", "main:app", \
+     "--workers", "4", \
+     "--bind", "0.0.0.0:8000", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--log-level", "info"]
 # Labels
 LABEL maintainer="Justin Anthony Howard-Stanley <shemshallah@gmail.com>"
 LABEL version="1.0"
