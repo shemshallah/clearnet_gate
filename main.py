@@ -1,14 +1,14 @@
 import os
 from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import RedirectResponse, JSONResponse, FileResponse
+from fastapi.responses import RedirectResponse, JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
 import uvicorn
 import logging
 from datetime import datetime
+import httpx
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +21,7 @@ STATIC_DIR.mkdir(exist_ok=True)
 TEMPLATES_DIR.mkdir(exist_ok=True)
 
 # Env var for backend URLs
-CHAT_BACKEND = os.getenv("CHAT_BACKEND_URL", "https://clearnet-chat.onrender.com")
+CHAT_BACKEND = os.getenv("CHAT_BACKEND_URL", "https://clearnet-chat-4bal.onrender.com")
 
 # Create FastAPI app
 app = FastAPI(
@@ -51,7 +51,6 @@ temp_storage = {}
 # Helper: Proxy requests to chat backend
 async def proxy_to_chat(request: Request, path: str):
     """Proxy API/WS requests to chat backend"""
-    import httpx
     backend_url = f"{CHAT_BACKEND}/{path}"
     
     # Handle query params
@@ -62,7 +61,7 @@ async def proxy_to_chat(request: Request, path: str):
     if request.method in ["POST", "PUT", "PATCH"]:
         body = await request.body()
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
         resp = await client.request(
             method=request.method,
             url=backend_url,
@@ -83,7 +82,7 @@ async def proxy_to_chat(request: Request, path: str):
 @app.get("/")
 async def root():
     """Serve main chat HTML page"""
-    # Read the HTML file or inline it
+    # Full integrated HTML with chat room
     html_content = """
 <!DOCTYPE html>
 <html lang="en">
@@ -139,7 +138,7 @@ async def root():
 
     <script>
         const API_BASE = '/api';  // Proxied to backend
-        const WS_URL = '/ws/chat';  // Proxied WS
+        const WS_URL = 'wss://clearnet-chat-4bal.onrender.com/ws/chat';  // Direct to backend for WS
         let ws = null;
         let token = localStorage.getItem('token') || null;
         let currentUser = null;
@@ -268,32 +267,27 @@ async def health_check():
     }
 
 # Proxy API routes to chat backend
-@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+@app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def proxy_api(path: str, request: Request):
     """Proxy all API calls to chat backend"""
     try:
-        return await proxy_to_chat(request, path)
+        return await proxy_to_chat(request, f"api/{path}")
     except Exception as e:
         logger.error(f"Proxy error: {e}")
         raise HTTPException(status_code=502, detail="Backend unavailable")
 
-# Proxy WebSocket (requires additional setup for WS proxying; for simplicity, redirect WS to backend)
-@app.websocket("/ws/{path:path}")
-async def proxy_ws(websocket: WebSocket, path: str):
-    """Proxy WebSocket to backend (basic; use for /ws/chat)"""
-    await websocket.accept()
-    backend_ws = f"wss://{CHAT_BACKEND.replace('https://', '')}/ws/{path}"
-    # Note: Full WS proxying needs websockets lib or nginx; this is a placeholder redirect
-    await websocket.close(code=1012, reason=f"Redirect to {backend_ws}")
-
-# Fallback for static files (e.g., if templates have assets)
+# Fallback for other routes (e.g., /ws/* - redirect to backend for now)
 @app.get("/{path:path}")
 async def catch_all(path: str):
-    """Catch-all for static or redirect"""
+    """Catch-all redirect or proxy"""
+    if path.startswith("ws/"):
+        # Redirect WS to backend
+        backend_ws = f"wss://{CHAT_BACKEND.replace('https://', '')}/{path}"
+        raise HTTPException(status_code=307, detail=f"WebSocket redirect to {backend_ws}")
+    # Else, serve index or static
     file_path = STATIC_DIR / path
     if file_path.exists():
         return FileResponse(file_path)
-    # Else, redirect to chat or serve index
     return RedirectResponse(url="/", status_code=302)
 
 @app.on_event("startup")
@@ -303,4 +297,4 @@ async def startup_event():
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run("main_gate:app", host="0.0.0.0", port=port, log_level="info")
+    uvicorn.run("main:app", host="0.0.0.0", port=port, log_level="info")
