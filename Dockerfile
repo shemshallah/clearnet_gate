@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy and rename the main application file from main-2.py to main.py
 # NOTE: Ensure the local file 'main-2.py' is present.
-COPY main-2.py main.py
+COPY main.py
 
 # Copy the custom modules directory (REQUIRED for your application to boot)
 # IMPORTANT: Ensure your local directory structure is: ./modules/quantum_core.py, etc.
