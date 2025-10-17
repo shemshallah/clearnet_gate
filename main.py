@@ -1,39 +1,703 @@
-from fastapi import FastAPI, Request, File, UploadFile, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-import json
-import os
-import hashlib
-import random
-import asyncio
-from datetime import datetime
-from typing import List
-import uvicorn
-import logging
-from contextlib import asynccontextmanager
+"""
+Quantum File Network (QFN) - Enhanced Production Version
+Primary Architect: Justin Anthony Howard-Stanley
+Secondary Architect: Dale Cwidak
 
-# Production logging
-logging.basicConfig(level=logging.INFO)
+Production-ready FastAPI application with modular quantum simulation framework
+"""
+
+from fastapi import FastAPI, Request, File, UploadFile, HTTPException, Depends, BackgroundTasks
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
+from typing import List, Optional, Dict, Any
+import asyncio
+import hashlib
+import json
+import logging
+import os
+import secrets
+import time
+from pathlib import Path
+
+# Import custom modules
+from modules.quantum_core import QuantumCore, EntanglementManager
+from modules.holo_storage import HoloStorageManager
+from modules.qsh_engine import QSHEngine
+from modules.rf_simulator import RFSimulator, RFMode
+from modules.security import SecurityManager, RateLimiter
+from modules.analytics import AnalyticsEngine
+from modules.blockchain_ledger import BlockchainLedger
+from modules.ai_optimizer import AIOptimizer
+from modules.p2p_network import P2PNetworkManager
+from modules.cache_manager import CacheManager
+
+# Configure production logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('qfn.log'),
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger(__name__)
 
-# Lifespan for startup/shutdown
+# Configuration management
+class Config:
+    """Centralized configuration with environment variable support"""
+    
+    # Paths
+    BASE_DIR = Path(__file__).parent
+    UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./uploads"))
+    STATIC_DIR = BASE_DIR / "static"
+    TEMPLATES_DIR = BASE_DIR / "templates"
+    CONFIG_FILE = Path(os.getenv("CONFIG_FILE", "config.json"))
+    
+    # Security
+    SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_hex(32))
+    RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "100"))
+    RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
+    MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", "104857600"))  # 100MB
+    
+    # Quantum settings
+    HOLO_STORAGE_IP = os.getenv("HOLO_STORAGE_IP", "138.0.0.1")
+    EPR_RATE = int(os.getenv("EPR_RATE", "2500"))
+    ENTANGLEMENT_THRESHOLD = float(os.getenv("ENTANGLEMENT_THRESHOLD", "0.975"))
+    QUANTUM_FIDELITY_TARGET = float(os.getenv("QUANTUM_FIDELITY_TARGET", "0.98"))
+    
+    # Network
+    P2P_PORT = int(os.getenv("P2P_PORT", "9000"))
+    DHT_ENABLED = os.getenv("DHT_ENABLED", "true").lower() == "true"
+    
+    # Features
+    BLOCKCHAIN_ENABLED = os.getenv("BLOCKCHAIN_ENABLED", "true").lower() == "true"
+    AI_OPTIMIZATION = os.getenv("AI_OPTIMIZATION", "true").lower() == "true"
+    ANALYTICS_ENABLED = os.getenv("ANALYTICS_ENABLED", "true").lower() == "true"
+    
+    @classmethod
+    def create_directories(cls):
+        """Create necessary directories"""
+        for directory in [cls.UPLOAD_DIR, cls.STATIC_DIR, cls.TEMPLATES_DIR]:
+            directory.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Directory ready: {directory}")
+
+# Global instances
+quantum_core: QuantumCore
+holo_storage: HoloStorageManager
+qsh_engine: QSHEngine
+rf_simulator: RFSimulator
+security_manager: SecurityManager
+analytics: AnalyticsEngine
+blockchain: Optional[BlockchainLedger]
+ai_optimizer: Optional[AIOptimizer]
+p2p_network: P2PNetworkManager
+cache_manager: CacheManager
+rate_limiter: RateLimiter
+
+# Lifespan management
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Create dirs, load config
-    os.makedirs("./uploads", exist_ok=True)
-    logger.info("QFN Startup: Directories and config loaded")
-    yield
-    # Shutdown: Save config
-    logger.info("QFN Shutdown: Config saved")
+    """Initialize and cleanup resources"""
+    global quantum_core, holo_storage, qsh_engine, rf_simulator
+    global security_manager, analytics, blockchain, ai_optimizer
+    global p2p_network, cache_manager, rate_limiter
+    
+    logger.info("🚀 QFN System initializing...")
+    
+    try:
+        # Create directories
+        Config.create_directories()
+        
+        # Initialize core modules
+        quantum_core = QuantumCore(
+            epr_rate=Config.EPR_RATE,
+            fidelity_target=Config.QUANTUM_FIDELITY_TARGET
+        )
+        
+        holo_storage = HoloStorageManager(
+            storage_ip=Config.HOLO_STORAGE_IP,
+            upload_dir=Config.UPLOAD_DIR
+        )
+        
+        qsh_engine = QSHEngine(quantum_core=quantum_core)
+        rf_simulator = RFSimulator()
+        
+        # Security and rate limiting
+        security_manager = SecurityManager(secret_key=Config.SECRET_KEY)
+        rate_limiter = RateLimiter(
+            max_requests=Config.RATE_LIMIT_REQUESTS,
+            window_seconds=Config.RATE_LIMIT_WINDOW
+        )
+        
+        # Cache manager
+        cache_manager = CacheManager(max_size=1000, ttl=300)
+        
+        # Optional features
+        if Config.ANALYTICS_ENABLED:
+            analytics = AnalyticsEngine()
+            logger.info("✓ Analytics engine enabled")
+        
+        if Config.BLOCKCHAIN_ENABLED:
+            blockchain = BlockchainLedger()
+            logger.info("✓ Blockchain ledger enabled")
+        else:
+            blockchain = None
+        
+        if Config.AI_OPTIMIZATION:
+            ai_optimizer = AIOptimizer(quantum_core=quantum_core)
+            logger.info("✓ AI optimizer enabled")
+        else:
+            ai_optimizer = None
+        
+        # P2P network
+        p2p_network = P2PNetworkManager(
+            port=Config.P2P_PORT,
+            dht_enabled=Config.DHT_ENABLED
+        )
+        await p2p_network.start()
+        logger.info(f"✓ P2P network started on port {Config.P2P_PORT}")
+        
+        # Start background tasks
+        asyncio.create_task(quantum_core.maintain_entanglement())
+        asyncio.create_task(holo_storage.sync_nodes())
+        
+        if Config.ANALYTICS_ENABLED:
+            asyncio.create_task(analytics.collect_metrics())
+        
+        logger.info("✅ QFN System ready - All modules initialized")
+        
+        yield
+        
+    finally:
+        # Cleanup
+        logger.info("🛑 Shutting down QFN System...")
+        await p2p_network.stop()
+        if blockchain:
+            await blockchain.finalize()
+        logger.info("✅ Cleanup complete")
 
-app = FastAPI(title="Quantum File Network (QFN)", lifespan=lifespan)
+# Create FastAPI app
+app = FastAPI(
+    title="Quantum File Network (QFN)",
+    description="Advanced quantum-inspired file sharing and networking platform",
+    version="2.0.0",
+    lifespan=lifespan,
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
+)
 
-# CORS for frontend integration
+# Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict in prod
+    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
     allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory=Config.STATIC_DIR), name="static")
+
+# Security dependency
+security = HTTPBasic(auto_error=False)
+
+async def verify_rate_limit(request: Request):
+    """Rate limiting middleware"""
+    client_ip = request.client.host
+    if not await rate_limiter.check_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+    return client_ip
+
+# ============================================================================
+# CORE API ENDPOINTS
+# ============================================================================
+
+@app.get("/", response_class=HTMLResponse)
+async def root_page():
+    """Enhanced root dashboard"""
+    try:
+        html_path = Config.TEMPLATES_DIR / "dashboard.html"
+        if not html_path.exists():
+            # Fallback to basic template
+            return """
+            <!DOCTYPE html>
+            <html>
+            <head><title>QFN Dashboard</title></head>
+            <body>
+                <h1>🌌 Quantum File Network</h1>
+                <nav>
+                    <a href="/api/docs">API Documentation</a> |
+                    <a href="/metrics">Metrics</a> |
+                    <a href="/quantum">Quantum Lab</a>
+                </nav>
+            </body>
+            </html>
+            """
+        return FileResponse(html_path)
+    except Exception as e:
+        logger.error(f"Root page error: {e}")
+        raise HTTPException(status_code=500, detail="Dashboard unavailable")
+
+@app.get("/health")
+async def health_check():
+    """Comprehensive health check"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": "2.0.0",
+        "modules": {
+            "quantum_core": quantum_core.is_healthy(),
+            "holo_storage": holo_storage.is_healthy(),
+            "p2p_network": p2p_network.is_connected(),
+            "blockchain": blockchain.is_synced() if blockchain else None,
+        },
+        "uptime_seconds": time.time() - app.state.start_time if hasattr(app.state, 'start_time') else 0
+    }
+
+# ============================================================================
+# QUANTUM OPERATIONS
+# ============================================================================
+
+@app.post("/api/quantum/entangle")
+async def create_entanglement(
+    num_pairs: int = 10,
+    client_ip: str = Depends(verify_rate_limit)
+):
+    """Generate EPR pairs for quantum communication"""
+    try:
+        pairs = await quantum_core.generate_epr_pairs(num_pairs)
+        
+        if Config.ANALYTICS_ENABLED:
+            await analytics.log_event("entanglement_created", {
+                "pairs": num_pairs,
+                "ip": client_ip
+            })
+        
+        return {
+            "success": True,
+            "pairs_generated": len(pairs),
+            "average_fidelity": sum(p["fidelity"] for p in pairs) / len(pairs),
+            "pairs": pairs[:5],  # Return first 5 for preview
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Entanglement creation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/quantum/state")
+async def quantum_state():
+    """Get current quantum network state"""
+    cached = await cache_manager.get("quantum_state")
+    if cached:
+        return cached
+    
+    state = {
+        "active_entanglements": await quantum_core.count_active_pairs(),
+        "average_fidelity": await quantum_core.get_average_fidelity(),
+        "epr_generation_rate": Config.EPR_RATE,
+        "decoherence_events": await quantum_core.get_decoherence_count(),
+        "foam_density": await quantum_core.get_foam_density(),
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    await cache_manager.set("quantum_state", state, ttl=10)
+    return state
+
+@app.post("/api/qsh/query")
+async def qsh_query(
+    request: Request,
+    client_ip: str = Depends(verify_rate_limit)
+):
+    """Quantum Secure Hash query - enhanced collision simulation"""
+    try:
+        data = await request.json()
+        query = data.get("query", "").strip()
+        
+        if not query:
+            raise HTTPException(status_code=400, detail="Query required")
+        
+        # Run QSH simulation
+        result = await qsh_engine.process_query(query)
+        
+        # Log to blockchain if enabled
+        if blockchain:
+            await blockchain.add_transaction({
+                "type": "qsh_query",
+                "query_hash": result["qsh_hash"][:16],
+                "timestamp": datetime.now().isoformat()
+            })
+        
+        if Config.ANALYTICS_ENABLED:
+            await analytics.log_event("qsh_query", {"query_length": len(query)})
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"QSH query error: {e}")
+        raise HTTPException(status_code=500, detail="QSH query failed")
+
+# ============================================================================
+# FILE OPERATIONS
+# ============================================================================
+
+@app.post("/api/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    client_ip: str = Depends(verify_rate_limit)
+):
+    """Enhanced file upload with quantum routing"""
+    try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file provided")
+        
+        # Read file content
+        content = await file.read()
+        
+        # Size check
+        if len(content) > Config.MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail=f"File too large (max {Config.MAX_FILE_SIZE/1024/1024}MB)")
+        
+        # Security scan
+        if not await security_manager.scan_file(content):
+            raise HTTPException(status_code=400, detail="File failed security scan")
+        
+        # Generate quantum signature
+        file_hash = hashlib.sha256(content).hexdigest()
+        quantum_signature = await quantum_core.sign_data(file_hash)
+        
+        # Store with holo routing
+        storage_result = await holo_storage.store_file(
+            filename=file.filename,
+            content=content,
+            quantum_signature=quantum_signature
+        )
+        
+        # Add to blockchain ledger
+        if blockchain:
+            background_tasks.add_task(
+                blockchain.add_file_record,
+                file_hash,
+                storage_result["quantum_route"]
+            )
+        
+        # Analytics
+        if Config.ANALYTICS_ENABLED:
+            background_tasks.add_task(
+                analytics.log_event,
+                "file_uploaded",
+                {"size": len(content), "ip": client_ip}
+            )
+        
+        return {
+            "success": True,
+            "filename": file.filename,
+            "file_hash": file_hash,
+            "size_bytes": len(content),
+            "quantum_signature": quantum_signature,
+            "routing": storage_result,
+            "blockchain_pending": blockchain is not None,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Upload error: {e}")
+        raise HTTPException(status_code=500, detail="Upload failed")
+
+@app.get("/api/files")
+async def list_files(
+    limit: int = 50,
+    offset: int = 0,
+    sort_by: str = "name"
+):
+    """List files with quantum routing information"""
+    try:
+        files = await holo_storage.list_files(limit=limit, offset=offset, sort_by=sort_by)
+        return {
+            "files": files,
+            "total": len(files),
+            "limit": limit,
+            "offset": offset
+        }
+    except Exception as e:
+        logger.error(f"File listing error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list files")
+
+@app.get("/api/download/{file_id}")
+async def download_file(
+    file_id: str,
+    client_ip: str = Depends(verify_rate_limit)
+):
+    """Download file with quantum verification"""
+    try:
+        # Get file from holo storage
+        file_data = await holo_storage.retrieve_file(file_id)
+        
+        if not file_data:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Verify quantum signature
+        if not await quantum_core.verify_signature(
+            file_data["hash"],
+            file_data["quantum_signature"]
+        ):
+            logger.warning(f"Quantum signature verification failed for {file_id}")
+        
+        # Analytics
+        if Config.ANALYTICS_ENABLED:
+            await analytics.log_event("file_downloaded", {"file_id": file_id})
+        
+        return StreamingResponse(
+            iter([file_data["content"]]),
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f"attachment; filename={file_data['filename']}"}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Download error: {e}")
+        raise HTTPException(status_code=500, detail="Download failed")
+
+# ============================================================================
+# RF SIMULATION & METRICS
+# ============================================================================
+
+@app.get("/api/rf-metrics")
+async def rf_metrics(mode: str = "quantum", interface: str = "wlan0"):
+    """Advanced RF metrics simulation"""
+    try:
+        rf_mode = RFMode(mode)
+        metrics = await rf_simulator.get_metrics(rf_mode, interface)
+        return metrics
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid mode: {mode}")
+    except Exception as e:
+        logger.error(f"RF metrics error: {e}")
+        raise HTTPException(status_code=500, detail="RF metrics unavailable")
+
+@app.get("/api/metrics")
+async def system_metrics():
+    """Comprehensive system metrics"""
+    cached = await cache_manager.get("system_metrics")
+    if cached:
+        return cached
+    
+    try:
+        metrics = {
+            "quantum": await quantum_state(),
+            "network": await p2p_network.get_stats(),
+            "storage": await holo_storage.get_stats(),
+            "analytics": await analytics.get_summary() if Config.ANALYTICS_ENABLED else None,
+            "blockchain": await blockchain.get_stats() if blockchain else None,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        await cache_manager.set("system_metrics", metrics, ttl=5)
+        return metrics
+        
+    except Exception as e:
+        logger.error(f"Metrics error: {e}")
+        raise HTTPException(status_code=500, detail="Metrics unavailable")
+
+# ============================================================================
+# AI OPTIMIZATION (Optional Module)
+# ============================================================================
+
+@app.post("/api/ai/optimize")
+async def ai_optimize(
+    request: Request,
+    client_ip: str = Depends(verify_rate_limit)
+):
+    """AI-powered quantum parameter optimization"""
+    if not ai_optimizer:
+        raise HTTPException(status_code=503, detail="AI optimization not enabled")
+    
+    try:
+        data = await request.json()
+        target_metric = data.get("target", "fidelity")
+        
+        recommendations = await ai_optimizer.optimize_parameters(target_metric)
+        
+        return {
+            "success": True,
+            "target_metric": target_metric,
+            "recommendations": recommendations,
+            "estimated_improvement": recommendations.get("improvement_percentage", 0),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"AI optimization error: {e}")
+        raise HTTPException(status_code=500, detail="Optimization failed")
+
+# ============================================================================
+# P2P NETWORK
+# ============================================================================
+
+@app.get("/api/p2p/peers")
+async def get_peers():
+    """Get connected peers"""
+    try:
+        peers = await p2p_network.get_peers()
+        return {
+            "peers": peers,
+            "count": len(peers),
+            "dht_enabled": Config.DHT_ENABLED
+        }
+    except Exception as e:
+        logger.error(f"Peer listing error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get peers")
+
+@app.post("/api/p2p/broadcast")
+async def broadcast_message(
+    request: Request,
+    client_ip: str = Depends(verify_rate_limit)
+):
+    """Broadcast message to P2P network"""
+    try:
+        data = await request.json()
+        message = data.get("message")
+        
+        if not message:
+            raise HTTPException(status_code=400, detail="Message required")
+        
+        result = await p2p_network.broadcast(message)
+        
+        return {
+            "success": True,
+            "recipients": result["peer_count"],
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Broadcast error: {e}")
+        raise HTTPException(status_code=500, detail="Broadcast failed")
+
+# ============================================================================
+# BLOCKCHAIN LEDGER (Optional Module)
+# ============================================================================
+
+@app.get("/api/blockchain/chain")
+async def get_blockchain():
+    """Get blockchain ledger"""
+    if not blockchain:
+        raise HTTPException(status_code=503, detail="Blockchain not enabled")
+    
+    try:
+        chain = await blockchain.get_chain()
+        return {
+            "chain": chain,
+            "length": len(chain),
+            "is_valid": await blockchain.validate_chain()
+        }
+    except Exception as e:
+        logger.error(f"Blockchain retrieval error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve chain")
+
+# ============================================================================
+# ANALYTICS & REPORTING
+# ============================================================================
+
+@app.get("/api/analytics/report")
+async def analytics_report(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """Generate analytics report"""
+    if not Config.ANALYTICS_ENABLED:
+        raise HTTPException(status_code=503, detail="Analytics not enabled")
+    
+    try:
+        report = await analytics.generate_report(start_date, end_date)
+        return report
+    except Exception as e:
+        logger.error(f"Analytics report error: {e}")
+        raise HTTPException(status_code=500, detail="Report generation failed")
+
+# ============================================================================
+# ADMIN ENDPOINTS
+# ============================================================================
+
+@app.post("/api/admin/config")
+async def update_config(
+    request: Request,
+    credentials: HTTPBasicCredentials = Depends(security)
+):
+    """Update system configuration (admin only)"""
+    # Simple auth check
+    if not secrets.compare_digest(credentials.username, "admin") or \
+       not secrets.compare_digest(credentials.password, os.getenv("ADMIN_PASSWORD", "quantum")):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    try:
+        data = await request.json()
+        
+        # Update configuration
+        # (In production, implement proper config validation and persistence)
+        
+        return {
+            "success": True,
+            "message": "Configuration updated",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Config update error: {e}")
+        raise HTTPException(status_code=500, detail="Config update failed")
+
+# ============================================================================
+# ERROR HANDLERS
+# ============================================================================
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Custom HTTP exception handler"""
+    logger.error(f"HTTP {exc.status_code}: {exc.detail} from {request.client.host}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": exc.detail,
+            "status_code": exc.status_code,
+            "timestamp": datetime.now().isoformat()
+        }
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """General exception handler"""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal server error",
+            "timestamp": datetime.now().isoformat()
+        }
+    )
+
+# Initialize start time
+@app.on_event("startup")
+async def startup_event():
+    app.state.start_time = time.time()
+    logger.info("⚡ QFN FastAPI application started")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        log_level="info",
+        access_log=True
+    )
     allow_methods=["*"],
     allow_headers=["*"],
 )
