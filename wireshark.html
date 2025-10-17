@@ -1,3 +1,4 @@
+<!-- wireshark.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -35,6 +36,12 @@
             const mode = document.getElementById('rf-mode').value;
             fetch(`/api/rf-metrics?mode=${mode}`).then(r => r.json()).then(data => {
                 document.getElementById('rf-data').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            });
+        }
+        loadRF();  // Initial load
+    </script>
+</body>
+</html>                document.getElementById('rf-data').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
             });
         }
         loadRF();  // Initial load
