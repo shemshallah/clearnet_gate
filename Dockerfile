@@ -1,27 +1,27 @@
-# Use an official Python runtime as a parent image
+# Use a Python slim base for a smaller final image
 FROM python:3.11-slim
 
-# Set the working directory in the container
+# Set the working directory
 WORKDIR /app
 
-# Copy the requirements file and install dependencies
+# Install dependencies first (for faster rebuilds when only code changes)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy and rename the main application file from main-2.py to main.py
-# NOTE: Ensure the local file 'main-2.py' is present.
+# Copy the main application file
+# Assuming your local file is now called main.py, or you use: COPY main-2.py main.py
 COPY main.py .
 
-# Copy the custom modules directory (REQUIRED for your application to boot)
-# IMPORTANT: Ensure your local directory structure is: ./modules/quantum_core.py, etc.
+# Copy the entire custom module package
 COPY modules modules/
 
-# Create necessary directories
+# Create necessary directories for file storage and web serving
+# The application (main.py) uses these for uploads and static content
 RUN mkdir -p uploads static templates
 
-# Expose the port the app runs on
+# Expose the application port
 EXPOSE 8000
 
 # Run the application using Gunicorn with Uvicorn workers
-# 'main:app' tells Gunicorn to load the object named 'app' from the file 'main.py'
+# 'main:app' is the correct module:object format for your FastAPI instance
 CMD ["gunicorn", "main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--log-level", "info"]
