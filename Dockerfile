@@ -1,4 +1,4 @@
-```dockerfile
+
 # Quantum Foam Computer - Extended System Docker Container
 # Created by Justin Anthony Howard-Stanley & Dale Cwidak
 # "For Logan and all the ones like him"
@@ -87,4 +87,3 @@ USER quantum
 
 # Start command
 CMD ["python3", "quantum_foam_extended.py"]
-```
