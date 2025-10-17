@@ -75,4 +75,45 @@
         }
     </script>
 </body>
+</html>            </div>
+            <div class="card">
+                <h2>Interface</h2>
+                <div class="metric"><span>QSH Link:</span><span style="color: #0f0;">{{ collider.interface.qsh_link }}</span></div>
+                <div class="metric"><span>Data Rate (Gbps):</span><span>{{ "%.2e"|format(collider.interface.data_rate_gbps) }}</span></div>
+                <div class="metric"><span>Entanglement Pairs:</span><span>{{ collider.interface.entanglement_pairs }}</span></div>
+                <button onclick="refreshStatus()">Refresh Status</button>
+            </div>
+        </div>
+        <div class="card" style="grid-column: 1 / -1; margin-top: 20px;">
+            <h2>Energy Spectrum (Sample)</h2>
+            <canvas id="spectrumChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Render initial chart with server data
+        const ctx = document.getElementById('spectrumChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array.from({length: {{ collider.energies_ev|length }} }, (_, i) => `Point ${i+1}`),
+                datasets: [{
+                    label: 'Energy (eV)',
+                    data: {{ collider.energies_ev|tojson }},
+                    borderColor: '#ff00ff',
+                    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+                    tension: 0.1
+                }]
+            },
+            options: { scales: { y: { beginAtZero: true } } }
+        });
+
+        async function refreshStatus() {
+            const res = await fetch('/api/collider/status');
+            const data = await res.json();
+            // Update DOM (e.g., document.querySelector('.metric span:last-child').textContent = data.black_hole.status;)
+            location.reload();  // Simple refresh for demo
+        }
+    </script>
+</body>
 </html>
