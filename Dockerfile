@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # (e.g., quantum_core.py, security.py, etc.) exists on your host machine
 # next to the Dockerfile when building.
 COPY modules modules/
-COPY main-2.py .
+COPY main.py .
 
 # Create necessary directories that the application initializes
 # UPLOAD_DIR (default: ./uploads), STATIC_DIR (default: ./static), TEMPLATES_DIR (default: ./templates)
