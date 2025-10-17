@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from typing import List
 import json
 from datetime import timedelta
-from .database import get_db, engine
+from app.database import get_db, engine, SessionLocal.
 from .models import Base, User, Message, Email, Contact, collider_black_hole_hash, encrypt_with_collider
 from .auth import create_access_token, get_current_user
 from .collider import create_black_hole_hash
