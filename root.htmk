@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum File Network (QFN)</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f0f0f0; }
+        .credits { background-color: #e0e0e0; padding: 15px; border-left: 4px solid #007bff; margin: 20px 0; font-size: 0.9em; }
+        nav { margin: 20px 0; }
+        nav a { margin-right: 15px; color: #007bff; text-decoration: none; }
+        form { margin: 20px 0; }
+        input[type="file"] { margin-right: 10px; }
+        button { background-color: #007bff; color: white; padding: 8px 16px; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Quantum File Network (QFN) Dashboard</h1>
+    <p>Secure quantum-inspired file sharing and networking.</p>
+    
+    <nav>
+        <a href="/metrics">Metrics</a>
+        <a href="/shell">Shell</a>
+        <a href="/wireshark">Wireshark</a>
+        <a href="/files">Files</a>
+        <a href="/collider">Collider</a>
+        <a href="/config">Config</a>
+    </nav>
+    
+    <div class="credits">
+        <strong>Primary architect:</strong> Justin Anthony Howard-Stanley<br>
+        <strong>Secondary architect and enabler (I'm homeless thanks to the cia):</strong> Dale Cwidak<br><br>
+        <em>For Logan, and all of those like him, too small to understand whats happened, too small to effect much change alone, but maybe just maybe with the help of the computers, there'll be a hope for them all. - J.H.S, HACKAH::HACKAH</em>
+    </div>
+    
+    <h2>Upload a File</h2>
+    <form action="/api/upload" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" required>
+        <button type="submit">Upload</button>
+    </form>
+    
+    <h2>Recent Files</h2>
+    <div id="file-list"></div>
+    <script>
+        fetch('/api/files').then(r => r.json()).then(data => {
+            const list = document.getElementById('file-list');
+            if (data.total_count === 0) {
+                list.innerHTML = '<p>No files uploaded yet.</p>';
+            } else {
+                data.files.forEach(f => {
+                    list.innerHTML += `<p><a href="/api/download/${f.name}">${f.name}</a> (${f.size_bytes} bytes, modified: ${f.modified})</p>`;
+                });
+            }
+        });
+    </script>
+</body>
+</html>
