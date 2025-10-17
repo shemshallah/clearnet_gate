@@ -1,38 +1,25 @@
+# Use official Python runtime as base image
 FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PORT=8000
-
+# Set working directory
 WORKDIR /app
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc && \
-    rm -rf /var/lib/apt/lists/*
+# Install system dependencies (if needed, e.g., for psycopg2)
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
 
+# Copy requirements first for better caching
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
 
-COPY main.py .
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy templates directory
-COPY templates/ ./templates/
+# Copy the rest of the application code
+COPY . .
 
-RUN mkdir -p /tmp/uploads && chmod 777 /tmp/uploads
+# Expose the port Render uses
+EXPOSE $PORT
 
-EXPOSE 8000
-
-LABEL maintainer="Justin Anthony Howard-Stanley <shemshallah@gmail.com>" \
-      version="2.0.0" \
-      description="Quantum Foam Computer - Quantum File Network"
-
-CMD gunicorn main:app \
-    --workers 4 \
-    --worker-class uvicorn.workers.UvicornWorker \
-    --bind 0.0.0.0:${PORT} \
-    --timeout 120 \
-    --keep-alive 5 \
-    --log-level info \
-    --access-logfile - \
-    --error-logfile -
+# Run the application using Gunicorn
+CMD ["gunicorn", "main:app", "--workers", "1", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:$PORT", "--timeout", "300", "--keep-alive", "65", "--max-requests", "500", "--log-level", "info"]
