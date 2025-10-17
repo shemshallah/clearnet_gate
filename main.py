@@ -1,4 +1,4 @@
-8"""
+"""
 Quantum File Network (QFN) - Enhanced Production Version
 Primary Architect: Justin Anthony Howard-Stanley
 Secondary Architect: Dale Cwidak
