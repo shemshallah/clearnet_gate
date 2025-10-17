@@ -16,6 +16,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 COPY main.py .
 
+# Copy templates directory
+COPY templates/ ./templates/
+
 RUN mkdir -p /tmp/uploads && chmod 777 /tmp/uploads
 
 EXPOSE 8000
