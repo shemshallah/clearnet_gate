@@ -1,3 +1,4 @@
+<!-- collider.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -35,6 +36,11 @@
                 body: JSON.stringify({query: query})
             }).then(r => r.json()).then(data => {
                 document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+            });
+        }
+    </script>
+</body>
+</html>                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
             });
         }
     </script>
