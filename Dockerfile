@@ -2,7 +2,7 @@
 FROM python:3.11-slim
 
 # Set the working directory in the container
-WORKDIR /app
+WORKDIR /
 
 # Copy the requirements file into the container
 # This allows Docker to use the cache if requirements.txt hasn't changed
@@ -31,4 +31,4 @@ EXPOSE 8000
 # 'main-2:app' refers to the 'app' object in the 'main-2.py' file.
 # The number of workers is often set to (2 * $num_cores) + 1 for optimal performance.
 # We'll default to 4 workers here for common environments.
-CMD ["gunicorn", "main-2:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--log-level", "info"]
+CMD ["gunicorn", "main", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--log-level", "info"]
