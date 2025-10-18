@@ -1,44 +1,701 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shell - Quantum Realm</title>
+    <title>Quantum Shell & Notebook - Quantum Realm</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #0f0; padding: 20px; }
-        h1 { color: #0f0; }
-        output { background: #111; padding: 10px; height: 400px; overflow-y: scroll; border: 1px solid #0f0; font-family: monospace; }
-        input { width: 80%; padding: 10px; background: #111; color: #0f0; border: 1px solid #0f0; }
-        button { padding: 10px; background: #0f0; color: #000; border: none; cursor: pointer; }
-        button:hover { background: #0a0; }
-        a { color: #0f0; text-decoration: none; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Monaco', 'Courier New', monospace; 
+            background: #000; 
+            color: #0f0; 
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Header */
+        .header {
+            background: #111;
+            border-bottom: 2px solid #0f0;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { color: #0f0; font-size: 20px; }
+        .header a { color: #0f0; text-decoration: none; padding: 5px 15px; background: #0f0; color: #000; border-radius: 3px; }
+        .header a:hover { background: #0a0; }
+        
+        /* Container split */
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        /* Notebook Section (Top 60%) */
+        .notebook-section {
+            height: 60%;
+            border-bottom: 2px solid #0f0;
+            display: flex;
+            flex-direction: column;
+            background: #0a0a0a;
+        }
+        
+        .notebook-toolbar {
+            background: #111;
+            padding: 10px;
+            border-bottom: 1px solid #0f0;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .notebook-toolbar button {
+            padding: 6px 12px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .notebook-toolbar button:hover { background: #0a0; }
+        .notebook-toolbar button:disabled { background: #555; cursor: not-allowed; }
+        
+        .kernel-status {
+            margin-left: auto;
+            padding: 6px 12px;
+            background: #0a0;
+            color: #000;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .kernel-status.stopped { background: #f00; }
+        
+        .notebook-cells {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        .cell {
+            background: #111;
+            border: 1px solid #0f0;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        .cell-header {
+            background: #0a0a0a;
+            padding: 5px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #0f0;
+        }
+        
+        .cell-header .cell-number {
+            color: #0f0;
+            font-size: 12px;
+        }
+        
+        .cell-header .cell-controls {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .cell-header .cell-controls input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        
+        .cell-header .cell-controls button {
+            padding: 2px 8px;
+            background: #f00;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            border-radius: 2px;
+            font-size: 10px;
+        }
+        .cell-header .cell-controls button:hover { background: #a00; }
+        
+        .cell-input {
+            width: 100%;
+            min-height: 80px;
+            background: #000;
+            color: #0f0;
+            border: none;
+            padding: 10px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        
+        .cell-output {
+            background: #0a0a0a;
+            color: #fff;
+            padding: 10px;
+            border-top: 1px solid #0f0;
+            font-size: 13px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .cell-output.error { color: #f00; }
+        .cell-output.success { color: #0ff; }
+        
+        /* Terminal Section (Bottom 40%) */
+        .terminal-section {
+            height: 40%;
+            display: flex;
+            flex-direction: column;
+            background: #000;
+        }
+        
+        .terminal-header {
+            background: #111;
+            padding: 8px 15px;
+            border-bottom: 1px solid #0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .terminal-header h2 { color: #0f0; font-size: 16px; }
+        
+        .terminal-controls button {
+            padding: 4px 10px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            border-radius: 3px;
+            font-size: 11px;
+            margin-left: 5px;
+        }
+        .terminal-controls button:hover { background: #0a0; }
+        
+        .terminal-output {
+            flex: 1;
+            background: #000;
+            padding: 10px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            color: #0f0;
+        }
+        
+        .terminal-output .qsh-line {
+            margin-bottom: 5px;
+        }
+        
+        .terminal-output .qsh-prompt {
+            color: #0ff;
+            font-weight: bold;
+        }
+        
+        .terminal-output .qsh-error {
+            color: #f00;
+        }
+        
+        .terminal-output .qsh-success {
+            color: #0f0;
+        }
+        
+        .terminal-input-container {
+            background: #111;
+            padding: 10px;
+            border-top: 1px solid #0f0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .terminal-input-container .prompt {
+            color: #0ff;
+            font-weight: bold;
+        }
+        
+        .terminal-input-container input {
+            flex: 1;
+            background: #000;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 8px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+        }
+        
+        .terminal-input-container button {
+            padding: 8px 15px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 3px;
+        }
+        .terminal-input-container button:hover { background: #0a0; }
+        
+        /* Auth Modal */
+        .auth-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .auth-modal.hidden { display: none; }
+        
+        .auth-content {
+            background: #111;
+            border: 2px solid #0f0;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 400px;
+            width: 90%;
+        }
+        
+        .auth-content h2 {
+            color: #0f0;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .auth-content .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .auth-content label {
+            display: block;
+            color: #0f0;
+            margin-bottom: 5px;
+        }
+        
+        .auth-content input {
+            width: 100%;
+            padding: 10px;
+            background: #000;
+            color: #0f0;
+            border: 1px solid #0f0;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+        
+        .auth-content button {
+            width: 100%;
+            padding: 12px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .auth-content button:hover { background: #0a0; }
+        
+        .auth-content .error {
+            color: #f00;
+            margin-top: 10px;
+            text-align: center;
+        }
+        
+        .auth-content .info {
+            color: #0ff;
+            margin-top: 15px;
+            text-align: center;
+            font-size: 12px;
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: #0f0; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #0a0; }
     </style>
 </head>
 <body>
-    <h1>🐚 QSH Shell Portal</h1>
-    <p>Quantum Secure Shell - Execute commands in the realm.</p>
-    <div id="output">QSH> Ready. Type 'help' for commands.</div>
-    <input type="text" id="command" placeholder="Enter command..." />
-    <button onclick="executeCommand()">Execute</button>
+    <!-- Auth Modal -->
+    <div id="authModal" class="auth-modal">
+        <div class="auth-content">
+            <h2>🔐 HOLOGRAPHIC AUTHENTICATION</h2>
+            <p class="info">Connection to: <strong>138.0.0.1</strong> (Holographic Storage)</p>
+            <div class="form-group">
+                <label>Administrator Username:</label>
+                <input type="text" id="authUsername" placeholder="UUID from holographic storage" />
+            </div>
+            <div class="form-group">
+                <label>Administrator Password:</label>
+                <input type="password" id="authPassword" placeholder="UUID from holographic storage" />
+            </div>
+            <button onclick="authenticate()">AUTHENTICATE</button>
+            <div id="authError" class="error"></div>
+            <p class="info">Session will close on browser close</p>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>🐚 Quantum Shell & Notebook Environment</h1>
+        <div>
+            <span id="sessionInfo" style="color: #0f0; margin-right: 20px;"></span>
+            <a href="/">← Dashboard</a>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Notebook Section -->
+        <div class="notebook-section">
+            <div class="notebook-toolbar">
+                <button onclick="addCell()">➕ Add Cell</button>
+                <button onclick="deleteSelectedCells()">🗑️ Delete Selected</button>
+                <button onclick="runSelectedCells()">▶️ Run Selected</button>
+                <button onclick="selectAllCells()">☑️ Select All</button>
+                <button onclick="copySelectedText()">📋 Copy Text</button>
+                <button onclick="pasteText()">📄 Paste</button>
+                <button onclick="resetKernel()">🔄 Reset Kernel</button>
+                <div class="kernel-status" id="kernelStatus">● Kernel: Running</div>
+            </div>
+            <div class="notebook-cells" id="notebookCells">
+                <!-- Cells will be added dynamically -->
+            </div>
+        </div>
+
+        <!-- Terminal Section -->
+        <div class="terminal-section">
+            <div class="terminal-header">
+                <h2>QSH FOAM REPL Terminal [Alice @ 127.0.0.1]</h2>
+                <div class="terminal-controls">
+                    <button onclick="clearTerminal()">Clear</button>
+                    <button onclick="exportLogs()">Export Logs</button>
+                </div>
+            </div>
+            <div class="terminal-output" id="terminalOutput">
+                <div class="qsh-line"><span class="qsh-prompt">QSH></span> Quantum Secure Shell initialized</div>
+                <div class="qsh-line"><span class="qsh-prompt">QSH></span> Connected to Alice @ 127.0.0.1</div>
+                <div class="qsh-line"><span class="qsh-prompt">QSH></span> Holographic link established: 138.0.0.1 (HOLO) | 136.0.0.1 (QRAM)</div>
+                <div class="qsh-line"><span class="qsh-success">QSH></span> Ready. Type 'help' for available commands.</div>
+            </div>
+            <div class="terminal-input-container">
+                <span class="prompt">QSH></span>
+                <input type="text" id="terminalInput" placeholder="Enter command..." autocomplete="off" />
+                <button onclick="executeTerminalCommand()">Execute</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        function executeCommand() {
-            const cmd = document.getElementById('command').value;
-            const output = document.getElementById('output');
-            output.innerHTML += `<p>QSH> ${cmd}</p><p>...</p>`;
-            fetch('/api/shell', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ command: cmd })
-            }).then(res => res.json()).then(data => {
-                output.innerHTML = output.innerHTML.replace('...', data.output || data.error || 'No output');
-                output.scrollTop = output.scrollHeight;
-            });
-            document.getElementById('command').value = '';
+        // Session management
+        let sessionToken = null;
+        let kernelRunning = true;
+        let cellCounter = 0;
+        let clipboard = '';
+
+        // Check auth on load
+        window.addEventListener('load', function() {
+            const token = sessionStorage.getItem('qsh_session_token');
+            if (token) {
+                sessionToken = token;
+                document.getElementById('authModal').classList.add('hidden');
+                document.getElementById('sessionInfo').textContent = '🔓 Authenticated';
+                addInitialCell();
+            } else {
+                document.getElementById('authModal').classList.remove('hidden');
+            }
+        });
+
+        // Clear session on browser close
+        window.addEventListener('beforeunload', function() {
+            if (sessionToken) {
+                fetch('/api/holographic/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: sessionToken }),
+                    keepalive: true
+                });
+                sessionStorage.removeItem('qsh_session_token');
+            }
+        });
+
+        // Authentication
+        async function authenticate() {
+            const username = document.getElementById('authUsername').value;
+            const password = document.getElementById('authPassword').value;
+            const errorDiv = document.getElementById('authError');
+            
+            errorDiv.textContent = '';
+            
+            try {
+                const response = await fetch('/api/holographic/auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password,
+                        storage_address: '138.0.0.1',
+                        qsh_dns: 'qsh.foam.quantum.realm'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    sessionToken = data.token;
+                    sessionStorage.setItem('qsh_session_token', sessionToken);
+                    document.getElementById('authModal').classList.add('hidden');
+                    document.getElementById('sessionInfo').textContent = '🔓 Authenticated';
+                    addToTerminal('Authentication successful. Session established.', 'success');
+                    addInitialCell();
+                } else {
+                    errorDiv.textContent = data.error || 'Authentication failed';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Connection error: ' + error.message;
+            }
         }
-        document.getElementById('command').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') executeCommand();
+
+        // Notebook functions
+        function addInitialCell() {
+            addCell();
+        }
+
+        function addCell() {
+            if (!sessionToken) return;
+            
+            cellCounter++;
+            const cellsContainer = document.getElementById('notebookCells');
+            const cellDiv = document.createElement('div');
+            cellDiv.className = 'cell';
+            cellDiv.dataset.cellId = cellCounter;
+            
+            cellDiv.innerHTML = `
+                <div class="cell-header">
+                    <span class="cell-number">In [${cellCounter}]:</span>
+                    <div class="cell-controls">
+                        <input type="checkbox" class="cell-select" />
+                        <button onclick="deleteCell(${cellCounter})">Delete</button>
+                    </div>
+                </div>
+                <textarea class="cell-input" placeholder="Enter Python code or QSH commands..."></textarea>
+                <div class="cell-output" id="output-${cellCounter}" style="display: none;"></div>
+            `;
+            
+            cellsContainer.appendChild(cellDiv);
+            cellDiv.querySelector('.cell-input').focus();
+        }
+
+        function deleteCell(cellId) {
+            const cell = document.querySelector(`[data-cell-id="${cellId}"]`);
+            if (cell) cell.remove();
+        }
+
+        function deleteSelectedCells() {
+            const checkboxes = document.querySelectorAll('.cell-select:checked');
+            checkboxes.forEach(checkbox => {
+                const cell = checkbox.closest('.cell');
+                if (cell) cell.remove();
+            });
+        }
+
+        async function runSelectedCells() {
+            if (!kernelRunning) {
+                alert('Kernel is not running. Please reset kernel.');
+                return;
+            }
+            
+            const checkboxes = document.querySelectorAll('.cell-select:checked');
+            if (checkboxes.length === 0) {
+                alert('No cells selected. Please select cells to run.');
+                return;
+            }
+            
+            for (const checkbox of checkboxes) {
+                const cell = checkbox.closest('.cell');
+                const cellId = cell.dataset.cellId;
+                const input = cell.querySelector('.cell-input').value;
+                const outputDiv = cell.querySelector('.cell-output');
+                
+                outputDiv.style.display = 'block';
+                outputDiv.className = 'cell-output';
+                outputDiv.textContent = 'Executing...';
+                
+                try {
+                    const response = await fetch('/api/notebook/execute', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${sessionToken}`
+                        },
+                        body: JSON.stringify({ code: input, cell_id: cellId })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        outputDiv.className = 'cell-output success';
+                        outputDiv.textContent = data.output || '(no output)';
+                        addToTerminal(`Cell [${cellId}] executed successfully`, 'success');
+                    } else {
+                        outputDiv.className = 'cell-output error';
+                        outputDiv.textContent = data.error || 'Execution error';
+                        addToTerminal(`Cell [${cellId}] execution failed: ${data.error}`, 'error');
+                    }
+                } catch (error) {
+                    outputDiv.className = 'cell-output error';
+                    outputDiv.textContent = 'Network error: ' + error.message;
+                }
+            }
+        }
+
+        function selectAllCells() {
+            const checkboxes = document.querySelectorAll('.cell-select');
+            checkboxes.forEach(cb => cb.checked = true);
+        }
+
+        function copySelectedText() {
+            const checkboxes = document.querySelectorAll('.cell-select:checked');
+            let text = '';
+            
+            checkboxes.forEach(checkbox => {
+                const cell = checkbox.closest('.cell');
+                const input = cell.querySelector('.cell-input').value;
+                text += input + '\n\n';
+            });
+            
+            clipboard = text;
+            addToTerminal('Text copied to clipboard', 'success');
+        }
+
+        function pasteText() {
+            if (!clipboard) {
+                alert('Clipboard is empty');
+                return;
+            }
+            
+            addCell();
+            const lastCell = document.querySelector('.cell:last-child');
+            if (lastCell) {
+                lastCell.querySelector('.cell-input').value = clipboard;
+            }
+        }
+
+        function resetKernel() {
+            if (confirm('Reset kernel? All variables will be lost.')) {
+                kernelRunning = true;
+                document.getElementById('kernelStatus').textContent = '● Kernel: Running';
+                document.getElementById('kernelStatus').className = 'kernel-status';
+                addToTerminal('Kernel reset successfully', 'success');
+                
+                fetch('/api/notebook/reset_kernel', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${sessionToken}`
+                    }
+                });
+            }
+        }
+
+        // Terminal functions
+        async function executeTerminalCommand() {
+            if (!sessionToken) {
+                addToTerminal('Authentication required', 'error');
+                return;
+            }
+            
+            const input = document.getElementById('terminalInput');
+            const command = input.value.trim();
+            
+            if (!command) return;
+            
+            addToTerminal(command, 'prompt');
+            input.value = '';
+            
+            try {
+                const response = await fetch('/api/shell', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${sessionToken}`
+                    },
+                    body: JSON.stringify({ command: command })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    addToTerminal(data.output || '(no output)', 'success');
+                } else {
+                    addToTerminal(data.error || 'Command failed', 'error');
+                }
+            } catch (error) {
+                addToTerminal('Network error: ' + error.message, 'error');
+            }
+        }
+
+        function addToTerminal(text, type = 'normal') {
+            const output = document.getElementById('terminalOutput');
+            const line = document.createElement('div');
+            line.className = 'qsh-line';
+            
+            const prompt = document.createElement('span');
+            prompt.className = type === 'prompt' ? 'qsh-prompt' : 
+                              type === 'error' ? 'qsh-error' : 
+                              type === 'success' ? 'qsh-success' : 'qsh-prompt';
+            prompt.textContent = 'QSH> ';
+            
+            const content = document.createTextNode(text);
+            
+            line.appendChild(prompt);
+            line.appendChild(content);
+            output.appendChild(line);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function clearTerminal() {
+            const output = document.getElementById('terminalOutput');
+            output.innerHTML = '<div class="qsh-line"><span class="qsh-success">QSH></span> Terminal cleared. Ready.</div>';
+        }
+
+        function exportLogs() {
+            const output = document.getElementById('terminalOutput');
+            const text = output.innerText;
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `qsh-logs-${Date.now()}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Enter key handler for terminal
+        document.getElementById('terminalInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                executeTerminalCommand();
+            }
         });
     </script>
-    <br><a href="/">← Back to Dashboard</a>
 </body>
 </html>
