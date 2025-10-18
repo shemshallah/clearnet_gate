@@ -201,7 +201,7 @@ class Storage:
         self.active_sessions: Dict[str, str] = {}  # token -> username
         
         # Encrypted messages
-        self.encrypted_messages: List[Dict]] = []
+        self.encrypted_messages: List[Dict] = []
         
         # Bitcoin cache
         self.bitcoin_cache: Dict[str, Any] = {
