@@ -1,425 +1,507 @@
-import os
-import logging
-import hashlib
-import base64
-import json
-import uuid
-from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List, Tuple
-from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect, Depends, WebSocketState
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.staticfiles import StaticFiles
-import uvicorn
-import httpx
-import asyncio
-from contextlib import asynccontextmanager
-import secrets
-from collections import defaultdict
-import random  # Retained for fictional quantum variance only
-import psutil  # For real-time system network and storage metrics
-import subprocess  # For real routing table extraction and QSH commands
-from jinja2 import Template
-import socket  # For AF_INET constant
-import sqlite3  # For persistent storage of emails, folders, labels, contacts
-import re  # For search regex
-
-# ==================== CONFIGURATION MODULE ====================
-class Config:
-    """Centralized configuration management"""
-    # Environment
-    ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
-    DEBUG = os.getenv("DEBUG", "false").lower() == "true"
-    
-    # Backend
-    CHAT_BACKEND = os.getenv("CHAT_BACKEND_URL", "https://clearnet-chat-4bal.onrender.com")
-    SKIP_BACKEND_CHECKS = os.getenv("SKIP_BACKEND_CHECKS", "true").lower() == "true"
-    
-    # Network
-    MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
-    TIMEOUT = int(os.getenv("TIMEOUT", "30"))
-    RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
-    
-    # Quantum
-    BLACK_HOLE_ADDRESS = "138.0.0.1"
-    WHITE_HOLE_ADDRESS = "139.0.0.1"
-    QUANTUM_REALM = "quantum.realm.domain.dominion.foam.computer.alice"
-    NETWORKING_ADDRESS = "quantum.realm.domain.dominion.foam.computer.networking"
-    
-    # Bitcoin
-    BITCOIN_UPDATE_INTERVAL = int(os.getenv("BITCOIN_UPDATE_INTERVAL", "30"))
-    BITCOIN_RPC_USER = os.getenv("BITCOIN_RPC_USER", "hackah")
-    BITCOIN_RPC_PASS = os.getenv("BITCOIN_RPC_PASS", "hackah")
-    
-    # Storage
-    HOLOGRAPHIC_CAPACITY_TB = 138000  # 138 Petabytes
-    QRAM_CAPACITY_QUBITS = 1000000000  # 1 Billion Qubits
-    
-    # Templates - changed to root directory
-    TEMPLATES_DIR = Path(".")
-    STATIC_DIR = Path("static")
-    UPLOADS_DIR = Path("uploads")
-    
-    # Database
-    DB_PATH = Path("quantum_foam.db")
-
-# Create directories
-Config.STATIC_DIR.mkdir(exist_ok=True)
-Config.UPLOADS_DIR.mkdir(exist_ok=True)
-
-# ==================== DATABASE MODULE ====================
-class Database:
-    """SQLite-based storage for emails, folders, labels, contacts with holographic simulation"""
-    
-    def __init__(self):
-        self.conn = sqlite3.connect(Config.DB_PATH, check_same_thread=False)
-        self.setup_tables()
-    
-    def setup_tables(self):
-        cursor = self.conn.cursor()
-        # Emails table with attachments and thread_id
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS emails (
-                id TEXT PRIMARY KEY,
-                thread_id TEXT DEFAULT '',
-                parent_id TEXT DEFAULT '',
-                from_email TEXT NOT NULL,
-                to_email TEXT NOT NULL,
-                cc_email TEXT DEFAULT '',
-                subject TEXT NOT NULL,
-                body TEXT NOT NULL,
-                attachments TEXT DEFAULT '[]',  -- JSON array of {name, path}
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                read BOOLEAN DEFAULT FALSE,
-                folder TEXT DEFAULT 'Inbox',
-                labels TEXT DEFAULT '[]'  -- JSON array of labels
-            )
-        """)
-        # Folders table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS folders (
-                id TEXT PRIMARY KEY,
-                name TEXT UNIQUE NOT NULL,
-                user TEXT NOT NULL
-            )
-        """)
-        # Contacts table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS contacts (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                user TEXT NOT NULL
-            )
-        """)
-        # Insert default folders
-        default_folders = [('Inbox',), ('Sent',), ('Drafts',), ('Trash',)]
-        cursor.executemany("INSERT OR IGNORE INTO folders (name, user) VALUES (?, ?)", [(f[0], 'all_users') for f in default_folders])
-        self.conn.commit()
-    
-    def holographic_store(self, data: Dict[str, Any]) -> str:
-        """Simulate holographic storage: hash + base64 encode with quantum variance"""
-        variance = round(random.uniform(0.9990, 0.9999), 4)
-        hashed = hashlib.sha256(json.dumps(data).encode()).digest()
-        encoded = base64.b64encode(hashed).decode()
-        return f"{encoded}:{variance}"  # Holo-tagged
-    
-    def holo_search(self, username: str, query: str, folder: str = 'Inbox') -> List[Dict[str, Any]]:
-        """Holo search: fuzzy regex search across fields"""
-        cursor = self.conn.cursor()
-        pattern = f".*{re.escape(query)}.*"  # Simple fuzzy
-        cursor.execute("""
-            SELECT * FROM emails 
-            WHERE (to_email LIKE ? OR from_email LIKE ? OR subject LIKE ? OR body LIKE ?) 
-            AND to_email LIKE ? AND folder = ?
-            ORDER BY timestamp DESC
-        """, (pattern, pattern, pattern, pattern, f"{username}::quantum.foam", folder))
-        rows = cursor.fetchall()
-        return [dict(zip([col[0] for col in cursor.description], row)) for row in rows]
-    
-    def get_emails(self, username: str, folder: str = 'Inbox') -> List[Dict[str, Any]]:
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT * FROM emails 
-            WHERE to_email LIKE ? AND folder = ? 
-            ORDER BY timestamp DESC
-        """, (f"{username}::quantum.foam", folder))
-        rows = cursor.fetchall()
-        return [dict(zip([col[0] for col in cursor.description], row)) for row in rows]
-    
-    def get_thread(self, thread_id: str) -> List[Dict[str, Any]]:
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM emails WHERE thread_id = ? ORDER BY timestamp ASC", (thread_id,))
-        rows = cursor.fetchall()
-        return [dict(zip([col[0] for col in cursor.description], row)) for row in rows]
-    
-    def send_email(self, email_data: Dict[str, Any]) -> Dict[str, Any]:
-        cursor = self.conn.cursor()
-        email_id = str(uuid.uuid4())
-        thread_id = email_data.get('thread_id', email_id)
-        parent_id = email_data.get('parent_id', '')
-        attachments = json.dumps(email_data.get('attachments', []))
-        holo_tag = self.holographic_store(email_data)
-        cursor.execute("""
-            INSERT INTO emails (id, thread_id, parent_id, from_email, to_email, cc_email, subject, body, attachments, labels)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (email_id, thread_id, parent_id, email_data['from'], email_data['to'], email_data.get('cc', ''), 
-              email_data['subject'], email_data['body'], attachments, json.dumps([])))
-        self.conn.commit()
-        # Simulate delivery to chat inbox if flagged
-        if 'chat_to' in email_data:
-            logger.info(f"Forwarding email {email_id} to chat for {email_data['chat_to']}")
-        return {'id': email_id, 'holo_tag': holo_tag}
-    
-    def create_folder(self, folder_name: str, username: str) -> str:
-        cursor = self.conn.cursor()
-        folder_id = str(uuid.uuid4())
-        cursor.execute("INSERT INTO folders (id, name, user) VALUES (?, ?, ?)", (folder_id, folder_name, username))
-        self.conn.commit()
-        return folder_id
-    
-    def get_folders(self, username: str) -> List[Dict[str, Any]]:
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM folders WHERE user = ? OR user = 'all_users'", (username,))
-        rows = cursor.fetchall()
-        return [dict(zip([col[0] for col in cursor.description], row)) for row in rows]
-    
-    def move_to_folder(self, email_id: str, folder_name: str):
-        cursor = self.conn.cursor()
-        cursor.execute("UPDATE emails SET folder = ? WHERE id = ?", (folder_name, email_id))
-        self.conn.commit()
-    
-    def add_label(self, email_id: str, label: str):
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT labels FROM emails WHERE id = ?", (email_id,))
-        row = cursor.fetchone()
-        if row:
-            labels = json.loads(row[0])
-            if label not in labels:
-                labels.append(label)
-                cursor.execute("UPDATE emails SET labels = ? WHERE id = ?", (json.dumps(labels), email_id))
-                self.conn.commit()
-    
-    def get_contacts(self, username: str) -> List[Dict[str, Any]]:
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM contacts WHERE user = ?", (username,))
-        rows = cursor.fetchall()
-        return [dict(zip([col[0] for col in cursor.description], row)) for row in rows]
-    
-    def add_contact(self, name: str, email: str, username: str) -> str:
-        cursor = self.conn.cursor()
-        contact_id = str(uuid.uuid4())
-        cursor.execute("INSERT INTO contacts (id, name, email, user) VALUES (?, ?, ?, ?)", (contact_id, name, email, username))
-        self.conn.commit()
-        return contact_id
-    
-    def mark_read(self, email_id: str, read: bool = True):
-        cursor = self.conn.cursor()
-        cursor.execute("UPDATE emails SET read = ? WHERE id = ?", (read, email_id))
-        self.conn.commit()
-    
-    def delete_emails(self, email_ids: List[str]):
-        cursor = self.conn.cursor()
-        cursor.executemany("DELETE FROM emails WHERE id = ?", [(eid,) for eid in email_ids])
-        self.conn.commit()
-    
-    def save_attachment(self, file_path: str) -> str:
-        """Save uploaded file"""
-        return str(file_path)
-
-db = Database()
-
-# ==================== LOGGING MODULE ====================
-class Logger:
-    """Centralized logging configuration"""
-    
-    @staticmethod
-    def setup():
-        logging.basicConfig(
-            level=logging.INFO if not Config.DEBUG else logging.DEBUG,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.StreamHandler(),
-                logging.FileHandler('app.log') if os.path.exists('/app') else logging.NullHandler()
-            ]
-        )
-        return logging.getLogger(__name__)
-
-logger = Logger.setup()
-
-# ==================== QUANTUM ENTANGLEMENT MODULE ====================
-class QuantumEntanglement:
-    """Quantum entanglement management and measurement"""
-    
-    def __init__(self):
-        self.entanglements = []
-        self.initialize_entanglements()
-    
-    def initialize_entanglements(self):
-        """Initialize quantum entanglements with dynamic timestamps"""
-        now = datetime.now().isoformat()
-        self.entanglements = [
-            {
-                "id": "QE-001",
-                "name": "Black Hole ⚫ ↔ White Hole ⚪",
-                "node_a": Config.BLACK_HOLE_ADDRESS,
-                "node_b": Config.WHITE_HOLE_ADDRESS,
-                "type": "Wormhole Bridge",
-                "coherence": round(random.uniform(0.9990, 0.9999), 4),
-                "timestamp": now,
-                "holo_tag": "holo:entangled_wormhole"
-            },
-            {
-                "id": "QE-002",
-                "name": "Holographic Email Entanglement",
-                "node_a": "holo.email.quantum.foam",
-                "node_b": "chat.inbox.quantum.foam",
-                "type": "Email-Chat Bridge",
-                "coherence": round(random.uniform(0.9991, 0.9998), 4),
-                "timestamp": now,
-                "holo_tag": "holo:email_chat_sync"
-            },
-            {
-                "id": "QE-003",
-                "name": "Holo Search Entanglement",
-                "node_a": "search.holo.quantum.foam",
-                "node_b": "index.realm.foam",
-                "type": "Quantum Index Bridge",
-                "coherence": round(random.uniform(0.9992, 0.9997), 4),
-                "timestamp": now,
-                "holo_tag": "holo:search_entangle"
-            }
-        ]
-
-quantum = QuantumEntanglement()
-
-# ==================== WEBSOCKET FOR NOTIFICATIONS ====================
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            if connection.client_state == WebSocketState.CONNECTED:
-                await connection.send_text(message)
-
-manager = ConnectionManager()
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-
-# ==================== FASTAPI APP ====================
-app = FastAPI(title="Quantum Foam Email System", version="3.0")
-
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-app.add_middleware(GZipMiddleware, minimum_size=1000)
-
-# Mount static files
-app.mount("/static", StaticFiles(directory=Config.STATIC_DIR), name="static")
-app.mount("/uploads", StaticFiles(directory=Config.UPLOADS_DIR), name="uploads")
-
-# Email Routes
-@app.get("/api/email/inbox/{username}")
-async def get_inbox(username: str, folder: str = "Inbox", search: str = ""):
-    if search:
-        return {"inbox": db.holo_search(username, search, folder)}
-    else:
-        return {"inbox": db.get_emails(username, folder)}
-
-@app.get("/api/email/thread/{thread_id}")
-async def get_thread(thread_id: str):
-    return {"thread": db.get_thread(thread_id)}
-
-@app.post("/api/email/send")
-async def send_email(request: Request):
-    data = await request.json()
-    # Validate holo format
-    if not data['to'].endswith('::quantum.foam'):
-        raise HTTPException(status_code=400, detail="Invalid holo email format")
-    if 'chat_to' in data:  # Interface with chat
-        data['chat_to'] = data['chat_to'] or data['to'].split('::')[0] + '::chat.quantum.foam'
-    result = db.send_email(data)
-    # Broadcast notification
-    await manager.broadcast(json.dumps({"type": "new_email", "data": result}))
-    return {"success": True, "data": result}
-
-@app.post("/api/email/upload")
-async def upload_attachment(file: UploadFile = File(...)):
-    file_path = Config.UPLOADS_DIR / f"{uuid.uuid4()}_{file.filename}"
-    with open(file_path, "wb") as buffer:
-        content = await file.read()
-        buffer.write(content)
-    return {"path": str(file_path)}
-
-@app.post("/api/email/folders")
-async def create_folder(request: Request):
-    data = await request.json()
-    folder_id = db.create_folder(data['name'], data['username'])
-    return {"folder_id": folder_id}
-
-@app.get("/api/email/folders/{username}")
-async def get_folders(username: str):
-    return {"folders": db.get_folders(username)}
-
-@app.post("/api/email/move")
-async def move_email(request: Request):
-    data = await request.json()
-    db.move_to_folder(data['email_id'], data['folder'])
-    return {"success": True}
-
-@app.post("/api/email/label")
-async def add_label(request: Request):
-    data = await request.json()
-    db.add_label(data['email_id'], data['label'])
-    return {"success": True}
-
-@app.get("/api/email/contacts/{username}")
-async def get_contacts(username: str):
-    return {"contacts": db.get_contacts(username)}
-
-@app.post("/api/email/contacts")
-async def add_contact(request: Request):
-    data = await request.json()
-    contact_id = db.add_contact(data['name'], data['email'], data['username'])
-    return {"contact_id": contact_id}
-
-@app.post("/api/email/mark_read")
-async def mark_read(request: Request):
-    data = await request.json()
-    db.mark_read(data['email_id'], data['read'])
-    return {"success": True}
-
-@app.post("/api/email/delete")
-async def delete_emails(request: Request):
-    data = await request.json()
-    db.delete_emails(data['email_ids'])
-    return {"success": True}
-
-# Serve email page
-@app.get("/email", response_class=HTMLResponse)
-async def email_page():
-    with open("email.html") as f:
-        return HTMLResponse(content=f.read())
-
-# Main page placeholder
-@app.get("/", response_class=HTMLResponse)
-async def main_page():
-    return HTMLResponse(content="<h1>Quantum Foam Portal</h1><a href='/email'>Email</a>")
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Holographic Email - Quantum Foam</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #000;
+            color: #0f0;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #111 0%, #0a0a0a 100%);
+            border-bottom: 2px solid #0f0;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 255, 0, 0.3);
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            color: #0f0;
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+        
+        .header-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .header-info .block-info {
+            font-size: 12px;
+            color: #0ff;
+            background: #0a0a0a;
+            padding: 5px 10px;
+            border-radius: 3px;
+            border: 1px solid #0ff;
+        }
+        
+        .header-info button {
+            padding: 8px 16px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+        .header-info button:hover {
+            background: #0a0;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+        
+        /* Main Container */
+        .main-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background: #0a0a0a;
+            border-right: 1px solid #0f0;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sidebar-section {
+            padding: 20px 15px;
+            border-bottom: 1px solid #0f0;
+        }
+        
+        .sidebar-section h3 {
+            font-size: 14px;
+            color: #0ff;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        
+        .sidebar-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+        }
+        
+        .sidebar-item:hover {
+            background: #111;
+            color: #0ff;
+        }
+        
+        .sidebar-item.active {
+            background: #0f0;
+            color: #000;
+            font-weight: bold;
+        }
+        
+        .sidebar-item .badge {
+            background: #f00;
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        
+        .compose-btn {
+            width: 100%;
+            padding: 12px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 4px;
+            margin-top: 15px;
+            transition: all 0.3s;
+        }
+        .compose-btn:hover {
+            background: #0a0;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+        }
+        
+        /* Email List */
+        .email-list {
+            width: 350px;
+            background: #0a0a0a;
+            border-right: 1px solid #0f0;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .email-list-header {
+            padding: 15px 20px;
+            background: #111;
+            border-bottom: 1px solid #0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .email-list-header h2 {
+            font-size: 18px;
+            color: #0f0;
+        }
+        
+        .email-list-header .search-box {
+            flex: 1;
+            margin-left: 15px;
+        }
+        
+        .email-list-header .search-box input {
+            width: 100%;
+            padding: 8px 12px;
+            background: #000;
+            color: #0f0;
+            border: 1px solid #0f0;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .email-list-items {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .email-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #0f0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .email-item:hover {
+            background: #111;
+        }
+        
+        .email-item.unread {
+            background: #0a1a0a;
+            border-left: 3px solid #0f0;
+        }
+        
+        .email-item.selected {
+            background: #0f0;
+            color: #000;
+        }
+        
+        .email-item-from {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .email-item-subject {
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+        
+        .email-item-preview {
+            font-size: 11px;
+            color: #888;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .email-item-time {
+            font-size: 10px;
+            color: #0ff;
+            margin-top: 5px;
+        }
+        
+        /* Email Viewer */
+        .email-viewer {
+            flex: 1;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .email-viewer-header {
+            padding: 20px 30px;
+            background: #0a0a0a;
+            border-bottom: 2px solid #0f0;
+        }
+        
+        .email-viewer-subject {
+            font-size: 24px;
+            color: #0f0;
+            margin-bottom: 15px;
+        }
+        
+        .email-viewer-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+        
+        .email-viewer-from {
+            color: #0ff;
+        }
+        
+        .email-viewer-time {
+            color: #888;
+        }
+        
+        .email-viewer-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .email-viewer-actions button {
+            padding: 8px 16px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .email-viewer-actions button:hover {
+            background: #0a0;
+        }
+        
+        .email-viewer-body {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            line-height: 1.6;
+            color: #ccc;
+        }
+        
+        .email-viewer-empty {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #555;
+            font-size: 18px;
+        }
+        
+        /* Compose Modal */
+        .compose-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .compose-modal.hidden { display: none; }
+        
+        .compose-content {
+            background: #0a0a0a;
+            border: 2px solid #0f0;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .compose-header {
+            padding: 20px;
+            background: #111;
+            border-bottom: 1px solid #0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .compose-header h2 {
+            color: #0f0;
+            font-size: 20px;
+        }
+        
+        .compose-header button.close-btn {
+            background: #f00;
+            color: #fff;
+            border: none;
+            padding: 5px 15px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        
+        .compose-body {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .compose-body .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .compose-body label {
+            display: block;
+            color: #0f0;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .compose-body input,
+        .compose-body textarea {
+            width: 100%;
+            padding: 10px;
+            background: #000;
+            color: #0f0;
+            border: 1px solid #0f0;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 14px;
+        }
+        
+        .compose-body textarea {
+            min-height: 200px;
+            resize: vertical;
+        }
+        
+        .compose-footer {
+            padding: 20px;
+            background: #111;
+            border-top: 1px solid #0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .compose-footer button {
+            padding: 10px 20px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+        .compose-footer button:hover {
+            background: #0a0;
+        }
+        
+        .compose-footer button.cancel {
+            background: #555;
+            color: #fff;
+        }
+        
+        /* Login Modal */
+        .login-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.98);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        
+        .login-modal.hidden { display: none; }
+        
+        .login-content {
+            background: #0a0a0a;
+            border: 3px solid #0f0;
+            border-radius: 10px;
+            padding: 40px;
+            max-width: 450px;
+            width: 90%;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+        }
+        
+        .login-content h2 {
+            color: #0f0;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 24px;
+            text-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+        }
+        
+        .login-content .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .login-content label {
+            display: block;
+            color: #0f0;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .login-content input {
+            width: 100%;
+            padding: 12px;
+            background: #000;
+            color: #0f0;
+            border: 2px solid #0f0;
+            border-radius: 5px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .login-content .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+        
+        .login-content button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        
+        .login-content button.primary {
+            background: #0f0;
+            color: #000;
+        }
+        .login-content button.primary:hover {
+            background: #0a0;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.7);
+        }
+        
+        .login-content button.secondary {
+            background: #555;
+            color: #fff;
+        }
+        .login-content button.secondary:hover {
+            background: #666;
+        }
+        
+        .login-content .error {
+            color: #f00;
+            text-align: center;
+            margin-top: 15px;
+            font-size: 13px
