@@ -1249,7 +1249,7 @@ EMAIL_TEMPLATE = """
         <p>{{ email.body }}</p>
     </div>
     {% endfor %}
-    <br><a href="/">← Back to Dashboard</a>
+    <br><a href="/">Back to Dashboard</a>
 </body>
 </html>
 """
