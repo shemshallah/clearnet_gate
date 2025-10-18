@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  quantum-app:
+    build: .
+    container_name: quantum-foam-dominion
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DEBUG=${DEBUG:-false}
+      - ADMINISTRATOR_USERNAME=${ADMINISTRATOR_USERNAME}
+      - ADMINISTRATOR_PASSWORD=${ADMINISTRATOR_PASSWORD}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-60}
+      - BELL_TEST_ITERATIONS=${BELL_TEST_ITERATIONS:-10000}
+      - GHZ_TEST_ITERATIONS=${GHZ_TEST_ITERATIONS:-10000}
+      - TELEPORTATION_ITERATIONS=${TELEPORTATION_ITERATIONS:-1000}
+    volumes:
+      - ./data:/app/data
+      - ./static:/app/static
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - quantum-network
+
+networks:
+  quantum-network:
+    driver: bridge
