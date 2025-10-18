@@ -14,14 +14,12 @@ from fastapi import FastAPI, Request, HTTPException, Depends, Security
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uvicorn
 import secrets
 from collections import defaultdict
 import random
 import psutil
-from jinja2 import Environment, FileSystemLoader
 import sqlite3
 import math
 import cmath
@@ -58,8 +56,6 @@ class Config:
     RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
     
     # Directories
-    TEMPLATES_DIR = Path("templates")
-    STATIC_DIR = Path("static")
     DATA_DIR = Path("data")
     DB_PATH = DATA_DIR / "quantum_foam.db"
     
@@ -80,9 +76,7 @@ class Config:
                 raise ValueError("SECRET_KEY must be set in production")
         
         # Create directories
-        cls.STATIC_DIR.mkdir(exist_ok=True)
         cls.DATA_DIR.mkdir(exist_ok=True)
-        cls.TEMPLATES_DIR.mkdir(exist_ok=True)
         
         # Initialize database
         if not cls.DB_PATH.exists():
@@ -503,10 +497,6 @@ app.add_middleware(
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# Mount static files if directory exists
-if Config.STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=Config.STATIC_DIR), name="static")
-
 # ==================== RATE LIMITING ====================
 rate_limit_store = defaultdict(list)
 
@@ -542,145 +532,427 @@ async def frontpage(request: Request):
         Database.store_measurement("quantum_suite", quantum_results)
         Database.store_measurement("system_metrics", system_metrics)
         
-        # Prepare template data
-        template_data = {
-            "quantum": quantum_results,
-            "system": system_metrics,
-            "environment": Config.ENVIRONMENT
-        }
+        # Generate HTML response with embedded template
+        html_content = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Foam Dominion - Scientific Quantum Simulations</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
         
-        # Try to load template
-        try:
-            env = Environment(loader=FileSystemLoader(Config.TEMPLATES_DIR))
-            template = env.get_template("index.html")
-            html_content = template.render(**template_data)
-        except Exception as template_error:
-            logger.warning(f"Template error: {template_error}, using fallback")
-            # Fallback HTML
-            html_content = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Quantum Foam Dominion</title>
-                <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <style>
-                    body {{
-                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                        max-width: 1200px;
-                        margin: 0 auto;
-                        padding: 20px;
-                        background: #f5f5f5;
-                    }}
-                    .container {{
-                        background: white;
-                        padding: 30px;
-                        border-radius: 10px;
-                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                    }}
-                    h1 {{
-                        color: #2c3e50;
-                        border-bottom: 3px solid #3498db;
-                        padding-bottom: 10px;
-                    }}
-                    h2 {{
-                        color: #34495e;
-                        margin-top: 30px;
-                    }}
-                    .metric {{
-                        background: #ecf0f1;
-                        padding: 15px;
-                        margin: 10px 0;
-                        border-radius: 5px;
-                        border-left: 4px solid #3498db;
-                    }}
-                    .success {{
-                        border-left-color: #27ae60;
-                    }}
-                    .warning {{
-                        border-left-color: #f39c12;
-                    }}
-                    .value {{
-                        font-size: 1.2em;
-                        font-weight: bold;
-                        color: #2c3e50;
-                    }}
-                    .label {{
-                        color: #7f8c8d;
-                        font-size: 0.9em;
-                    }}
-                    pre {{
-                        background: #2c3e50;
-                        color: #ecf0f1;
-                        padding: 15px;
-                        border-radius: 5px;
-                        overflow-x: auto;
-                    }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1>🔬 Quantum Foam Dominion</h1>
-                    <p>Scientific quantum computing simulations and system monitoring</p>
-                    
-                    <h2>⚛️ Quantum Entanglement Tests</h2>
-                    
-                    <div class="metric {('success' if quantum_results['bell_test']['violates_inequality'] else 'warning')}">
-                        <div class="label">Bell-CHSH Test</div>
-                        <div class="value">S = {quantum_results['bell_test']['S']}</div>
-                        <div>Classical bound: ≤ 2.0 | Quantum bound: ≤ 2.828</div>
-                        <div><strong>Violates classical inequality: {quantum_results['bell_test']['violates_inequality']}</strong></div>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }}
+        
+        .container {{
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }}
+        
+        header {{
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }}
+        
+        header h1 {{
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }}
+        
+        header p {{
+            font-size: 1.2em;
+            opacity: 0.9;
+        }}
+        
+        .content {{
+            padding: 40px;
+        }}
+        
+        .section {{
+            margin-bottom: 50px;
+        }}
+        
+        .section h2 {{
+            color: #2c3e50;
+            font-size: 2em;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #3498db;
+        }}
+        
+        .grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-top: 20px;
+        }}
+        
+        .card {{
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            border-left: 5px solid #3498db;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }}
+        
+        .card:hover {{
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }}
+        
+        .card.success {{
+            border-left-color: #27ae60;
+            background: linear-gradient(135deg, #f8fff9 0%, #f0fff4 100%);
+        }}
+        
+        .card.warning {{
+            border-left-color: #f39c12;
+            background: linear-gradient(135deg, #fffcf8 0%, #fff9f0 100%);
+        }}
+        
+        .card-title {{
+            font-size: 1.1em;
+            color: #7f8c8d;
+            margin-bottom: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }}
+        
+        .card-value {{
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 15px 0;
+        }}
+        
+        .card-details {{
+            color: #555;
+            line-height: 1.8;
+            margin-top: 15px;
+        }}
+        
+        .card-details div {{
+            padding: 5px 0;
+        }}
+        
+        .badge {{
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-top: 10px;
+        }}
+        
+        .badge.success {{
+            background: #27ae60;
+            color: white;
+        }}
+        
+        .badge.warning {{
+            background: #f39c12;
+            color: white;
+        }}
+        
+        .metrics-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }}
+        
+        .metric-box {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }}
+        
+        .metric-box .label {{
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }}
+        
+        .metric-box .value {{
+            font-size: 2em;
+            font-weight: bold;
+        }}
+        
+        .api-section {{
+            background: #ecf0f1;
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 30px;
+        }}
+        
+        .api-section h3 {{
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }}
+        
+        .api-list {{
+            list-style: none;
+        }}
+        
+        .api-list li {{
+            padding: 12px 20px;
+            margin: 8px 0;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+        }}
+        
+        .api-list a {{
+            color: #3498db;
+            text-decoration: none;
+            font-weight: 600;
+        }}
+        
+        .api-list a:hover {{
+            text-decoration: underline;
+        }}
+        
+        .formula {{
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 15px 0;
+            overflow-x: auto;
+        }}
+        
+        footer {{
+            background: #2c3e50;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }}
+        
+        .timestamp {{
+            opacity: 0.7;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }}
+        
+        @media (max-width: 768px) {{
+            header h1 {{
+                font-size: 1.8em;
+            }}
+            
+            .content {{
+                padding: 20px;
+            }}
+            
+            .card-value {{
+                font-size: 2em;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔬 Quantum Foam Dominion</h1>
+            <p>Scientific Quantum Computing Simulations & System Monitoring</p>
+        </header>
+        
+        <div class="content">
+            <!-- Quantum Entanglement Section -->
+            <div class="section">
+                <h2>⚛️ Quantum Entanglement Experiments</h2>
+                <p style="margin-bottom: 20px; color: #555;">
+                    Demonstrating quantum entanglement through Bell inequality violations and quantum teleportation protocols.
+                </p>
+                
+                <div class="grid">
+                    <!-- Bell Test -->
+                    <div class="card {'success' if quantum_results['bell_test']['violates_inequality'] else 'warning'}">
+                        <div class="card-title">🔔 Bell-CHSH Test</div>
+                        <div class="card-value">S = {quantum_results['bell_test']['S']}</div>
+                        <div class="card-details">
+                            <div><strong>Classical bound:</strong> ≤ 2.0</div>
+                            <div><strong>Quantum bound:</strong> ≤ {quantum_results['bell_test']['quantum_bound']}</div>
+                            <div><strong>Iterations:</strong> {quantum_results['bell_test']['iterations']:,}</div>
+                            <div style="margin-top: 15px;">
+                                <strong>Correlations:</strong><br>
+                                E(a,b) = {quantum_results['bell_test']['correlations']['E_ab']}<br>
+                                E(a,b') = {quantum_results['bell_test']['correlations']["E_ab'"]}<br>
+                                E(a',b) = {quantum_results['bell_test']['correlations']["E_a'b"]}<br>
+                                E(a',b') = {quantum_results['bell_test']['correlations']["E_a'b'"]}
+                            </div>
+                        </div>
+                        <span class="badge {'success' if quantum_results['bell_test']['violates_inequality'] else 'warning'}">
+                            {'✓ Violates Classical' if quantum_results['bell_test']['violates_inequality'] else 'Within Classical'}
+                        </span>
                     </div>
                     
-                    <div class="metric {('success' if quantum_results['ghz_test']['violates_inequality'] else 'warning')}">
-                        <div class="label">GHZ-Mermin Test</div>
-                        <div class="value">M = {quantum_results['ghz_test']['M']}</div>
-                        <div>Classical bound: ≤ 2.0 | Quantum value: 4.0</div>
-                        <div><strong>Violates classical inequality: {quantum_results['ghz_test']['violates_inequality']}</strong></div>
+                    <!-- GHZ Test -->
+                    <div class="card {'success' if quantum_results['ghz_test']['violates_inequality'] else 'warning'}">
+                        <div class="card-title">🌀 GHZ-Mermin Test</div>
+                        <div class="card-value">M = {quantum_results['ghz_test']['M']}</div>
+                        <div class="card-details">
+                            <div><strong>Classical bound:</strong> ≤ 2.0</div>
+                            <div><strong>Quantum value:</strong> 4.0</div>
+                            <div><strong>Iterations:</strong> {quantum_results['ghz_test']['iterations']:,}</div>
+                            <div style="margin-top: 15px;">
+                                <strong>Expectation values:</strong><br>
+                                ⟨XXX⟩ = {quantum_results['ghz_test']['expectation_values']['E_XXX']}<br>
+                                ⟨XYY⟩ = {quantum_results['ghz_test']['expectation_values']['E_XYY']}<br>
+                                ⟨YXY⟩ = {quantum_results['ghz_test']['expectation_values']['E_YXY']}<br>
+                                ⟨YYX⟩ = {quantum_results['ghz_test']['expectation_values']['E_YYX']}
+                            </div>
+                        </div>
+                        <span class="badge {'success' if quantum_results['ghz_test']['violates_inequality'] else 'warning'}">
+                            {'✓ Three-Particle Entangled' if quantum_results['ghz_test']['violates_inequality'] else 'Not Entangled'}
+                        </span>
                     </div>
                     
-                    <div class="metric success">
-                        <div class="label">Quantum Teleportation</div>
-                        <div class="value">Fidelity = {quantum_results['teleportation']['avg_fidelity']}</div>
-                        <div>Success rate: {quantum_results['teleportation']['success_rate']*100:.1f}%</div>
-                        <div>Iterations: {quantum_results['teleportation']['iterations']:,}</div>
+                    <!-- Quantum Teleportation -->
+                    <div class="card success">
+                        <div class="card-title">📡 Quantum Teleportation</div>
+                        <div class="card-value">F = {quantum_results['teleportation']['avg_fidelity']}</div>
+                        <div class="card-details">
+                            <div><strong>Success rate:</strong> {quantum_results['teleportation']['success_rate']*100:.1f}%</div>
+                            <div><strong>Min fidelity:</strong> {quantum_results['teleportation']['min_fidelity']}</div>
+                            <div><strong>Max fidelity:</strong> {quantum_results['teleportation']['max_fidelity']}</div>
+                            <div><strong>Iterations:</strong> {quantum_results['teleportation']['iterations']:,}</div>
+                            <div><strong>Theoretical max:</strong> {quantum_results['teleportation']['theoretical_max']}</div>
+                        </div>
+                        <span class="badge success">✓ Protocol Verified</span>
                     </div>
-                    
-                    <h2>💾 System Metrics</h2>
-                    
-                    <div class="metric">
-                        <div class="label">Storage</div>
-                        <div class="value">{system_metrics['storage']['free_gb']} GB free / {system_metrics['storage']['total_gb']} GB total</div>
-                        <div>Usage: {system_metrics['storage']['percent_used']}%</div>
-                    </div>
-                    
-                    <div class="metric">
-                        <div class="label">Memory</div>
-                        <div class="value">{system_metrics['memory']['available_gb']} GB available / {system_metrics['memory']['total_gb']} GB total</div>
-                        <div>Usage: {system_metrics['memory']['percent_used']}%</div>
-                    </div>
-                    
-                    <div class="metric">
-                        <div class="label">CPU</div>
-                        <div class="value">{system_metrics['cpu']['usage_percent']}% usage</div>
-                        <div>Cores: {system_metrics['cpu']['cpu_count']}</div>
-                    </div>
-                    
-                    <h2>📊 API Endpoints</h2>
-                    <ul>
-                        <li><a href="/api/quantum">/api/quantum</a> - Quantum test results</li>
-                        <li><a href="/api/metrics">/api/metrics</a> - System metrics</li>
-                        <li><a href="/api/history">/api/history</a> - Recent measurements</li>
-                        <li><a href="/health">/health</a> - Health check</li>
-                    </ul>
-                    
-                    <p style="margin-top: 40px; color: #7f8c8d; font-size: 0.9em;">
-                        Environment: {Config.ENVIRONMENT} | Timestamp: {quantum_results['timestamp']}
-                    </p>
                 </div>
-            </body>
-            </html>
-            """
+                
+                <!-- Formulas -->
+                <div style="margin-top: 30px;">
+                    <h3 style="color: #2c3e50; margin-bottom: 15px;">📐 Mathematical Framework</h3>
+                    <div class="formula">
+                        Bell-CHSH: S = |E(a,b) - E(a,b') + E(a',b) + E(a',b')|
+                        <br>Classical: S ≤ 2
+                        <br>Quantum: S ≤ 2√2 ≈ 2.828
+                    </div>
+                    <div class="formula">
+                        GHZ-Mermin: M = ⟨XXX⟩ - ⟨XYY⟩ - ⟨YXY⟩ - ⟨YYX⟩
+                        <br>Classical: |M| ≤ 2
+                        <br>Quantum GHZ: M = 4
+                    </div>
+                    <div class="formula">
+                        Fidelity: F = |⟨ψ|φ⟩|²
+                        <br>Perfect teleportation: F = 1
+                    </div>
+                </div>
+            </div>
+            
+            <!-- System Metrics Section -->
+            <div class="section">
+                <h2>💾 System Metrics</h2>
+                
+                <div class="metrics-grid">
+                    <div class="metric-box">
+                        <div class="label">💽 Storage Available</div>
+                        <div class="value">{system_metrics['storage']['free_gb']} GB</div>
+                        <div class="label">of {system_metrics['storage']['total_gb']} GB total</div>
+                    </div>
+                    
+                    <div class="metric-box">
+                        <div class="label">🧠 Memory Available</div>
+                        <div class="value">{system_metrics['memory']['available_gb']} GB</div>
+                        <div class="label">of {system_metrics['memory']['total_gb']} GB total</div>
+                    </div>
+                    
+                    <div class="metric-box">
+                        <div class="label">⚙️ CPU Usage</div>
+                        <div class="value">{system_metrics['cpu']['usage_percent']}%</div>
+                        <div class="label">{system_metrics['cpu']['cpu_count']} cores</div>
+                    </div>
+                </div>
+                
+                <div class="grid" style="margin-top: 25px;">
+                    <div class="card">
+                        <div class="card-title">Storage Details</div>
+                        <div class="card-details">
+                            <div><strong>Total:</strong> {system_metrics['storage']['total_gb']} GB</div>
+                            <div><strong>Used:</strong> {system_metrics['storage']['used_gb']} GB</div>
+                            <div><strong>Free:</strong> {system_metrics['storage']['free_gb']} GB</div>
+                            <div><strong>Usage:</strong> {system_metrics['storage']['percent_used']}%</div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">Memory Details</div>
+                        <div class="card-details">
+                            <div><strong>Total:</strong> {system_metrics['memory']['total_gb']} GB</div>
+                            <div><strong>Available:</strong> {system_metrics['memory']['available_gb']} GB</div>
+                            <div><strong>Usage:</strong> {system_metrics['memory']['percent_used']}%</div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">CPU Details</div>
+                        <div class="card-details">
+                            <div><strong>Cores:</strong> {system_metrics['cpu']['cpu_count']}</div>
+                            <div><strong>Usage:</strong> {system_metrics['cpu']['usage_percent']}%</div>
+                            <div><strong>Load:</strong> {', '.join(map(str, system_metrics['cpu']['load_average']))}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- API Section -->
+            <div class="api-section">
+                <h3>🔌 API Endpoints</h3>
+                <ul class="api-list">
+                    <li>
+                        <a href="/api/quantum">/api/quantum</a>
+                        <span style="color: #7f8c8d;"> - Get quantum experiment results (JSON)</span>
+                    </li>
+                    <li>
+                        <a href="/api/metrics">/api/metrics</a>
+                        <span style="color: #7f8c8d;"> - Get system metrics (JSON)</span>
+                    </li>
+                    <li>
+                        <a href="/api/history">/api/history</a>
+                        <span style="color: #7f8c8d;"> - Get measurement history</span>
+                    </li>
+                    <li>
+                        <a href="/health">/health</a>
+                        <span style="color: #7f8c8d;"> - Health check endpoint</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        
+        <footer>
+            <p><strong>Quantum Foam Dominion</strong> v2.0.0</p>
+            <p>Scientific Quantum Computing Simulations</p>
+            <p class="timestamp">
+                Environment: {Config.ENVIRONMENT} | 
+                Generated: {quantum_results['timestamp']}
+            </p>
+        </footer>
+    </div>
+</body>
+</html>
+"""
         
         return HTMLResponse(content=html_content)
         
