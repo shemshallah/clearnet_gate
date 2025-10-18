@@ -12,7 +12,6 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 import uvicorn
 import httpx
 import asyncio
@@ -22,6 +21,7 @@ from collections import defaultdict
 import random  # Retained for fictional quantum variance only
 import psutil  # For real-time system network and storage metrics
 import subprocess  # For real routing table extraction and QSH commands
+from jinja2 import Template
 
 # ==================== CONFIGURATION MODULE ====================
 class Config:
@@ -229,23 +229,35 @@ class Storage:
     
     def update_storage_metrics(self):
         """Update storage metrics with real disk usage"""
-        du = psutil.disk_usage('/')
-        used_gb = du.used / (1024**3)
-        total_gb = du.total / (1024**3)
-        used_tb = used_gb / 1024  # Convert to TB for scaling
-        total_tb = total_gb / 1024
-        
-        # Scale to fictional holographic capacity
-        scale_factor = Config.HOLOGRAPHIC_CAPACITY_TB / total_tb if total_tb > 0 else 1
-        self.holographic_storage = {
-            "total_capacity_tb": Config.HOLOGRAPHIC_CAPACITY_TB,
-            "used_capacity_tb": int(used_tb * scale_factor),
-            "available_capacity_tb": Config.HOLOGRAPHIC_CAPACITY_TB - int(used_tb * scale_factor),
-            "efficiency": round(du.used / du.total, 2),
-            "redundancy_factor": 3,
-            "node_address": Config.BLACK_HOLE_ADDRESS,
-            "last_update": datetime.now().isoformat()
-        }
+        try:
+            du = psutil.disk_usage('/')
+            used_gb = du.used / (1024**3)
+            total_gb = du.total / (1024**3)
+            used_tb = used_gb / 1024  # Convert to TB for scaling
+            total_tb = total_gb / 1024
+            
+            # Scale to fictional holographic capacity
+            scale_factor = Config.HOLOGRAPHIC_CAPACITY_TB / total_tb if total_tb > 0 else 1
+            self.holographic_storage = {
+                "total_capacity_tb": Config.HOLOGRAPHIC_CAPACITY_TB,
+                "used_capacity_tb": int(used_tb * scale_factor),
+                "available_capacity_tb": Config.HOLOGRAPHIC_CAPACITY_TB - int(used_tb * scale_factor),
+                "efficiency": round(du.used / du.total, 2),
+                "redundancy_factor": 3,
+                "node_address": Config.BLACK_HOLE_ADDRESS,
+                "last_update": datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.warning(f"Disk usage fetch failed: {e}. Using defaults.")
+            self.holographic_storage = {
+                "total_capacity_tb": Config.HOLOGRAPHIC_CAPACITY_TB,
+                "used_capacity_tb": 0,
+                "available_capacity_tb": Config.HOLOGRAPHIC_CAPACITY_TB,
+                "efficiency": 0.0,
+                "redundancy_factor": 3,
+                "node_address": Config.BLACK_HOLE_ADDRESS,
+                "last_update": datetime.now().isoformat()
+            }
         
         # Update QRAM fictional (now safe since self.qram_storage exists)
         self.qram_storage["used_capacity_qubits"] = int(random.uniform(700000000, 800000000))
@@ -799,8 +811,6 @@ class NetworkAnalysis:
         return []  # No data if both fail
 
 # ==================== FASTAPI APP SETUP ====================
-templates = Jinja2Templates(directory=str(Config.TEMPLATES_DIR))
-
 app = FastAPI(title="Quantum Realm Dashboard", version="1.0.0")
 
 # Middleware
@@ -816,56 +826,256 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Static files
 app.mount("/static", StaticFiles(directory=str(Config.STATIC_DIR)), name="static")
 
+# ==================== HTML TEMPLATES AS STRINGS ====================
+INDEX_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Realm Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #000; color: #0f0; padding: 20px; }
+        h1 { color: #0f0; text-align: center; }
+        nav { text-align: center; margin: 20px 0; }
+        a { color: #0f0; text-decoration: none; margin: 0 15px; font-size: 18px; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>🌌 Quantum Realm Dashboard 🌌</h1>
+    <nav>
+        <a href="/networking">Networking 🌐</a>
+        <a href="/bitcoin">Bitcoin ⚡</a>
+        <a href="/chat">Chat 💬</a>
+        <a href="/email">Email 📧</a>
+    </nav>
+    <p style="text-align: center; color: #666;">Welcome to the entangled future. Select a portal above.</p>
+</body>
+</html>
+"""
+
+NETWORKING_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Networking - Quantum Realm</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #000; color: #0f0; padding: 20px; }
+        h1 { color: #0f0; }
+        table { border-collapse: collapse; width: 100%; color: #0f0; }
+        th, td { border: 1px solid #0f0; padding: 8px; text-align: left; }
+        th { background: #111; }
+        pre { background: #111; padding: 10px; overflow-x: auto; color: #0f0; }
+        a { color: #0f0; }
+    </style>
+</head>
+<body>
+    <h1>🌐 Networking Portal</h1>
+    <p>Quantum Realm: {{ quantum_realm }} | Networking Node: {{ networking_address }}</p>
+    <h2>Network Interfaces</h2>
+    <table>
+        <tr><th>ID</th><th>Name</th><th>Address</th><th>Speed (Gbps)</th><th>Status</th><th>MTU</th></tr>
+        {% for iface in interfaces %}
+        <tr>
+            <td>{{ iface.id }}</td>
+            <td>{{ iface.name }}</td>
+            <td>{{ iface.address }}</td>
+            <td>{{ "%.2f"|format(iface.speed_gbps) }}</td>
+            <td>{{ iface.status }}</td>
+            <td>{{ iface.mtu }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <h2>Routing Tables</h2>
+    {% for table in routes %}
+    <h3>{{ table.name }} ({{ table.source }})</h3>
+    <pre>{{ table.routes|join('\n') }}</pre>
+    {% endfor %}
+    <br><a href="/">← Back to Dashboard</a>
+</body>
+</html>
+"""
+
+BITCOIN_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitcoin - Quantum Realm</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #000; color: #ff6b35; padding: 20px; }
+        h1 { color: #ff6b35; }
+        .info { background: #111; padding: 10px; margin: 10px 0; border-left: 4px solid #ff6b35; }
+        table { border-collapse: collapse; width: 100%; color: #ff6b35; }
+        th, td { border: 1px solid #ff6b35; padding: 8px; text-align: left; }
+        th { background: #111; }
+        a { color: #ff6b35; }
+    </style>
+</head>
+<body>
+    <h1>⚡ Bitcoin Mainnet Portal</h1>
+    <p>Stored in Holographic Black Hole: {{ black_hole_address }}</p>
+    <h2>Blockchain Info</h2>
+    <div class="info">
+        <p><strong>Chain:</strong> {{ blockchain_info.chain }}</p>
+        <p><strong>Blocks:</strong> {{ blockchain_info.blocks }}</p>
+        <p><strong>Best Block Hash:</strong> {{ blockchain_info.bestblockhash[:16] }}...</p>
+        <p><strong>Difficulty:</strong> {{ "%.2f"|format(blockchain_info.difficulty) }}</p>
+        <p><strong>Market Price USD:</strong> ${{ "%.2f"|format(blockchain_info.market_price_usd) }}</p>
+    </div>
+    <h2>Mempool Info</h2>
+    <div class="info">
+        <p><strong>Size:</strong> {{ mempool_info.size }} tx</p>
+        <p><strong>Bytes:</strong> {{ "%.2f"|format(mempool_info.bytes / 1024 / 1024) }} MB</p>
+        <p><strong>Total Fee:</strong> {{ "%.8f"|format(mempool_info.usage / 100000000) }} BTC</p>
+    </div>
+    <h2>Recent Blocks (Top 5)</h2>
+    <table>
+        <tr><th>Height</th><th>Hash</th><th>Time</th></tr>
+        {% for block in recent_blocks.blocks %}
+        <tr>
+            <td>{{ block.height }}</td>
+            <td>{{ block.id[:16] }}...</td>
+            <td>{{ block.timestamp }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <br><a href="/">← Back to Dashboard</a>
+</body>
+</html>
+"""
+
+CHAT_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat - Quantum Realm</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #000; color: #00f; padding: 20px; }
+        h1 { color: #00f; }
+        #messages { background: #111; height: 300px; overflow-y: scroll; padding: 10px; border: 1px solid #00f; }
+        #input { width: 70%; padding: 10px; }
+        button { padding: 10px; background: #00f; color: #fff; border: none; }
+        a { color: #00f; }
+    </style>
+</head>
+<body>
+    <h1>💬 Quantum Chat Realm</h1>
+    <p>Backend: {{ chat_backend }}</p>
+    <div id="messages">
+        {% for msg in messages %}
+        <p><strong>{{ msg.sender }}:</strong> {{ msg.content }} <em>({{ msg.timestamp }})</em></p>
+        {% endfor %}
+    </div>
+    <input type="text" id="input" placeholder="Entangle a message..." />
+    <button onclick="sendMessage()">Send</button>
+    <script>
+        const ws = new WebSocket(`ws://${window.location.host}/ws/chat`);
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            const div = document.getElementById('messages');
+            div.innerHTML += `<p><strong>${data.sender}:</strong> ${data.content} <em>(${data.timestamp})</em></p>`;
+            div.scrollTop = div.scrollHeight;
+        };
+        function sendMessage() {
+            const input = document.getElementById('input');
+            ws.send(input.value);
+            input.value = '';
+        }
+    </script>
+    <br><a href="/">← Back to Dashboard</a>
+</body>
+</html>
+"""
+
+EMAIL_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email - Quantum Foam</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #000; color: #f0f; padding: 20px; }
+        h1 { color: #f0f; }
+        .email { background: #111; padding: 10px; margin: 10px 0; border-left: 4px solid #f0f; }
+        .unread { font-weight: bold; }
+        a { color: #f0f; }
+    </style>
+</head>
+<body>
+    <h1>📧 Quantum Foam Inbox</h1>
+    <p>Your Address: {{ user_email }}</p>
+    {% for email in inbox %}
+    <div class="email {{ 'unread' if not email.read else '' }}">
+        <h3>{{ email.subject }}</h3>
+        <p><strong>From:</strong> {{ email.from }}</p>
+        <p><strong>Time:</strong> {{ email.timestamp }}</p>
+        <p>{{ email.body }}</p>
+    </div>
+    {% endfor %}
+    <br><a href="/">← Back to Dashboard</a>
+</body>
+</html>
+"""
+
 # ==================== HTML ROUTES ====================
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    """Root route serving index.html from root directory"""
-    return templates.TemplateResponse("index.html", {"request": request})
+    """Root route serving inline index.html"""
+    template = Template(INDEX_TEMPLATE)
+    return HTMLResponse(template.render())
 
 @app.get("/networking", response_class=HTMLResponse)
 async def networking_page(request: Request):
-    """Networking page serving networking.html from root directory"""
+    """Networking page serving inline networking.html"""
     interfaces = NetworkAnalysis.get_network_interfaces()
     routes = NetworkAnalysis.get_routing_tables()
     context = {
-        "request": request,
         "interfaces": interfaces,
-        "routes": routes,
+        "routes": [{"name": r["name"], "source": r["source"], "routes": r["routes"]} for r in routes],
         "quantum_realm": Config.QUANTUM_REALM,
         "networking_address": Config.NETWORKING_ADDRESS
     }
-    return templates.TemplateResponse("networking.html", context)
+    template = Template(NETWORKING_TEMPLATE)
+    return HTMLResponse(template.render(**context))
 
 @app.get("/bitcoin", response_class=HTMLResponse)
 async def bitcoin_page(request: Request):
-    """Bitcoin page serving bitcoin.html from root directory"""
+    """Bitcoin page serving inline bitcoin.html"""
     # Fetch real-time data
-    blockchain_info = await BitcoinCLI.execute_command("getblockchaininfo")
-    mempool_info = await BitcoinCLI.execute_command("getmempoolinfo")
-    recent_blocks = await BitcoinCLI.execute_command("getrecentblocks 5")
+    blockchain_info_result = await BitcoinCLI.execute_command("getblockchaininfo")
+    mempool_info_result = await BitcoinCLI.execute_command("getmempoolinfo")
+    recent_blocks_result = await BitcoinCLI.execute_command("getrecentblocks 5")
     context = {
-        "request": request,
-        "blockchain_info": blockchain_info.get("result", {}),
-        "mempool_info": mempool_info.get("result", {}),
-        "recent_blocks": recent_blocks.get("result", {}),
+        "blockchain_info": blockchain_info_result.get("result", {}),
+        "mempool_info": mempool_info_result.get("result", {}),
+        "recent_blocks": recent_blocks_result.get("result", {}),
         "black_hole_address": Config.BLACK_HOLE_ADDRESS
     }
-    return templates.TemplateResponse("bitcoin.html", context)
+    template = Template(BITCOIN_TEMPLATE)
+    return HTMLResponse(template.render(**context))
 
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_page(request: Request):
-    """Chat page serving chat.html from root directory"""
+    """Chat page serving inline chat.html"""
     recent_messages = storage.get_recent_messages()
     context = {
-        "request": request,
         "messages": recent_messages,
         "chat_backend": Config.CHAT_BACKEND
     }
-    return templates.TemplateResponse("chat.html", context)
+    template = Template(CHAT_TEMPLATE)
+    return HTMLResponse(template.render(**context))
 
 @app.get("/email", response_class=HTMLResponse)
 async def email_page(request: Request):
-    """Email page serving email.html from root directory"""
+    """Email page serving inline email.html"""
     # Assuming a demo user; in real app, use auth
     demo_username = "demo_user"
     if demo_username not in storage.emails:
@@ -878,11 +1088,11 @@ async def email_page(request: Request):
         )
     inbox = storage.get_inbox(demo_username)
     context = {
-        "request": request,
         "inbox": inbox,
         "user_email": storage.user_emails.get(demo_username, "")
     }
-    return templates.TemplateResponse("email.html", context)
+    template = Template(EMAIL_TEMPLATE)
+    return HTMLResponse(template.render(**context))
 
 @app.get("/blockchain", response_class=HTMLResponse)
 async def blockchain_page(request: Request):
