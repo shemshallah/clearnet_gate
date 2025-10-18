@@ -1,0 +1,449 @@
+JUPYTER_HTML = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jupyter Clone - Quantum Realm</title>
+    <!-- Prism.js for syntax highlighting (2) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/themes/prism.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <!-- Marked for Markdown (3) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/16.3.0/lib/marked.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Monaco', 'Menlo', monospace;
+            background: #000;
+            color: #0f0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #0f0;
+            padding-bottom: 10px;
+        }
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .notebook {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid #0f0;
+            padding: 10px;
+            background: #111;
+            margin-right: 10px;
+        }
+        .sidebar {
+            width: 300px;
+            background: #111;
+            border: 1px solid #0f0;
+            padding: 10px;
+            overflow-y: auto;
+        }
+        .cell {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #333;
+            position: relative;
+        }
+        .cell-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .cell-type { color: #0f0; font-weight: bold; }
+        .cell-type-selector {
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 2px 5px;
+            cursor: pointer;
+        }
+        textarea, .markdown-input {
+            width: 100%;
+            height: 80px;
+            background: #000;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 10px;
+            font-family: inherit;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        .markdown-render {
+            margin-top: 10px;
+            padding: 10px;
+            background: #222;
+            border-left: 3px solid #ff0;
+            color: #0f0;
+        }
+        .code-preview {
+            background: #000;
+            border: 1px solid #333;
+            padding: 10px;
+            margin-top: 5px;
+            white-space: pre-wrap;
+            font-size: 14px;
+        }
+        .cell-buttons button {
+            padding: 5px 10px;
+            margin-left: 5px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        .cell-buttons button:hover { background: #0a0; }
+        .checkmark {
+            color: #0f0;
+            font-weight: bold;
+            display: none;
+        }
+        .output {
+            margin-top: 10px;
+            padding: 10px;
+            background: #222;
+            border-left: 3px solid #0f0;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .logs-chat {
+            height: 20vh;
+            overflow-y: auto;
+            border: 1px solid #0f0;
+            padding: 10px;
+            background: #111;
+        }
+        .logs-chat .message {
+            margin-bottom: 10px;
+            padding: 5px;
+            border-bottom: 1px solid #333;
+        }
+        .kernel-controls {
+            margin-bottom: 10px;
+        }
+        .var-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .var-table th, .var-table td {
+            border: 1px solid #333;
+            padding: 5px;
+            text-align: left;
+        }
+        a { color: #0f0; text-decoration: none; }
+        #save-status { color: #ff0; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 style="color: #0f0; margin: 0;">Quantum Jupyter Clone</h1>
+        <div>
+            <span id="kernel-status">Idle</span>
+            <div class="kernel-controls">
+                <button onclick="restartKernel()">Restart Kernel</button>
+                <button onclick="interruptKernel()">Interrupt</button>
+            </div>
+            <button onclick="saveNotebook()">Save</button>
+            <span id="save-status"></span>
+            <a href="/">Back to Dashboard</a>
+        </div>
+    </div>
+    <div class="main-content">
+        <div id="notebook" class="notebook"></div>
+        <div class="sidebar">
+            <h3>Variables (9)</h3>
+            <table id="var-table" class="var-table" style="display: none;">
+                <thead><tr><th>Name</th><th>Value</th></tr></thead>
+                <tbody></tbody>
+            </table>
+            <div id="no-vars">No variables in scope</div>
+        </div>
+    </div>
+    <div id="logs-chat" class="logs-chat">
+        <h3>Verbose Logs</h3>
+        <div id="logs"></div>
+    </div>
+
+    <script>
+        let cellCounter = 0;
+        let currentNotebook = { cells: [], title: 'Untitled' };
+        let autoSaveInterval;
+        const notebook = document.getElementById('notebook');
+        const logs = document.getElementById('logs');
+        const kernelStatus = document.getElementById('kernel-status');
+        const varTable = document.getElementById('var-table');
+        const noVars = document.getElementById('no-vars');
+        const saveStatus = document.getElementById('save-status');
+        const USER_EMAIL = 'hackah::quantum.foam';
+        const FOLDER = 'holostorage/jupyter/';
+
+        // Load notebook on start (4)
+        async function loadNotebook() {
+            try {
+                const response = await fetch(`/api/jupyter/load?user_email=${USER_EMAIL}&folder=${FOLDER}`);
+                const data = await response.json();
+                if (data.notebooks && data.notebooks.length > 0) {
+                    const latest = data.notebooks[0];
+                    currentNotebook = JSON.parse(latest.content_json);
+                    currentNotebook.title = latest.title;
+                    notebook.innerHTML = '';
+                    currentNotebook.cells.forEach(cellData => addCellFromData(cellData));
+                } else {
+                    addCell('code');
+                }
+            } catch (e) {
+                console.error('Load failed:', e);
+                addCell('code');
+            }
+        }
+
+        function addCellFromData(cellData) {
+            const cell = addCell(cellData.type || 'code', false);
+            const textarea = cell.querySelector('textarea');
+            if (textarea) textarea.value = cellData.value || '';
+            const outputDiv = document.getElementById(`output-${cell.id}`);
+            if (outputDiv && cellData.output) outputDiv.textContent = cellData.output;
+            return cell;
+        }
+
+        function addCell(type = 'code', autoFocus = true) {
+            cellCounter++;
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.id = `cell-${cellCounter}`;
+            cell.dataset.type = type;
+            cell.innerHTML = `
+                <div class="cell-header">
+                    <span class="cell-type">${type.charAt(0).toUpperCase() + type.slice(1)}</span>
+                    <select class="cell-type-selector" onchange="changeCellType('${cell.id}', this.value)">
+                        <option value="code" ${type === 'code' ? 'selected' : ''}>Code</option>
+                        <option value="markdown" ${type === 'markdown' ? 'selected' : ''}>Markdown</option>
+                    </select>
+                    <div class="cell-buttons">
+                        <button onclick="copyCell('${cell.id}')">Copy</button>
+                        <button onclick="pasteCell('${cell.id}')">Paste</button>
+                        <button onclick="executeCell('${cell.id}')">Run</button>
+                        <span class="checkmark" id="check-${cell.id}">✓</span>
+                    </div>
+                </div>
+                <textarea placeholder="Enter ${type} here..." ${type === 'markdown' ? 'class="markdown-input"' : ''}></textarea>
+                <div class="output" id="output-${cell.id}" style="display: ${type === 'markdown' ? 'block' : 'none'};"></div>
+                <div class="code-preview" id="preview-${cell.id}" style="display: none;"></div>
+            `;
+            notebook.appendChild(cell);
+            notebook.scrollTop = notebook.scrollHeight;
+            if (autoFocus) {
+                cell.querySelector('textarea').focus();
+            }
+            updatePreview(cell.id);
+            return cell;
+        }
+
+        function changeCellType(cellId, newType) {
+            const cell = document.getElementById(cellId);
+            cell.dataset.type = newType;
+            const textarea = cell.querySelector('textarea');
+            const outputDiv = document.getElementById(`output-${cellId}`);
+            const previewDiv = document.getElementById(`preview-${cellId}`);
+            if (newType === 'code') {
+                outputDiv.style.display = 'block';
+                previewDiv.style.display = 'none';
+                textarea.classList.remove('markdown-input');
+            } else {
+                outputDiv.style.display = 'none';
+                previewDiv.style.display = 'block';
+                textarea.classList.add('markdown-input');
+                executeCell(cellId);  // Auto-render markdown
+            }
+            cell.querySelector('.cell-type').textContent = newType.charAt(0).toUpperCase() + newType.slice(1);
+            saveNotebook();  // Auto-save on type change
+        }
+
+        // Syntax highlighting (2) - on input change
+        function updatePreview(cellId) {
+            const cell = document.getElementById(cellId);
+            if (cell.dataset.type !== 'code') return;
+            const textarea = cell.querySelector('textarea');
+            const preview = document.getElementById(`preview-${cellId}`);
+            preview.style.display = 'block';
+            const highlighted = Prism.highlight(textarea.value || '', Prism.languages.python, 'python');
+            preview.innerHTML = `<pre><code class="language-python">${highlighted}</code></pre>`;
+        }
+
+        // Listen for input changes
+        notebook.addEventListener('input', (e) => {
+            if (e.target.tagName === 'TEXTAREA' && e.target.closest('.cell').dataset.type === 'code') {
+                const cellId = e.target.closest('.cell').id;
+                updatePreview(cellId);
+            }
+        });
+
+        function copyCell(cellId) {
+            const input = document.querySelector(`#${cellId} textarea`);
+            navigator.clipboard.writeText(input.value).then(() => alert('Copied!'));
+        }
+
+        function pasteCell(cellId) {
+            navigator.clipboard.readText().then(text => {
+                const input = document.querySelector(`#${cellId} textarea`);
+                input.value = text;
+                if (document.getElementById(cellId).dataset.type === 'code') updatePreview(cellId);
+            });
+        }
+
+        async function executeCell(cellId) {
+            kernelStatus.textContent = 'Running...';
+            const checkmark = document.getElementById(`check-${cellId}`);
+            const outputDiv = document.getElementById(`output-${cellId}`);
+            const previewDiv = document.getElementById(`preview-${cellId}`);
+            const input = document.querySelector(`#${cellId} textarea`);
+            const cellType = document.getElementById(cellId).dataset.type;
+            
+            if (cellType === 'markdown') {
+                const rendered = marked.parse(input.value);
+                outputDiv.innerHTML = `<div class="markdown-render">${rendered}</div>`;
+                checkmark.style.display = 'inline';
+                addLog('Rendered markdown cell ' + cellId);
+                updateVars();
+                kernelStatus.textContent = 'Idle';
+                saveNotebook();
+                return;
+            }
+            
+            previewDiv.style.display = 'none';
+            const response = await fetch('/api/jupyter/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: input.value, cell_id: cellId })
+            });
+            const data = await response.json();
+            
+            outputDiv.textContent = data.stdout || data.stderr || data.error || 'No output';
+            if (data.success) {
+                checkmark.style.display = 'inline';
+                updateVars(data.vars);  // (9)
+                addLog('Executed cell ' + cellId + ': Success');
+            } else {
+                checkmark.style.display = 'none';
+                addLog('Executed cell ' + cellId + ': Error - ' + data.error);
+            }
+            kernelStatus.textContent = 'Idle';
+            saveNotebook();  // Auto-save after exec
+        }
+
+        function updateVars(varsData = null) {
+            if (!varsData) {
+                // Fetch current
+                fetch('/api/jupyter/vars').then(res => res.json()).then(data => {
+                    if (data.vars) showVars(data.vars);
+                });
+                return;
+            }
+            showVars(varsData);
+        }
+
+        function showVars(vars) {
+            const tbody = varTable.querySelector('tbody');
+            tbody.innerHTML = '';
+            if (Object.keys(vars).length === 0) {
+                noVars.style.display = 'block';
+                varTable.style.display = 'none';
+                return;
+            }
+            noVars.style.display = 'none';
+            varTable.style.display = 'table';
+            Object.entries(vars).forEach(([name, value]) => {
+                const row = tbody.insertRow();
+                row.insertCell(0).textContent = name;
+                row.insertCell(1).textContent = value;
+            });
+        }
+
+        async function restartKernel() {
+            await fetch('/api/jupyter/restart', { method: 'POST' });
+            addLog('Kernel restarted');
+            updateVars({});  // Clear vars
+            kernelStatus.textContent = 'Idle';
+        }
+
+        function interruptKernel() {
+            // Stub: In real, cancel fetch or use AbortController
+            addLog('Interrupt requested (execution may continue)');
+        }
+
+        async function saveNotebook() {
+            currentNotebook.cells = Array.from(notebook.querySelectorAll('.cell')).map(cell => ({
+                id: cell.id,
+                type: cell.dataset.type,
+                value: cell.querySelector('textarea').value,
+                output: document.getElementById(`output-${cell.id}`).textContent
+            }));
+            try {
+                const response = await fetch('/api/jupyter/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        notebook_json: JSON.stringify(currentNotebook),
+                        user_email: USER_EMAIL,
+                        folder: FOLDER,
+                        title: currentNotebook.title
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    saveStatus.textContent = `Saved: ${data.notebook_id}`;
+                    setTimeout(() => saveStatus.textContent = '', 3000);
+                }
+            } catch (e) {
+                console.error('Save failed:', e);
+                saveStatus.textContent = 'Save failed';
+            }
+        }
+
+        function addLog(message) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message';
+            msgDiv.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logs.appendChild(msgDiv);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        // Auto-save every 30s (4)
+        autoSaveInterval = setInterval(saveNotebook, 30000);
+
+        // Keyboard shortcuts (bonus, partial for 5)
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                const focused = document.activeElement.closest('.cell');
+                if (focused) executeCell(focused.id);
+            } else if (e.key === 'b' && e.ctrlKey) {  // Ctrl+B add below
+                const focused = document.activeElement.closest('.cell');
+                if (focused) {
+                    const newCell = addCell('code');
+                    newCell.style.marginTop = '0';
+                    focused.after(newCell);
+                } else addCell('code');
+            }
+        });
+
+        // Init
+        loadNotebook();
+        updateVars();
+    </script>
+</body>
+</html>
