@@ -1,0 +1,707 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Analysis - Quantum Foam</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #000033, #001a4d, #000033);
+            color: #00ffff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 30px;
+            border: 2px solid #00ffff;
+            background: rgba(0, 255, 255, 0.1);
+            margin-bottom: 30px;
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.3);
+        }
+        
+        h1 {
+            color: #00ffff;
+            text-shadow: 0 0 20px #00ffff;
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+        
+        .back-link {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #00ffff;
+            color: #000;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .back-link:hover {
+            background: #00cccc;
+            box-shadow: 0 0 20px #00ffff;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            padding: 12px 25px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid #00ffff;
+            color: #00ffff;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+        
+        .tab:hover {
+            background: rgba(0, 255, 255, 0.2);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+        }
+        
+        .tab.active {
+            background: #00ffff;
+            color: #000;
+            box-shadow: 0 0 20px #00ffff;
+        }
+        
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.5s;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .section {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ffff;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+        }
+        
+        .section h2 {
+            color: #00ffff;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            border-bottom: 2px solid #00ffff;
+            padding-bottom: 10px;
+        }
+        
+        .interface-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .interface-card {
+            background: rgba(0, 255, 0, 0.1);
+            border: 2px solid #00ff00;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+        
+        .interface-card:hover {
+            background: rgba(0, 255, 0, 0.2);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+            transform: translateY(-5px);
+        }
+        
+        .interface-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #00ff00;
+        }
+        
+        .interface-name {
+            color: #00ff00;
+            font-size: 1.3em;
+            font-weight: bold;
+        }
+        
+        .status-badge {
+            padding: 5px 15px;
+            border-radius: 3px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        
+        .status-up {
+            background: #00ff00;
+            color: #000;
+        }
+        
+        .status-down {
+            background: #ff0000;
+            color: #fff;
+        }
+        
+        .interface-detail {
+            margin: 8px 0;
+            color: #00ffff;
+        }
+        
+        .interface-detail strong {
+            color: #ffff00;
+        }
+        
+        .routing-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .routing-table th {
+            background: rgba(0, 255, 255, 0.2);
+            color: #00ffff;
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #00ffff;
+        }
+        
+        .routing-table td {
+            padding: 10px;
+            border: 1px solid #00ffff;
+            color: #00ff00;
+        }
+        
+        .routing-table tr:hover {
+            background: rgba(0, 255, 255, 0.1);
+        }
+        
+        .tree-view {
+            margin: 20px 0;
+        }
+        
+        .tree-node {
+            margin-left: 20px;
+            padding: 10px;
+            border-left: 2px solid #00ffff;
+            margin-bottom: 10px;
+        }
+        
+        .tree-node-header {
+            color: #00ffff;
+            font-weight: bold;
+            margin-bottom: 5px;
+            cursor: pointer;
+            padding: 5px;
+            background: rgba(0, 255, 255, 0.1);
+        }
+        
+        .tree-node-header:hover {
+            background: rgba(0, 255, 255, 0.2);
+        }
+        
+        .tree-node-content {
+            color: #00ff00;
+            margin-left: 20px;
+            font-size: 0.95em;
+        }
+        
+        .path-visualization {
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid #ffff00;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        
+        .path-hop {
+            display: inline-block;
+            padding: 10px 20px;
+            background: rgba(255, 255, 0, 0.2);
+            border: 1px solid #ffff00;
+            color: #ffff00;
+            margin: 5px;
+            position: relative;
+        }
+        
+        .path-hop::after {
+            content: '→';
+            position: absolute;
+            right: -15px;
+            color: #ff00ff;
+            font-size: 1.5em;
+        }
+        
+        .path-hop:last-child::after {
+            content: '';
+        }
+        
+        .spectrum-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .spectrum-card {
+            background: rgba(255, 0, 255, 0.1);
+            border: 2px solid #ff00ff;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+        
+        .spectrum-card:hover {
+            background: rgba(255, 0, 255, 0.2);
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+        }
+        
+        .spectrum-card h3 {
+            color: #ff00ff;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .protocol-grid {
+            display: grid;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .protocol-card {
+            background: rgba(255, 165, 0, 0.1);
+            border: 2px solid #ff8800;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 20px;
+        }
+        
+        .protocol-card h3 {
+            color: #ff8800;
+            margin-bottom: 10px;
+        }
+        
+        .metric-bar {
+            width: 100%;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ffff;
+            margin: 10px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .metric-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff00, #00ffff);
+            transition: width 1s ease;
+        }
+        
+        .metric-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-weight: bold;
+            text-shadow: 0 0 5px #000;
+        }
+        
+        @media (max-width: 768px) {
+            h1 { font-size: 2em; }
+            .interface-grid { grid-template-columns: 1fr; }
+            .tabs { flex-direction: column; }
+            .protocol-card { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Main</a>
+        
+        <div class="header">
+            <h1>🌐 NETWORK ANALYSIS & TOPOLOGY</h1>
+            <p style="font-size: 1.2em; margin-top: 10px;">
+                Quantum Realm: quantum.realm.domain.dominion.foam.computer.alice<br>
+                Networking Node: computer.networking:127.0.0.1
+            </p>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="interfaces">Network Interfaces</div>
+            <div class="tab" data-tab="routing">Routing Tables</div>
+            <div class="tab" data-tab="endpoints">Recursive Endpoints</div>
+            <div class="tab" data-tab="paths">Point-to-Point Paths</div>
+            <div class="tab" data-tab="spectrums">Network Spectrums</div>
+            <div class="tab" data-tab="protocols">Protocol Formats</div>
+        </div>
+        
+        <!-- Network Interfaces Tab -->
+        <div id="interfaces" class="tab-content active">
+            <div class="section">
+                <h2>Network Interfaces</h2>
+                <div class="interface-grid" id="interfacesGrid">
+                    <p style="text-align: center; color: #888;">Loading network interfaces...</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Routing Tables Tab -->
+        <div id="routing" class="tab-content">
+            <div class="section">
+                <h2>Routing Tables</h2>
+                <div id="routingContent">
+                    <p style="text-align: center; color: #888;">Loading routing tables...</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recursive Endpoints Tab -->
+        <div id="endpoints" class="tab-content">
+            <div class="section">
+                <h2>Recursive Network Endpoints</h2>
+                <div id="endpointsContent">
+                    <p style="text-align: center; color: #888;">Loading endpoints...</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Point-to-Point Paths Tab -->
+        <div id="paths" class="tab-content">
+            <div class="section">
+                <h2>Point-to-Point Routing Paths</h2>
+                <div id="pathsContent">
+                    <p style="text-align: center; color: #888;">Loading paths...</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Network Spectrums Tab -->
+        <div id="spectrums" class="tab-content">
+            <div class="section">
+                <h2>Network Spectrum Analysis</h2>
+                <div class="spectrum-grid" id="spectrumsGrid">
+                    <p style="text-align: center; color: #888;">Loading spectrums...</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Protocol Formats Tab -->
+        <div id="protocols" class="tab-content">
+            <div class="section">
+                <h2>Network Protocol Formats</h2>
+                <div class="protocol-grid" id="protocolsGrid">
+                    <p style="text-align: center; color: #888;">Loading protocols...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active from all tabs
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Add active to clicked tab
+                tab.classList.add('active');
+                const tabId = tab.dataset.tab;
+                document.getElementById(tabId).classList.add('active');
+                
+                // Load content if not loaded
+                loadTabContent(tabId);
+            });
+        });
+        
+        // Load network interfaces
+        async function loadInterfaces() {
+            try {
+                const response = await fetch('/api/network/interfaces');
+                const interfaces = await response.json();
+                
+                const grid = document.getElementById('interfacesGrid');
+                grid.innerHTML = interfaces.map(iface => `
+                    <div class="interface-card">
+                        <div class="interface-header">
+                            <div class="interface-name">${iface.name}</div>
+                            <span class="status-badge status-${iface.status.toLowerCase()}">${iface.status}</span>
+                        </div>
+                        <div class="interface-detail"><strong>ID:</strong> ${iface.id}</div>
+                        <div class="interface-detail"><strong>Type:</strong> ${iface.type}</div>
+                        <div class="interface-detail"><strong>Address:</strong> ${iface.address}</div>
+                        <div class="interface-detail"><strong>Speed:</strong> ${iface.speed_gbps.toLocaleString()} Gbps</div>
+                        <div class="interface-detail"><strong>MTU:</strong> ${iface.mtu}</div>
+                        <div class="interface-detail"><strong>Packets Sent:</strong> ${iface.packets_sent.toLocaleString()}</div>
+                        <div class="interface-detail"><strong>Packets Received:</strong> ${iface.packets_received.toLocaleString()}</div>
+                        <div class="interface-detail"><strong>Errors:</strong> ${iface.errors}</div>
+                        <div class="interface-detail"><strong>Drops:</strong> ${iface.drops}</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load interfaces:', error);
+            }
+        }
+        
+        // Load routing tables
+        async function loadRouting() {
+            try {
+                const response = await fetch('/api/network/routing');
+                const tables = await response.json();
+                
+                const content = document.getElementById('routingContent');
+                content.innerHTML = tables.map(table => `
+                    <div style="margin-bottom: 30px;">
+                        <h3 style="color: #00ffff; margin-bottom: 15px;">${table.name} (${table.table_id})</h3>
+                        <table class="routing-table">
+                            <thead>
+                                <tr>
+                                    <th>Destination</th>
+                                    <th>Gateway</th>
+                                    <th>Interface</th>
+                                    <th>Metric</th>
+                                    <th>Protocol</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${table.routes.map(route => `
+                                    <tr>
+                                        <td>${route.destination}</td>
+                                        <td>${route.gateway}</td>
+                                        <td>${route.interface}</td>
+                                        <td>${route.metric}</td>
+                                        <td>${route.protocol}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load routing:', error);
+            }
+        }
+        
+        // Load recursive endpoints
+        async function loadEndpoints() {
+            try {
+                const response = await fetch('/api/network/endpoints');
+                const data = await response.json();
+                
+                const content = document.getElementById('endpointsContent');
+                
+                function renderEndpoint(endpoint, level = 0) {
+                    let html = `
+                        <div class="tree-node" style="margin-left: ${level * 20}px;">
+                            <div class="tree-node-header">
+                                📍 ${endpoint.name}
+                            </div>
+                            <div class="tree-node-content">
+                                <div><strong>ID:</strong> ${endpoint.endpoint_id}</div>
+                                <div><strong>Address:</strong> ${endpoint.address}</div>
+                                <div><strong>Type:</strong> ${endpoint.type}</div>
+                    `;
+                    
+                    if (endpoint.routing_path) {
+                        html += `
+                            <div style="margin-top: 10px;"><strong>Routing Path:</strong></div>
+                            <div class="path-visualization">
+                                ${endpoint.routing_path.map(hop => `
+                                    <div class="path-hop">
+                                        Hop ${hop.hop}: ${hop.node}<br>
+                                        <small>${hop.latency_ms}ms</small>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    }
+                    
+                    html += `</div></div>`;
+                    
+                    if (endpoint.children) {
+                        endpoint.children.forEach(child => {
+                            html += renderEndpoint(child, level + 1);
+                        });
+                    }
+                    
+                    return html;
+                }
+                
+                content.innerHTML = '<div class="tree-view">' + 
+                    data.endpoints.map(ep => renderEndpoint(ep)).join('') + 
+                    '</div>';
+            } catch (error) {
+                console.error('Failed to load endpoints:', error);
+            }
+        }
+        
+        // Load point-to-point paths
+        async function loadPaths() {
+            try {
+                const response = await fetch('/api/network/endpoints');
+                const data = await response.json();
+                
+                const content = document.getElementById('pathsContent');
+                content.innerHTML = data.point_to_point_paths.map(path => `
+                    <div style="margin-bottom: 30px; padding: 20px; background: rgba(0, 255, 255, 0.1); border: 2px solid #00ffff;">
+                        <h3 style="color: #00ffff; margin-bottom: 15px;">
+                            ${path.source} → ${path.destination}
+                        </h3>
+                        <div style="color: #ffff00; margin-bottom: 10px;">
+                            <strong>Path Type:</strong> ${path.path_type}
+                        </div>
+                        <div class="path-visualization">
+                            ${path.hops.map(hop => `
+                                <div class="path-hop">
+                                    Hop ${hop.hop}: ${hop.node}<br>
+                                    <small>Type: ${hop.type} | ${hop.latency_ms}ms</small>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div style="margin-top: 15px; color: #00ff00;">
+                            <strong>Total Latency:</strong> ${path.total_latency_ms}ms | 
+                            <strong>Bandwidth:</strong> ${path.bandwidth_gbps.toLocaleString()} Gbps
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load paths:', error);
+            }
+        }
+        
+        // Load network spectrums
+        async function loadSpectrums() {
+            try {
+                const response = await fetch('/api/network/spectrums');
+                const spectrums = await response.json();
+                
+                const grid = document.getElementById('spectrumsGrid');
+                grid.innerHTML = spectrums.map(spectrum => `
+                    <div class="spectrum-card">
+                        <h3>${spectrum.name}</h3>
+                        <div style="color: #00ffff; margin: 8px 0;">
+                            <strong>ID:</strong> ${spectrum.spectrum_id}
+                        </div>
+                        <div style="color: #00ffff; margin: 8px 0;">
+                            <strong>Frequency Range:</strong> ${spectrum.frequency_range}
+                        </div>
+                        <div style="color: #00ffff; margin: 8px 0;">
+                            <strong>Wavelength:</strong> ${spectrum.wavelength}
+                        </div>
+                        <div style="color: #00ffff; margin: 8px 0;">
+                            <strong>Bandwidth:</strong> ${spectrum.bandwidth}
+                        </div>
+                        <div style="color: #00ffff; margin: 8px 0;">
+                            <strong>Modulation:</strong> ${spectrum.modulation}
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <div style="color: #ffff00; margin-bottom: 5px;">Signal Strength</div>
+                            <div class="metric-bar">
+                                <div class="metric-fill" style="width: ${spectrum.signal_strength * 100}%"></div>
+                                <div class="metric-label">${(spectrum.signal_strength * 100).toFixed(2)}%</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 10px;">
+                            <div style="color: #ffff00; margin-bottom: 5px;">Noise Level</div>
+                            <div class="metric-bar">
+                                <div class="metric-fill" style="width: ${spectrum.noise_level * 100}%; background: linear-gradient(90deg, #ff0000, #ff8800);"></div>
+                                <div class="metric-label">${(spectrum.noise_level * 100).toFixed(2)}%</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load spectrums:', error);
+            }
+        }
+        
+        // Load protocol formats
+        async function loadProtocols() {
+            try {
+                const response = await fetch('/api/network/protocols');
+                const protocols = await response.json();
+                
+                const grid = document.getElementById('protocolsGrid');
+                grid.innerHTML = protocols.map(protocol => `
+                    <div class="protocol-card">
+                        <div>
+                            <h3>${protocol.protocol}</h3>
+                            <div style="color: #00ffff; margin: 8px 0;">
+                                <strong>Layer:</strong> ${protocol.layer}
+                            </div>
+                        </div>
+                        <div>
+                            <div style="color: #00ffff; margin: 8px 0;">
+                                <strong>Header Size:</strong> ${protocol.header_size_qubits || protocol.header_size_bytes} ${protocol.header_size_qubits ? 'qubits' : 'bytes'}
+                            </div>
+                            <div style="color: #00ffff; margin: 8px 0;">
+                                <strong>Payload Size:</strong> ${protocol.payload_size_qubits || protocol.payload_size_bytes} ${protocol.payload_size_qubits ? 'qubits' : 'bytes'}
+                            </div>
+                            <div style="color: #00ffff; margin: 8px 0;">
+                                <strong>Error Correction:</strong> ${protocol.error_correction}
+                            </div>
+                            <div style="color: #00ff00; margin-top: 10px;">
+                                <strong>Features:</strong><br>
+                                ${protocol.features.map(f => `• ${f}`).join('<br>')}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load protocols:', error);
+            }
+        }
+        
+        // Load tab content
+        const loadedTabs = new Set(['interfaces']);
+        
+        function loadTabContent(tabId) {
+            if (loadedTabs.has(tabId)) return;
+            
+            loadedTabs.add(tabId);
+            
+            switch(tabId) {
+                case 'routing':
+                    loadRouting();
+                    break;
+                case 'endpoints':
+                    loadEndpoints();
+                    break;
+                case 'paths':
+                    loadPaths();
+                    break;
+                case 'spectrums':
+                    loadSpectrums();
+                    break;
+                case 'protocols':
+                    loadProtocols();
+                    break;
+            }
+        }
+        
+        // Initial load
+        loadInterfaces();
+    </script>
+</body>
+</html>
