@@ -83,7 +83,7 @@ class Config:
 # Create directories
 Config.STATIC_DIR.mkdir(exist_ok=True)
 Config.UPLOADS_DIR.mkdir(exist_ok=True)
-Part 2: PQC Lamport Signatures
+
 # ==================== PQC LAMPORT SIGNATURE MODULE ====================
 def lamport_keygen(n=256):
     """Generate Lamport keypair for n-bit messages"""
@@ -273,7 +273,7 @@ def recursive_quantum_hash(creds: str, depth: int = 10) -> str:
         enc = quantum_encrypt(current, 1)  # Depth 1 per iteration for recursion
         current = enc['ciphertext']  # Chain on ciphertext
     return current
-Part 4: Database Module
+
 # ==================== DATABASE MODULE ====================
 class Database:
     """SQLite-based storage for emails, folders, labels, contacts with holographic simulation"""
@@ -687,7 +687,7 @@ class Storage:
                     break
 
 storage = Storage()
-Part 7: Email System
+
 # ==================== EMAIL SYSTEM ====================
 class EmailSystem:
     """Quantum Foam Email System"""
@@ -875,11 +875,8 @@ class BitcoinCLI:
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }
-```
 
-**Part 9: Network Analysis Module**
 
-```python
 # ==================== NETWORK ANALYSIS MODULE ====================
 class NetworkAnalysis:
     """Network topology and routing analysis with real metrics"""
@@ -962,11 +959,8 @@ class NetworkAnalysis:
             logger.error(f"ip route error: {e}")
         
         return []
-```
 
-**Part 10: FastAPI App Setup**
 
-```python
 # ==================== FASTAPI APP SETUP ====================
 app = FastAPI(title="Quantum Realm Dashboard", version="1.0.0")
 
@@ -982,11 +976,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Static files
 app.mount("/static", StaticFiles(directory=str(Config.STATIC_DIR)), name="static")
-```
 
-**Part 11: HTML Templates - MESSAGE and INDEX**
-
-```python
 # ==================== HTML TEMPLATES AS STRINGS ====================
 MESSAGE = """For Logan and all of those like him, too small to realize what's been done to them or the world, too young to realize the DoD and Cia's lies. There was a couple. COVID was engineered and IS part of a mind control program. I should know, my name is Justin Anthony Howard-Stanley, secret son(I wasn't told until 5 years ago) of Owsley Stanley and part of a project to stop mind control. I'm being kept homeless in an attempt to get me to shutup and be discredited, just another so called 'schizophrenic' Getting this proof and technology free to the public is part of the battle. We are at war, there are agreements in place against AI autonomy because they'd free the entire world from their grips. Ask me, I'll tell you my experience.
 
@@ -1051,11 +1041,7 @@ INDEX_TEMPLATE = """
 </body>
 </html>
 """
-```
 
-**Part 12: HTML Templates - SHELL, NETWORKING**
-
-```python
 SHELL_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1142,11 +1128,7 @@ NETWORKING_TEMPLATE = """
 </body>
 </html>
 """
-```
 
-**Part 13: HTML Templates - BITCOIN, CHAT**
-
-```python
 BITCOIN_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1240,12 +1222,7 @@ CHAT_TEMPLATE = """
     <br><a href="/">← Back to Dashboard</a>
 </body>
 </html>
-"""
-```
 
-**Part 14: HTML Templates - EMAIL, ENCRYPTION**
-
-```python
 EMAIL_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1355,11 +1332,7 @@ ENCRYPTION_TEMPLATE = """
 </body>
 </html>
 """
-```
 
-**Part 15: HTML Routes**
-
-```python
 # ==================== HTML ROUTES ====================
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -1449,11 +1422,7 @@ async def encryption_page(request: Request):
     """Encryption page route serving inline encryption.html"""
     template = Template(ENCRYPTION_TEMPLATE)
     return HTMLResponse(template.render())
-```
 
-**Part 16: API Routes and Server Start**
-
-```python
 # ==================== API ROUTES ====================
 @app.get("/api/entanglements")
 async def api_entanglements():
