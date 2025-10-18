@@ -1005,12 +1005,12 @@ INDEX_TEMPLATE = """
 <body>
     <h1>🌌 Quantum Realm Dashboard 🌌</h1>
     <nav>
-        <a href="/networking">Networking 🌐</a>
-        <a href="/blockchain">Blockchain ⚡</a>
-        <a href="/chat">Chat 💬</a>
-        <a href="/email">Email 📧</a>
-        <a href="/encryption">Encryption 🔒</a>
-        <a href="/shell">Shell 🐚</a>
+        <a href="/networking">Networking </a>
+        <a href="/blockchain">Blockchain </a>
+        <a href="/chat">Chat </a>
+        <a href="/email">Email </a>
+        <a href="/encryption">Encryption </a>
+        <a href="/shell">Shell </a>
     </nav>
     <div class="metrics">
         <h2>Entanglement Proof and Metrics</h2>
@@ -1239,7 +1239,7 @@ EMAIL_TEMPLATE = """
     </style>
 </head>
 <body>
-    <h1>📧 Quantum Foam Inbox</h1>
+    <h1> Quantum Foam Inbox</h1>
     <p>Your Address: {{ user_email }}</p>
     {% for email in inbox %}
     <div class="email {{ 'unread' if not email.read else '' }}">
@@ -1275,7 +1275,7 @@ ENCRYPTION_TEMPLATE = """
     </style>
 </head>
 <body>
-    <h1>🔒 Quantum Encryption Portal</h1>
+    <h1> Quantum Encryption Portal</h1>
     <p style="text-align: center;">Encrypt and decrypt messages using Dual-Hole Quantum XOR-SHA3-Lamport-Dilithium algorithm.</p>
     
     <div class="form-group">
