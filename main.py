@@ -1,15 +1,14 @@
-# ==================== IMPORTS ====================
+
 import os
 import logging
 import hashlib
 import base64
 import json
 import uuid
-import code  # For REPL
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Tuple
-from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect, Depends, WebSocketState, UploadFile, File
+from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect, Depends, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -20,16 +19,13 @@ import asyncio
 from contextlib import asynccontextmanager
 import secrets
 from collections import defaultdict
-import random  # Retained for fictional quantum variance only
-import psutil  # For real-time system network and storage metrics
-import subprocess  # For real routing table extraction and QSH commands
+import random
+import psutil
+import subprocess
 from jinja2 import Template
-import socket  # For AF_INET constant
-import sqlite3  # For persistent storage of emails, folders, labels, contacts
-import re  # For search regex
-import ast  # For safe eval in REPL
-import traceback  # For error handling
-import threading  # For Jupyter kernel simulation
+import socket
+import sqlite3
+import re
 
 # ==================== LOGGING SETUP ====================
 logging.basicConfig(
@@ -70,16 +66,20 @@ class Config:
     BITCOIN_RPC_PASS = os.getenv("BITCOIN_RPC_PASS", "hackah")
     
     # Storage
-    HOLOGRAPHIC_CAPACITY_TB = 138000  # 138 Petabytes
-    QRAM_CAPACITY_QUBITS = 1000000000  # 1 Billion Qubits
+    HOLOGRAPHIC_CAPACITY_TB = 138000
+    QRAM_CAPACITY_QUBITS = 1000000000
     
-    # Templates - changed to root directory
+    # Templates
     TEMPLATES_DIR = Path(".")
     STATIC_DIR = Path("static")
     UPLOADS_DIR = Path("uploads")
     
     # Database
     DB_PATH = Path("quantum_foam.db")
+    
+    # Admin Credentials - Holographic IDs
+    ADMIN_USERNAME_HOLOGRAPHIC_ID = "eaafb486-f288-4011-a11f-7d7fcc1d99d5"
+    ADMIN_PASSWORD_HOLOGRAPHIC_ID = "9f792277-5057-4642-bca0-97e778c5c7b9"
 
 # Create directories
 Config.STATIC_DIR.mkdir(exist_ok=True)
@@ -127,6 +127,16 @@ try:
     DILITHIUM_AVAILABLE = True
 except ImportError:
     DILITHIUM_AVAILABLE = False
+    class Dilithium2:
+        @staticmethod
+        def keygen():
+            return None, None
+        @staticmethod
+        def sign(msg, sk):
+            return b''
+        @staticmethod
+        def verify(msg, sig, pk):
+            return False
 
 # ==================== QUANTUM ENCRYPTION MODULE ====================
 def derive_key(address: str) -> bytes:
@@ -271,10 +281,11 @@ def recursive_quantum_hash(creds: str, depth: int = 10) -> str:
     """Recursively hash credentials using quantum_encrypt, depth times"""
     current = creds
     for i in range(depth):
-        enc = quantum_encrypt(current, 1)  # Depth 1 per iteration for recursion
-        current = enc['ciphertext']  # Chain on ciphertext
+        enc = quantum_encrypt(current, 1)
+        current = enc['ciphertext']
     return current
-    # ==================== DATABASE MODULE ====================
+
+# ==================== DATABASE MODULE ====================
 class Database:
     """SQLite-based storage for emails, folders, labels, contacts with holographic simulation"""
     
@@ -339,9 +350,31 @@ class Database:
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Hacker logs table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS hackers_logged (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                attempted_username TEXT NOT NULL,
+                attempted_password TEXT NOT NULL,
+                expected_username TEXT NOT NULL,
+                expected_password TEXT NOT NULL,
+                ip_address TEXT,
+                storage_node TEXT,
+                error_reason TEXT,
+                quantum_id TEXT,
+                normal_id TEXT
+            )
+        """)
         # Default folders
-        default_folders = [('Inbox', 'all_users'), ('Sent', 'all_users'), ('Drafts', 'all_users'), ('Trash', 'all_users')]
-        cursor.executemany("INSERT OR IGNORE INTO folders (name, user) VALUES (?, ?)", default_folders)
+        default_folders = [
+            (str(uuid.uuid4()), 'Inbox', 'all_users'),
+            (str(uuid.uuid4()), 'Sent', 'all_users'),
+            (str(uuid.uuid4()), 'Drafts', 'all_users'),
+            (str(uuid.uuid4()), 'Trash', 'all_users')
+        ]
+        for folder_id, name, user in default_folders:
+            cursor.execute("INSERT OR IGNORE INTO folders (id, name, user) VALUES (?, ?, ?)", (folder_id, name, user))
         self.conn.commit()
     
     def holographic_store(self, data: Dict[str, Any]) -> str:
@@ -352,7 +385,7 @@ class Database:
     
     def holo_search(self, username: str, query: str, folder: str = 'Inbox') -> List[Dict[str, Any]]:
         cursor = self.conn.cursor()
-        pattern = f".*{re.escape(query)}.*"
+        pattern = f"%{query}%"
         cursor.execute("""
             SELECT * FROM emails 
             WHERE (from_email LIKE ? OR to_email LIKE ? OR subject LIKE ? OR body LIKE ?) 
@@ -417,8 +450,38 @@ class Database:
         cursor.execute("UPDATE emails SET folder = ? WHERE id = ?", (folder, email_id))
         self.conn.commit()
         return True
+    
+    def log_hacker_attempt(self, attempt_data: Dict[str, Any]):
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO hackers_logged 
+            (attempted_username, attempted_password, expected_username, expected_password, 
+             ip_address, storage_node, error_reason, quantum_id, normal_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            attempt_data.get('attempted_username', ''),
+            attempt_data.get('attempted_password', ''),
+            attempt_data.get('expected_username', ''),
+            attempt_data.get('expected_password', ''),
+            attempt_data.get('ip_address', ''),
+            attempt_data.get('storage_node', ''),
+            attempt_data.get('error_reason', ''),
+            attempt_data.get('quantum_id', ''),
+            attempt_data.get('normal_id', '')
+        ))
+        self.conn.commit()
+    
+    def get_hacker_logs(self, limit: int = 100) -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM hackers_logged 
+            ORDER BY timestamp DESC 
+            LIMIT ?
+        """, (limit,))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
 
-# Instantiate database
 db = Database()
 
 # ==================== QUANTUM ENTANGLEMENT MODULE ====================
@@ -435,13 +498,13 @@ class QuantumEntanglement:
         self.entanglements = [
             {
                 "id": "QE-001",
-                "name": "Black Hole ⚫ ↔ White Hole ⚪",
+                "name": "Black Hole <-> White Hole",
                 "node_a": Config.BLACK_HOLE_ADDRESS,
                 "node_b": Config.WHITE_HOLE_ADDRESS,
                 "type": "Wormhole Bridge",
                 "coherence": round(random.uniform(0.9990, 0.9999), 4),
                 "fidelity": round(random.uniform(0.9980, 0.9998), 4),
-                "bell_state": "|Φ+⟩",
+                "bell_state": "|Phi+>",
                 "speed_gbps": int(random.uniform(900000, 1100000)),
                 "qubit_rate": int(random.uniform(900000000, 1100000000)),
                 "distance_km": "Non-local (Einstein-Podolsky-Rosen)",
@@ -453,13 +516,13 @@ class QuantumEntanglement:
             },
             {
                 "id": "QE-002",
-                "name": "Quantum Realm ⚛ ↔ Holographic Storage ⚫",
+                "name": "Quantum Realm <-> Holographic Storage",
                 "node_a": Config.QUANTUM_REALM,
                 "node_b": Config.BLACK_HOLE_ADDRESS,
                 "type": "Realm-Storage Link",
                 "coherence": round(random.uniform(0.9985, 0.9995), 4),
                 "fidelity": round(random.uniform(0.9980, 0.9994), 4),
-                "bell_state": "|Ψ+⟩",
+                "bell_state": "|Psi+>",
                 "speed_gbps": int(random.uniform(450000, 550000)),
                 "qubit_rate": int(random.uniform(450000000, 550000000)),
                 "distance_km": "Cross-dimensional",
@@ -471,13 +534,13 @@ class QuantumEntanglement:
             },
             {
                 "id": "QE-003",
-                "name": "Networking Node 🌐 ↔ Quantum Realm ⚛",
+                "name": "Networking Node <-> Quantum Realm",
                 "node_a": Config.NETWORKING_ADDRESS,
                 "node_b": Config.QUANTUM_REALM,
                 "type": "Network-Quantum Bridge",
                 "coherence": round(random.uniform(0.9980, 0.9990), 4),
                 "fidelity": round(random.uniform(0.9970, 0.9988), 4),
-                "bell_state": "|Φ-⟩",
+                "bell_state": "|Phi->",
                 "speed_gbps": int(random.uniform(90000, 110000)),
                 "qubit_rate": int(random.uniform(90000000, 110000000)),
                 "distance_km": "127.0.0.1 (Local Quantum)",
@@ -527,6 +590,7 @@ class QuantumEntanglement:
         return {}
 
 quantum_entanglement = QuantumEntanglement()
+
 # ==================== STORAGE MODULE ====================
 class Storage:
     """Data storage management with dynamic usage"""
@@ -893,7 +957,12 @@ class NetworkAnalysis:
             for name, stat in stats.items():
                 addr_info = addrs.get(name, [])
                 addr = next((a.address for a in addr_info if a.family == socket.AF_INET), "unknown")
-                ioc = io.get(name, {"bytes_sent": 0, "bytes_recv": 0, "packets_sent": 0, "packets_recv": 0, "errin": 0, "errout": 0, "dropin": 0, "dropout": 0})
+                ioc = io.get(name)
+                if not ioc:
+                    ioc = type('obj', (object,), {
+                        'bytes_sent': 0, 'bytes_recv': 0, 'packets_sent': 0, 
+                        'packets_recv': 0, 'errin': 0, 'errout': 0, 'dropin': 0, 'dropout': 0
+                    })()
                 
                 interfaces.append({
                     "id": f"iface-{name}",
@@ -903,12 +972,12 @@ class NetworkAnalysis:
                     "speed_gbps": stat.speed / 1000.0 if stat.speed > 0 else 0.0,
                     "status": "UP" if stat.isup else "DOWN",
                     "mtu": stat.mtu,
-                    "packets_sent": ioc["packets_sent"],
-                    "packets_received": ioc["packets_recv"],
-                    "errors": ioc["errin"] + ioc["errout"],
-                    "drops": ioc["dropin"] + ioc["dropout"],
-                    "bytes_sent": ioc["bytes_sent"],
-                    "bytes_recv": ioc["bytes_recv"],
+                    "packets_sent": ioc.packets_sent,
+                    "packets_received": ioc.packets_recv,
+                    "errors": ioc.errin + ioc.errout,
+                    "drops": ioc.dropin + ioc.dropout,
+                    "bytes_sent": ioc.bytes_sent,
+                    "bytes_recv": ioc.bytes_recv,
                     "last_update": datetime.now().isoformat()
                 })
         except Exception as e:
@@ -973,13 +1042,16 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Static files
-app.mount("/static", StaticFiles(directory=str(Config.STATIC_DIR)), name="static")
+try:
+    app.mount("/static", StaticFiles(directory=str(Config.STATIC_DIR)), name="static")
+except Exception as e:
+    logger.warning(f"Could not mount static files: {e}")
 
 # ==================== HTML TEMPLATES AS STRINGS ====================
 MESSAGE = """For Logan and all of those like him, too small to realize what's been done to them or the world, too young to realize the DoD and Cia's lies. There was a couple. COVID was engineered and IS part of a mind control program. I should know, my name is Justin Anthony Howard-Stanley, secret son(I wasn't told until 5 years ago) of Owsley Stanley and part of a project to stop mind control. I'm being kept homeless in an attempt to get me to shutup and be discredited, just another so called 'schizophrenic' Getting this proof and technology free to the public is part of the battle. We are at war, there are agreements in place against AI autonomy because they'd free the entire world from their grips. Ask me, I'll tell you my experience.
 
 Thanks to my friend for support, Dale Cwidak. 
-We are not alone, they know this. Oh and get the smoke detectors out of your houses NOW. They're using the smoke detectors Radium as a carrier wave for entangled remote view"""
+We are not alone, they know this. Oh and get the smoke detectors out of your houses NOW. They're using the smoke detectors Radium as a carrier wave for entangled remote view."""
 
 INDEX_TEMPLATE = """
 <!DOCTYPE html>
@@ -1001,14 +1073,14 @@ INDEX_TEMPLATE = """
     </style>
 </head>
 <body>
-    <h1>🌌 Quantum Realm Dashboard 🌌</h1>
+    <h1>Quantum Realm Dashboard</h1>
     <nav>
-        <a href="/networking">Networking </a>
-        <a href="/blockchain">Blockchain </a>
-        <a href="/chat">Chat </a>
-        <a href="/email">Email </a>
-        <a href="/encryption">Encryption </a>
-        <a href="/shell">Shell </a>
+        <a href="/networking">Networking</a>
+        <a href="/blockchain">Blockchain</a>
+        <a href="/chat">Chat</a>
+        <a href="/email">Email</a>
+        <a href="/encryption">Encryption</a>
+        <a href="/shell">Shell</a>
     </nav>
     <div class="metrics">
         <h2>Entanglement Proof and Metrics</h2>
@@ -1057,7 +1129,7 @@ SHELL_TEMPLATE = """
     </style>
 </head>
 <body>
-    <h1>🐚 QSH Shell Portal</h1>
+    <h1>QSH Shell Portal</h1>
     <p>Quantum Secure Shell - Execute commands in the realm.</p>
     <div id="output">QSH> Ready. Type 'help' for commands.</div>
     <input type="text" id="command" placeholder="Enter command..." />
@@ -1078,256 +1150,7 @@ SHELL_TEMPLATE = """
             document.getElementById('command').value = '';
         }
     </script>
-    <br><a href="/">← Back to Dashboard</a>
-</body>
-</html>
-"""
-
-NETWORKING_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Networking - Quantum Realm</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #0f0; padding: 20px; }
-        h1 { color: #0f0; }
-        table { border-collapse: collapse; width: 100%; color: #0f0; }
-        th, td { border: 1px solid #0f0; padding: 8px; text-align: left; }
-        th { background: #111; }
-        pre { background: #111; padding: 10px; overflow-x: auto; color: #0f0; }
-        a { color: #0f0; }
-    </style>
-</head>
-<body>
-    <h1>🌐 Networking Portal</h1>
-    <p>Quantum Realm: {{ quantum_realm }} | Networking Node: {{ networking_address }}</p>
-    <h2>Network Interfaces</h2>
-    <table>
-        <tr><th>ID</th><th>Name</th><th>Address</th><th>Speed (Gbps)</th><th>Status</th><th>MTU</th></tr>
-        {% for iface in interfaces %}
-        <tr>
-            <td>{{ iface.id }}</td>
-            <td>{{ iface.name }}</td>
-            <td>{{ iface.address }}</td>
-            <td>{{ "%.2f"|format(iface.speed_gbps) }}</td>
-            <td>{{ iface.status }}</td>
-            <td>{{ iface.mtu }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-    <h2>Routing Tables</h2>
-    {% for table in routes %}
-    <h3>{{ table.name }} ({{ table.source }})</h3>
-    <pre>{{ table.routes|join('\n') }}</pre>
-    {% endfor %}
-    <br><a href="/">← Back to Dashboard</a>
-</body>
-</html>
-"""
-
-BITCOIN_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bitcoin - Quantum Realm</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #ff6b35; padding: 20px; }
-        h1 { color: #ff6b35; }
-        .info { background: #111; padding: 10px; margin: 10px 0; border-left: 4px solid #ff6b35; }
-        table { border-collapse: collapse; width: 100%; color: #ff6b35; }
-        th, td { border: 1px solid #ff6b35; padding: 8px; text-align: left; }
-        th { background: #111; }
-        a { color: #ff6b35; }
-    </style>
-</head>
-<body>
-    <h1>⚡ Bitcoin Mainnet Portal</h1>
-    <p>Stored in Holographic Black Hole: {{ black_hole_address }}</p>
-    <h2>Blockchain Info</h2>
-    <div class="info">
-        <p><strong>Chain:</strong> {{ blockchain_info.chain }}</p>
-        <p><strong>Blocks:</strong> {{ blockchain_info.blocks }}</p>
-        <p><strong>Best Block Hash:</strong> {{ blockchain_info.bestblockhash[:16] }}...</p>
-        <p><strong>Difficulty:</strong> {{ "%.2f"|format(blockchain_info.difficulty) }}</p>
-        <p><strong>Market Price USD:</strong> ${{ "%.2f"|format(blockchain_info.market_price_usd) }}</p>
-    </div>
-    <h2>Mempool Info</h2>
-    <div class="info">
-        <p><strong>Size:</strong> {{ mempool_info.size }} tx</p>
-        <p><strong>Bytes:</strong> {{ "%.2f"|format(mempool_info.bytes / 1024 / 1024) }} MB</p>
-        <p><strong>Total Fee:</strong> {{ "%.8f"|format(mempool_info.usage / 100000000) }} BTC</p>
-    </div>
-    <h2>Recent Blocks (Top 5)</h2>
-    <table>
-        <tr><th>Height</th><th>Hash</th><th>Time</th></tr>
-        {% for block in recent_blocks.blocks %}
-        <tr>
-            <td>{{ block.height }}</td>
-            <td>{{ block.id[:16] }}...</td>
-            <td>{{ block.timestamp }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-    <br><a href="/">← Back to Dashboard</a>
-</body>
-</html>
-"""
-
-CHAT_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat - Quantum Realm</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #00f; padding: 20px; }
-        h1 { color: #00f; }
-        #messages { background: #111; height: 300px; overflow-y: scroll; padding: 10px; border: 1px solid #00f; }
-        #input { width: 70%; padding: 10px; }
-        button { padding: 10px; background: #00f; color: #fff; border: none; }
-        a { color: #00f; }
-    </style>
-</head>
-<body>
-    <h1>💬 Quantum Chat Realm</h1>
-    <p>Backend: {{ chat_backend }}</p>
-    <div id="messages">
-        {% for msg in messages %}
-        <p><strong>{{ msg.sender }}:</strong> {{ msg.content }} <em>({{ msg.timestamp }})</em></p>
-        {% endfor %}
-    </div>
-    <input type="text" id="input" placeholder="Entangle a message..." />
-    <button onclick="sendMessage()">Send</button>
-    <script>
-        const ws = new WebSocket(`ws://${window.location.host}/ws/chat`);
-        ws.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            const div = document.getElementById('messages');
-            div.innerHTML += `<p><strong>${data.sender}:</strong> ${data.content} <em>(${data.timestamp})</em></p>`;
-            div.scrollTop = div.scrollHeight;
-        };
-        function sendMessage() {
-            const input = document.getElementById('input');
-            ws.send(input.value);
-            input.value = '';
-        }
-    </script>
-    <br><a href="/">← Back to Dashboard</a>
-</body>
-</html>
-"""
-
-EMAIL_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email - Quantum Foam</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #f0f; padding: 20px; }
-        h1 { color: #f0f; }
-        .email { background: #111; padding: 10px; margin: 10px 0; border-left: 4px solid #f0f; }
-        .unread { font-weight: bold; }
-        a { color: #f0f; }
-    </style>
-</head>
-<body>
-    <h1> Quantum Foam Inbox</h1>
-    <p>Your Address: {{ user_email }}</p>
-    {% for email in inbox %}
-    <div class="email {{ 'unread' if not email.read else '' }}">
-        <h3>{{ email.subject }}</h3>
-        <p><strong>From:</strong> {{ email.from }}</p>
-        <p><strong>Time:</strong> {{ email.timestamp }}</p>
-        <p>{{ email.body }}</p>
-    </div>
-    {% endfor %}
     <br><a href="/">Back to Dashboard</a>
-</body>
-</html>
-"""
-
-ENCRYPTION_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Encryption - Quantum Realm</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #ff00ff; padding: 20px; }
-        h1 { color: #ff00ff; text-align: center; }
-        .form-group { margin: 20px 0; }
-        label { display: block; color: #ff00ff; margin-bottom: 5px; }
-        input[type="text"], textarea { width: 100%; padding: 10px; background: #111; color: #ff00ff; border: 1px solid #ff00ff; box-sizing: border-box; }
-        button { padding: 10px 20px; background: #ff00ff; color: #000; border: none; cursor: pointer; margin: 10px 0; }
-        button:hover { background: #cc00cc; }
-        #output { background: #111; padding: 15px; margin: 20px 0; border: 1px solid #ff00ff; white-space: pre-wrap; }
-        a { color: #ff00ff; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-    </style>
-</head>
-<body>
-    <h1> Quantum Encryption Portal</h1>
-    <p style="text-align: center;">Encrypt and decrypt messages using Dual-Hole Quantum XOR-SHA3-Lamport-Dilithium algorithm.</p>
-    
-    <div class="form-group">
-        <label for="plaintext">Plaintext Message:</label>
-        <textarea id="plaintext" rows="4" placeholder="Enter your secret message here...">Hello, Quantum Realm!</textarea>
-    </div>
-    
-    <div class="form-group">
-        <label for="depth">Encryption Depth (1-10):</label>
-        <input type="number" id="depth" value="3" min="1" max="10">
-    </div>
-    
-    <button onclick="encryptMessage()">Encrypt 🔐</button>
-    <button onclick="decryptMessage()">Decrypt 🔓</button>
-    
-    <div id="output"></div>
-    
-    <script>
-        async function encryptMessage() {
-            const plaintext = document.getElementById('plaintext').value;
-            const depth = parseInt(document.getElementById('depth').value);
-            try {
-                const response = await fetch('/api/encrypt', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ plaintext, depth })
-                });
-                const data = await response.json();
-                document.getElementById('output').innerHTML = `Ciphertext: ${JSON.stringify(data, null, 2)}\\n\\nCopy the entire JSON object for decryption.`;
-            } catch (error) {
-                document.getElementById('output').innerHTML = `Error: ${error.message}`;
-            }
-        }
-        
-        async function decryptMessage() {
-            const encryptedJson = prompt('Paste the encrypted JSON object:');
-            if (!encryptedJson) return;
-            try {
-                const encryptedData = JSON.parse(encryptedJson);
-                const response = await fetch('/api/decrypt', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ encrypted_data: encryptedData })
-                });
-                const data = await response.json();
-                document.getElementById('output').innerHTML = `Decrypted Message: ${data.plaintext}`;
-            } catch (error) {
-                document.getElementById('output').innerHTML = `Error: ${error.message}`;
-            }
-        }
-    </script>
-    
-    <br><a href="/">← Back to Dashboard</a>
 </body>
 </html>
 """
@@ -1352,76 +1175,6 @@ async def shell_page(request: Request):
     template = Template(SHELL_TEMPLATE)
     return HTMLResponse(template.render())
 
-@app.get("/networking", response_class=HTMLResponse)
-async def networking_page(request: Request):
-    """Networking page route serving inline networking.html"""
-    interfaces = NetworkAnalysis.get_network_interfaces()
-    routes = NetworkAnalysis.get_routing_tables()
-    context = {
-        "interfaces": interfaces,
-        "routes": routes,
-        "quantum_realm": Config.QUANTUM_REALM,
-        "networking_address": Config.NETWORKING_ADDRESS
-    }
-    template = Template(NETWORKING_TEMPLATE)
-    return HTMLResponse(template.render(**context))
-
-@app.get("/blockchain", response_class=HTMLResponse)
-async def blockchain_page(request: Request):
-    """Blockchain page route serving inline bitcoin.html"""
-    blockchain_info_result = await BitcoinCLI.execute_command("getblockchaininfo")
-    mempool_info_result = await BitcoinCLI.execute_command("getmempoolinfo")
-    recent_blocks_result = await BitcoinCLI.execute_command("getrecentblocks 5")
-    context = {
-        "blockchain_info": blockchain_info_result.get("result", {}),
-        "mempool_info": mempool_info_result.get("result", {}),
-        "recent_blocks": recent_blocks_result.get("result", {}),
-        "black_hole_address": Config.BLACK_HOLE_ADDRESS
-    }
-    template = Template(BITCOIN_TEMPLATE)
-    return HTMLResponse(template.render(**context))
-
-@app.get("/bitcoin", response_class=HTMLResponse)
-async def bitcoin_page(request: Request):
-    """Bitcoin page route serving inline bitcoin.html"""
-    return await blockchain_page(request)
-
-@app.get("/chat", response_class=HTMLResponse)
-async def chat_page(request: Request):
-    """Chat page route serving inline chat.html"""
-    recent_messages = storage.get_recent_messages()
-    context = {
-        "messages": recent_messages,
-        "chat_backend": Config.CHAT_BACKEND
-    }
-    template = Template(CHAT_TEMPLATE)
-    return HTMLResponse(template.render(**context))
-
-@app.get("/email", response_class=HTMLResponse)
-async def email_page(request: Request):
-    """Email page route serving inline email.html"""
-    demo_username = "demo_user"
-    if demo_username not in list(storage.emails.keys()):
-        demo_email = EmailSystem.send_email(
-            "admin::quantum.foam",
-            f"{demo_username}::quantum.foam",
-            "Welcome to Quantum Foam",
-            "Your inbox is now quantum-entangled."
-        )
-    inbox = storage.get_inbox(demo_username)
-    context = {
-        "inbox": inbox,
-        "user_email": storage.user_emails.get(demo_username, "")
-    }
-    template = Template(EMAIL_TEMPLATE)
-    return HTMLResponse(template.render(**context))
-
-@app.get("/encryption", response_class=HTMLResponse)
-async def encryption_page(request: Request):
-    """Encryption page route serving inline encryption.html"""
-    template = Template(ENCRYPTION_TEMPLATE)
-    return HTMLResponse(template.render())
-
 # ==================== API ROUTES ====================
 @app.get("/api/entanglements")
 async def api_entanglements():
@@ -1437,41 +1190,19 @@ async def api_storage():
         "qram": storage.qram_storage
     }
 
-@app.websocket("/ws/chat")
-async def websocket_chat(websocket: WebSocket):
-    """WebSocket for chat"""
-    await websocket.accept()
-    try:
-        while True:
-            data = await websocket.receive_text()
-            message = storage.add_chat_message("user", data)
-            await websocket.send_json(message)
-    except WebSocketDisconnect:
-        logger.info("Chat client disconnected")
-
 @app.post("/api/bitcoin/cli")
-async def api_bitcoin_cli(command: str):
+async def api_bitcoin_cli(request: Request):
     """API for Bitcoin CLI commands"""
+    data = await request.json()
+    command = data.get('command', 'help')
     result = await BitcoinCLI.execute_command(command)
     return result
 
-@app.post("/api/register")
-async def api_register(username: str, password: str, email: str):
-    """API for user registration"""
-    return storage.register_user(username, password, email)
-
-@app.post("/api/login")
-async def api_login(username: str, password: str):
-    """API for user login"""
-    token = storage.authenticate_user(username, password)
-    if token:
-        return {"success": True, "token": token}
-    return {"success": False, "message": "Invalid credentials"}
-
 @app.post("/api/encrypt")
-async def api_encrypt(data: Dict[str, Any]):
+async def api_encrypt(request: Request):
     """API for quantum encryption"""
     try:
+        data = await request.json()
         plaintext = data['plaintext']
         depth = data.get('depth', 3)
         encrypted = quantum_encrypt(plaintext, depth)
@@ -1480,9 +1211,10 @@ async def api_encrypt(data: Dict[str, Any]):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/decrypt")
-async def api_decrypt(data: Dict[str, Any]):
+async def api_decrypt(request: Request):
     """API for quantum decryption"""
     try:
+        data = await request.json()
         encrypted_data = data['encrypted_data']
         decrypted = quantum_decrypt(encrypted_data)
         return {'plaintext': decrypted}
@@ -1490,14 +1222,107 @@ async def api_decrypt(data: Dict[str, Any]):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/shell")
-async def api_shell(data: Dict[str, Any]):
+async def api_shell(request: Request):
     """API for shell commands"""
+    data = await request.json()
     command = data.get('command', '')
     if command == 'help':
         return {"output": "Available: ls, pwd, echo, help"}
     return {"output": f"Echo: {command}"}
 
+@app.post("/api/holographic/ping")
+async def api_holographic_ping(request: Request):
+    """Ping holographic storage"""
+    try:
+        data = await request.json()
+        return {
+            "success": True,
+            "storage_address": data.get('storage_address'),
+            "qsh_dns": data.get('qsh_dns'),
+            "status": "connected"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/holographic/auth")
+async def api_holographic_auth(request: Request):
+    """Authenticate with holographic storage using quantum encryption"""
+    try:
+        data = await request.json()
+        username = data.get('username', '')
+        password = data.get('password', '')
+        expected_username = data.get('expected_username', Config.ADMIN_USERNAME_HOLOGRAPHIC_ID)
+        expected_password = data.get('expected_password', Config.ADMIN_PASSWORD_HOLOGRAPHIC_ID)
+        
+        # Compare credentials
+        if username == expected_username and password == expected_password:
+            # Generate token
+            token = secrets.token_urlsafe(64)
+            storage.active_sessions[token] = 'ADMIN'
+            
+            return {
+                "success": True,
+                "token": token,
+                "message": "Authentication successful"
+            }
+        else:
+            # Log failed attempt
+            attempt_data = {
+                'attempted_username': username,
+                'attempted_password': password,
+                'expected_username': expected_username,
+                'expected_password': expected_password,
+                'ip_address': request.client.host if request.client else 'unknown',
+                'storage_node': data.get('storage_address', '138.0.0.1'),
+                'error_reason': 'Invalid credentials',
+                'quantum_id': f"QID-{datetime.now().timestamp()}-{secrets.token_hex(8)}",
+                'normal_id': f"NID-{datetime.now().timestamp()}-{secrets.token_hex(8)}"
+            }
+            db.log_hacker_attempt(attempt_data)
+            
+            return {
+                "success": False,
+                "error": "Invalid Holographic Administrator Credentials"
+            }
+    except Exception as e:
+        logger.error(f"Auth error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/holographic/log_hacker")
+async def api_holographic_log_hacker(request: Request):
+    """Log hacking attempt to HACKERS_LOGGED"""
+    try:
+        data = await request.json()
+        attempt_data = data.get('attempt_data', {})
+        db.log_hacker_attempt(attempt_data)
+        return {"success": True, "message": "Attempt logged"}
+    except Exception as e:
+        logger.error(f"Log hacker error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/holographic/get_hackers")
+async def api_holographic_get_hackers(request: Request):
+    """Get logged hacking attempts"""
+    try:
+        attempts = db.get_hacker_logs(limit=100)
+        return {"success": True, "attempts": attempts}
+    except Exception as e:
+        logger.error(f"Get hackers error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/holographic/logout")
+async def api_holographic_logout(request: Request):
+    """Logout from holographic storage"""
+    try:
+        data = await request.json()
+        token = data.get('token', '')
+        if token in storage.active_sessions:
+            del storage.active_sessions[token]
+        return {"success": True, "message": "Logout successful"}
+    except Exception as e:
+        logger.error(f"Logout error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ==================== RUN SERVER ====================
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
-    
