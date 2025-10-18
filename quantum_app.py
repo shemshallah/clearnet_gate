@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
-from fastapi import FastAPI, Request, HTTPException, Depends, Security
+from fastapi import FastAPI, Request, HTTPException, Depends, Security, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -796,9 +796,9 @@ async def frontpage(request: Request):
                             <div style="margin-top: 15px;">
                                 <strong>Correlations:</strong><br>
                                 E(a,b) = {quantum_results['bell_test']['correlations']['E_ab']}<br>
-                                E(a,b') = {quantum_results['bell_test']['correlations']["E_ab'"]}<br>
-                                E(a',b) = {quantum_results['bell_test']['correlations']["E_a'b"]}<br>
-                                E(a',b') = {quantum_results['bell_test']['correlations']["E_a'b'"]}
+                                E(a,b') = {quantum_results['bell_test']['correlations']['E_ab'']}<br>
+                                E(a',b) = {quantum_results['bell_test']['correlations']['E_a'b']}<br>
+                                E(a',b') = {quantum_results['bell_test']['correlations']['E_a'b'']}
                             </div>
                         </div>
                         <span class="badge {'success' if quantum_results['bell_test']['violates_inequality'] else 'warning'}">
