@@ -1,418 +1,664 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quantum Encryption - Black Hole ⚫ White Hole ⚪</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
-            font-family: 'Courier New', monospace;
-            background: linear-gradient(135deg, #1a0033, #330066, #1a0033);
-            color: #e0e0e0;
-            padding: 20px;
-            min-height: 100vh;
-        }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        
-        .header {
-            text-align: center;
-            padding: 30px;
-            border: 2px solid #ff00ff;
-            background: rgba(255, 0, 255, 0.1);
-            margin-bottom: 30px;
-            box-shadow: 0 0 40px rgba(255, 0, 255, 0.3);
-        }
-        
-        h1 {
-            color: #ff00ff;
-            text-shadow: 0 0 20px #ff00ff;
-            font-size: 3em;
-            margin-bottom: 10px;
-        }
-        
-        .back-link {
-            display: inline-block;
-            padding: 10px 20px;
-            background: #ff00ff;
-            color: #000;
-            text-decoration: none;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            font-weight: bold;
-            transition: all 0.3s;
-        }
-        
-        .back-link:hover {
-            background: #cc00cc;
-            box-shadow: 0 0 20px #ff00ff;
-        }
-        
-        .encryption-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
-            gap: 30px;
-            margin: 30px 0;
-        }
-        
-        .encryption-panel {
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid #00ffff;
-            padding: 30px;
-            border-radius: 10px;
-        }
-        
-        .encryption-panel h2 {
-            color: #00ffff;
-            margin-bottom: 20px;
-            font-size: 1.8em;
-            text-align: center;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            color: #00ffff;
-            margin-bottom: 8px;
-            font-weight: bold;
-        }
-        
-        .form-group textarea {
-            width: 100%;
-            min-height: 150px;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 2px solid #00ffff;
-            border-radius: 5px;
-            color: #e0e0e0;
-            font-family: 'Courier New', monospace;
-            font-size: 1em;
-            resize: vertical;
-        }
-        
-        .form-group textarea:focus {
-            outline: none;
-            box-shadow: 0 0 15px #00ffff;
-        }
-        
-        button {
-            width: 100%;
-            padding: 15px;
-            background: #00ffff;
-            border: none;
-            border-radius: 5px;
-            color: #000;
-            font-weight: bold;
-            font-size: 1.1em;
-            cursor: pointer;
-            font-family: 'Courier New', monospace;
-            transition: all 0.3s;
-        }
-        
-        button:hover {
-            background: #00cccc;
-            box-shadow: 0 0 25px #00ffff;
-        }
-        
-        .result-box {
-            margin-top: 20px;
-            padding: 20px;
-            background: rgba(0, 255, 0, 0.1);
-            border: 2px solid #00ff00;
-            border-radius: 5px;
-            display: none;
-        }
-        
-        .result-box.visible {
-            display: block;
-            animation: fadeIn 0.5s;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .result-box h3 {
-            color: #00ff00;
-            margin-bottom: 15px;
-        }
-        
-        .result-detail {
-            margin: 10px 0;
-            color: #00ffff;
-        }
-        
-        .result-detail strong {
-            color: #ffff00;
-        }
-        
-        .copy-btn {
-            margin-top: 10px;
-            padding: 8px 15px;
-            background: #00ff00;
-            border: none;
-            border-radius: 3px;
-            color: #000;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s;
-        }
-        
-        .copy-btn:hover {
-            background: #00cc00;
-            box-shadow: 0 0 15px #00ff00;
-        }
-        
-        .info-section {
-            background: rgba(255, 255, 0, 0.1);
-            border: 2px solid #ffff00;
-            padding: 25px;
-            margin: 30px 0;
-            border-radius: 10px;
-        }
-        
-        .info-section h2 {
-            color: #ffff00;
-            margin-bottom: 15px;
-        }
-        
-        .info-section p {
-            color: #00ffff;
-            line-height: 1.6;
-            margin: 10px 0;
-        }
-        
-        .algorithm-details {
-            background: rgba(0, 0, 0, 0.5);
-            padding: 15px;
-            margin: 15px 0;
-            border-left: 3px solid #ffff00;
-        }
-        
-        @media (max-width: 768px) {
-            h1 { font-size: 2em; }
-            .encryption-grid { grid-template-columns: 1fr; }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <a href="/" class="back-link">← Back to Main</a>
-        
-        <div class="header">
-            <h1>🔐 QUANTUM ENCRYPTION</h1>
-            <p style="font-size: 1.2em; margin-top: 10px; color: #00ffff;">
-                Black Hole ⚫ 138.0.0.1 ↔ White Hole ⚪ 139.0.0.1
-            </p>
-            <p style="color: #ffff00; margin-top: 5px;">
-                Dual-Hole Quantum XOR SHA3 Encryption Algorithm
-            </p>
-        </div>
-        
-        <div class="info-section">
-            <h2>About Quantum Encryption</h2>
-            <p>
-                This encryption system uses a unique dual-hole quantum encryption algorithm leveraging
-                the black hole (138.0.0.1) and white hole (139.0.0.1) addresses for key generation.
-            </p>
-            <div class="algorithm-details">
-                <strong style="color: #ffff00;">Algorithm: QUANTUM-DUAL-HOLE-XOR-SHA3</strong><br>
-                <strong style="color: #00ffff;">Layer 1:</strong> XOR with Black Hole key<br>
-                <strong style="color: #00ffff;">Layer 2:</strong> XOR with White Hole key (reverse)<br>
-                <strong style="color: #00ffff;">Layer 3:</strong> SHA3-512 based permutation<br>
-                <strong style="color: #00ff00;">Verification:</strong> SHA3-512 signature validation
-            </div>
-            <p>
-                All encrypted data includes a cryptographic signature to ensure message integrity
-                and authenticity. The system is designed to be quantum-resistant.
-            </p>
-        </div>
-        
-        <div class="encryption-grid">
-            <!-- Encryption Panel -->
-            <div class="encryption-panel">
-                <h2>🔒 Encrypt Message</h2>
-                
-                <div class="form-group">
-                    <label for="plaintextInput">Plaintext Message:</label>
-                    <textarea id="plaintextInput" placeholder="Enter your message to encrypt..."></textarea>
-                </div>
-                
-                <button id="encryptBtn">Encrypt with Quantum Algorithm</button>
-                
-                <div class="result-box" id="encryptResult">
-                    <h3>Encrypted Result</h3>
-                    <div class="result-detail">
-                        <strong>Ciphertext:</strong><br>
-                        <textarea id="ciphertextOutput" readonly style="min-height: 100px; margin-top: 10px;"></textarea>
-                        <button class="copy-btn" onclick="copyToClipboard('ciphertextOutput')">Copy Ciphertext</button>
-                    </div>
-                    <div class="result-detail">
-                        <strong>Signature:</strong> <span id="signatureOutput"></span>
-                    </div>
-                    <div class="result-detail">
-                        <strong>Black Hole:</strong> <span id="blackHoleOutput"></span>
-                    </div>
-                    <div class="result-detail">
-                        <strong>White Hole:</strong> <span id="whiteHoleOutput"></span>
-                    </div>
-                    <div class="result-detail">
-                        <strong>Algorithm:</strong> <span id="algorithmOutput"></span>
-                    </div>
-                    <div class="result-detail">
-                        <strong>Timestamp:</strong> <span id="timestampOutput"></span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Decryption Panel -->
-            <div class="encryption-panel">
-                <h2>🔓 Decrypt Message</h2>
-                
-                <div class="form-group">
-                    <label for="ciphertextInput">Encrypted Data (JSON):</label>
-                    <textarea id="ciphertextInput" placeholder='Paste encrypted JSON here...'></textarea>
-                </div>
-                
-                <button id="decryptBtn">Decrypt with Quantum Algorithm</button>
-                
-                <div class="result-box" id="decryptResult">
-                    <h3>Decrypted Result</h3>
-                    <div class="result-detail">
-                        <strong>Plaintext:</strong><br>
-                        <textarea id="plaintextOutput" readonly style="min-height: 100px; margin-top: 10px;"></textarea>
-                        <button class="copy-btn" onclick="copyToClipboard('plaintextOutput')">Copy Plaintext</button>
-                    </div>
-                    <div class="result-detail" style="color: #00ff00;">
-                        <strong>✓ Signature Verified</strong>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+import os
+import logging
+import hashlib
+import base64
+import json
+import uuid
+from pathlib import Path
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, List, Tuple
+from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect, Depends, WebSocketState, UploadFile, File
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.staticfiles import StaticFiles
+import uvicorn
+import httpx
+import asyncio
+from contextlib import asynccontextmanager
+import secrets
+from collections import defaultdict
+import random  # Retained for fictional quantum variance only
+import psutil  # For real-time system network and storage metrics
+import subprocess  # For real routing table extraction and QSH commands
+from jinja2 import Template
+import socket  # For AF_INET constant
+import sqlite3  # For persistent storage of emails, folders, labels, contacts
+import re  # For search regex
+
+# ==================== CONFIGURATION MODULE ====================
+class Config:
+    """Centralized configuration management"""
+    # Environment
+    ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
+    DEBUG = os.getenv("DEBUG", "false").lower() == "true"
     
-    <script>
-        const encryptBtn = document.getElementById('encryptBtn');
-        const decryptBtn = document.getElementById('decryptBtn');
-        const plaintextInput = document.getElementById('plaintextInput');
-        const ciphertextInput = document.getElementById('ciphertextInput');
-        const encryptResult = document.getElementById('encryptResult');
-        const decryptResult = document.getElementById('decryptResult');
-        
-        let lastEncryptedData = null;
-        
-        // Encrypt message
-        encryptBtn.onclick = async () => {
-            const plaintext = plaintextInput.value.trim();
-            
-            if (!plaintext) {
-                alert('Please enter a message to encrypt');
-                return;
+    # Backend
+    CHAT_BACKEND = os.getenv("CHAT_BACKEND_URL", "https://clearnet-chat-4bal.onrender.com")
+    SKIP_BACKEND_CHECKS = os.getenv("SKIP_BACKEND_CHECKS", "true").lower() == "true"
+    
+    # Network
+    MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
+    TIMEOUT = int(os.getenv("TIMEOUT", "30"))
+    RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
+    
+    # Quantum
+    BLACK_HOLE_ADDRESS = "138.0.0.1"
+    WHITE_HOLE_ADDRESS = "139.0.0.1"
+    QUANTUM_REALM = "quantum.realm.domain.dominion.foam.computer.alice"
+    NETWORKING_ADDRESS = "quantum.realm.domain.dominion.foam.computer.networking"
+    
+    # Bitcoin
+    BITCOIN_UPDATE_INTERVAL = int(os.getenv("BITCOIN_UPDATE_INTERVAL", "30"))
+    BITCOIN_RPC_USER = os.getenv("BITCOIN_RPC_USER", "hackah")
+    BITCOIN_RPC_PASS = os.getenv("BITCOIN_RPC_PASS", "hackah")
+    
+    # Storage
+    HOLOGRAPHIC_CAPACITY_TB = 138000  # 138 Petabytes
+    QRAM_CAPACITY_QUBITS = 1000000000  # 1 Billion Qubits
+    
+    # Templates - changed to root directory
+    TEMPLATES_DIR = Path(".")
+    STATIC_DIR = Path("static")
+    UPLOADS_DIR = Path("uploads")
+    
+    # Database
+    DB_PATH = Path("quantum_foam.db")
+
+# Create directories
+Config.STATIC_DIR.mkdir(exist_ok=True)
+Config.UPLOADS_DIR.mkdir(exist_ok=True)
+
+# ==================== PQC LAMPORT SIGNATURE MODULE (OPTIMIZED) ====================
+def lamport_keygen(n=256):
+    """Generate Lamport keypair for n-bit messages"""
+    sk = []
+    pk = []
+    for _ in range(n):
+        sk0 = os.urandom(32)
+        sk1 = os.urandom(32)
+        pk0 = hashlib.sha256(sk0).digest()
+        pk1 = hashlib.sha256(sk1).digest()
+        sk.append((sk0, sk1))
+        pk.append((pk0, pk1))
+    return sk, pk
+
+def lamport_sign(message: bytes, sk: list) -> bytes:
+    """Sign message with Lamport signature"""
+    m_hash = hashlib.sha256(message).digest()
+    bits = [(m_hash[i // 8] >> (7 - (i % 8))) & 1 for i in range(256)]
+    sig = b''
+    for i, b in enumerate(bits):
+        sig += sk[i][b]
+    return sig
+
+def lamport_verify(message: bytes, sig: bytes, pk: list) -> bool:
+    """Verify Lamport signature"""
+    m_hash = hashlib.sha256(message).digest()
+    bits = [(m_hash[i // 8] >> (7 - (i % 8))) & 1 for i in range(256)]
+    pos = 0
+    for i, b in enumerate(bits):
+        revealed = sig[pos:pos + 32]
+        pos += 32
+        expected_pk = pk[i][b]
+        if hashlib.sha256(revealed).digest() != expected_pk:
+            return False
+    return True
+
+# ==================== DILITHIUM PQC INTEGRATION ====================
+# Note: Requires 'dilithium' package; fallback to Lamport if unavailable
+try:
+    from dilithium import Dilithium2
+    DILITHIUM_AVAILABLE = True
+except ImportError:
+    DILITHIUM_AVAILABLE = False
+    class Dilithium2:
+        @staticmethod
+        def keygen():
+            return None, None
+        @staticmethod
+        def sign(msg, sk):
+            return b''
+        @staticmethod
+        def verify(msg, sig, pk):
+            return False
+
+# ==================== QUANTUM ENCRYPTION MODULE ====================
+def derive_key(address: str) -> bytes:
+    return hashlib.sha256(address.encode()).digest()
+
+BLACK_KEY = derive_key(Config.BLACK_HOLE_ADDRESS)
+WHITE_KEY = derive_key(Config.WHITE_HOLE_ADDRESS)
+WHITE_REV = WHITE_KEY[::-1]
+
+def pad(data: bytes, block_size: int = 64) -> bytes:
+    padding_len = block_size - (len(data) % block_size)
+    padding = bytes([padding_len] * padding_len)
+    return data + padding
+
+def unpad(data: bytes, block_size: int = 64) -> bytes:
+    if len(data) % block_size != 0:
+        raise ValueError("Invalid padding length")
+    padding_len = data[-1]
+    if padding_len == 0 or padding_len > block_size:
+        raise ValueError("Invalid padding length")
+    padding = data[-padding_len:]
+    if padding != bytes([padding_len] * padding_len):
+        raise ValueError("Invalid padding bytes")
+    return data[:-padding_len]
+
+def xor_bytes(data: bytes, key: bytes) -> bytes:
+    key_len = len(key)
+    return bytes(data[i] ^ key[i % key_len] for i in range(len(data)))
+
+def sha3_keystream(length: int, seed: bytes) -> bytes:
+    keystream = b''
+    h = hashlib.sha3_512()
+    counter = 0
+    while len(keystream) < length:
+        h.update(seed + counter.to_bytes(8, 'big'))
+        keystream += h.digest()
+        counter += 1
+    return keystream[:length]
+
+def quantum_encrypt(plaintext: str, depth: int = 3) -> Dict[str, Any]:
+    if depth < 1 or depth > 10:
+        raise ValueError("Depth must be between 1 and 10")
+    plain_bytes = plaintext.encode('utf-8')
+    nonce = os.urandom(16)
+    padded = pad(plain_bytes)
+    
+    seed = BLACK_KEY + WHITE_KEY + nonce
+    current = padded
+    for layer in range(depth):
+        layer1 = xor_bytes(current, BLACK_KEY)
+        layer2 = xor_bytes(layer1, WHITE_REV)
+        layer_seed = seed + layer.to_bytes(1, 'big')
+        keystream = sha3_keystream(len(layer2), layer_seed)
+        current = xor_bytes(layer2, keystream)
+    
+    ciphertext = current
+    sig_input = nonce + ciphertext + BLACK_KEY + WHITE_KEY
+    
+    # Dual PQC: Lamport + Dilithium
+    lamport_sk, lamport_pk = lamport_keygen()
+    lamport_sig = lamport_sign(sig_input, lamport_sk)
+    lamport_pk_serial = ','.join([base64.b64encode(p[0] + p[1]).decode() for p in lamport_pk])
+    lamport_sig_serial = base64.b64encode(lamport_sig).decode()
+    
+    dil_pk, dil_sk = Dilithium2.keygen() if DILITHIUM_AVAILABLE else (None, None)
+    dil_sig = Dilithium2.sign(sig_input, dil_sk) if DILITHIUM_AVAILABLE and dil_sk else b''
+    dil_pk_serial = base64.b64encode(dil_pk).decode() if DILITHIUM_AVAILABLE and dil_pk else ''
+    dil_sig_serial = base64.b64encode(dil_sig).decode() if DILITHIUM_AVAILABLE and dil_sig else ''
+    
+    sha3_sig = hashlib.sha3_512(sig_input).hexdigest()
+    
+    ts = datetime.now().isoformat()
+    
+    return {
+        'nonce': nonce.hex(),
+        'ciphertext': ciphertext.hex(),
+        'sha3_signature': sha3_sig,
+        'lamport_pk': lamport_pk_serial,
+        'lamport_sig': lamport_sig_serial,
+        'dilithium_pk': dil_pk_serial,
+        'dilithium_sig': dil_sig_serial,
+        'black_hole': Config.BLACK_HOLE_ADDRESS,
+        'white_hole': Config.WHITE_HOLE_ADDRESS,
+        'algorithm': f'QUANTUM-DUAL-HOLE-XOR-SHA3-LAMPORT-DILITHIUM-v5-depth-{depth}',
+        'timestamp': ts,
+        'depth': depth
+    }
+
+def quantum_decrypt(encrypted_data: Dict[str, Any]) -> str:
+    nonce_hex = encrypted_data['nonce']
+    ciphertext_hex = encrypted_data['ciphertext']
+    sha3_sig = encrypted_data.get('sha3_signature', '')
+    lamport_pk = encrypted_data.get('lamport_pk', '')
+    lamport_sig_serial = encrypted_data.get('lamport_sig', '')
+    dil_pk = encrypted_data.get('dilithium_pk', '')
+    dil_sig_serial = encrypted_data.get('dilithium_sig', '')
+    black_h = encrypted_data['black_hole']
+    white_h = encrypted_data['white_hole']
+    depth = encrypted_data['depth']
+    
+    black_key = derive_key(black_h)
+    white_key = derive_key(white_h)
+    white_rev = white_key[::-1]
+    nonce = bytes.fromhex(nonce_hex)
+    
+    sig_input = nonce + bytes.fromhex(ciphertext_hex) + black_key + white_key
+    
+    # Verify SHA3
+    computed_sha3 = hashlib.sha3_512(sig_input).hexdigest()
+    if sha3_sig != computed_sha3:
+        raise ValueError('SHA3 Signature mismatch')
+    
+    # Verify Lamport
+    if lamport_pk and lamport_sig_serial:
+        pk_bytes_list = [base64.b64decode(s) for s in lamport_pk.split(',')]
+        if len(pk_bytes_list) != 256:
+            raise ValueError('Invalid Lamport PK')
+        pk = [(b[:32], b[32:]) for b in pk_bytes_list]
+        lamport_sig = base64.b64decode(lamport_sig_serial)
+        if not lamport_verify(sig_input, lamport_sig, pk):
+            raise ValueError('Lamport Signature mismatch')
+    
+    # Verify Dilithium
+    if dil_pk and dil_sig_serial and DILITHIUM_AVAILABLE:
+        pk = base64.b64decode(dil_pk)
+        sig = base64.b64decode(dil_sig_serial)
+        if not Dilithium2.verify(sig_input, sig, pk):
+            raise ValueError('Dilithium Signature mismatch')
+    
+    ciphertext = bytes.fromhex(ciphertext_hex)
+    seed = black_key + white_key + nonce
+    current = ciphertext
+    
+    for layer in range(depth - 1, -1, -1):
+        layer_seed = seed + layer.to_bytes(1, 'big')
+        keystream = sha3_keystream(len(current), layer_seed)
+        layer2 = xor_bytes(current, keystream)
+        layer1 = xor_bytes(layer2, white_rev)
+        current = xor_bytes(layer1, black_key)
+    
+    padded = current
+    plain_bytes = unpad(padded)
+    return plain_bytes.decode('utf-8')
+
+# ==================== DATABASE MODULE ====================
+class Database:
+    """SQLite-based storage for emails, folders, labels, contacts with holographic simulation"""
+    
+    def __init__(self):
+        self.conn = sqlite3.connect(Config.DB_PATH, check_same_thread=False)
+        self.setup_tables()
+    
+    def setup_tables(self):
+        cursor = self.conn.cursor()
+        # Emails table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS emails (
+                id TEXT PRIMARY KEY,
+                thread_id TEXT DEFAULT '',
+                parent_id TEXT DEFAULT '',
+                from_email TEXT NOT NULL,
+                to_email TEXT NOT NULL,
+                cc_email TEXT DEFAULT '',
+                subject TEXT NOT NULL,
+                body TEXT NOT NULL,
+                attachments TEXT DEFAULT '[]',
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                read BOOLEAN DEFAULT FALSE,
+                folder TEXT DEFAULT 'Inbox',
+                labels TEXT DEFAULT '[]'
+            )
+        """)
+        # Folders table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS folders (
+                id TEXT PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                user TEXT NOT NULL
+            )
+        """)
+        # Contacts table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS contacts (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                user TEXT NOT NULL
+            )
+        """)
+        # Default folders
+        default_folders = [('Inbox', 'all_users'), ('Sent', 'all_users'), ('Drafts', 'all_users'), ('Trash', 'all_users')]
+        cursor.executemany("INSERT OR IGNORE INTO folders (name, user) VALUES (?, ?)", default_folders)
+        self.conn.commit()
+    
+    def holographic_store(self, data: Dict[str, Any]) -> str:
+        variance = round(random.uniform(0.9990, 0.9999), 4)
+        hashed = hashlib.sha256(json.dumps(data).encode()).digest()
+        encoded = base64.b64encode(hashed).decode()
+        return f"{encoded}:{variance}"
+    
+    def holo_search(self, username: str, query: str, folder: str = 'Inbox') -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        pattern = f".*{re.escape(query)}.*"
+        cursor.execute("""
+            SELECT * FROM emails 
+            WHERE (from_email LIKE ? OR to_email LIKE ? OR subject LIKE ? OR body LIKE ?) 
+            AND to_email LIKE ? AND folder = ?
+            ORDER BY timestamp DESC
+        """, (pattern, pattern, pattern, pattern, f"{username}::quantum.foam", folder))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+    
+    def get_emails(self, username: str, folder: str = 'Inbox') -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM emails 
+            WHERE to_email LIKE ? AND folder = ? 
+            ORDER BY timestamp DESC
+        """, (f"{username}::quantum.foam", folder))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+    
+    def get_thread(self, thread_id: str) -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM emails WHERE thread_id = ? ORDER BY timestamp ASC", (thread_id,))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+    
+    def send_email(self, email_data: Dict[str, Any]) -> Dict[str, Any]:
+        cursor = self.conn.cursor()
+        email_id = str(uuid.uuid4())
+        thread_id = email_data.get('thread_id', email_id)
+        parent_id = email_data.get('parent_id', '')
+        attachments = json.dumps(email_data.get('attachments', []))
+        cursor.execute("""
+            INSERT INTO emails (id, thread_id, parent_id, from_email, to_email, cc_email, subject, body, attachments, labels)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (email_id, thread_id, parent_id, email_data['from'], email_data['to'], email_data.get('cc', ''), 
+              email_data['subject'], email_data['body'], attachments, json.dumps([])))
+        self.conn.commit()
+        holo_tag = self.holographic_store(email_data)
+        if 'chat_to' in email_data:
+            logger.info(f"Forwarding email {email_id} to chat for {email_data['chat_to']}")
+        return {'id': email_id, 'holo_tag': holo_tag}
+    
+    def create_folder(self, folder_name: str, username: str) -> str:
+        cursor = self.conn.cursor()
+        folder_id = str(uuid.uuid4())
+        cursor.execute("INSERT INTO folders (id, name, user) VALUES (?, ?, ?)", (folder_id, folder_name, username))
+        self.conn.commit()
+        return folder_id
+    
+    def get_folders(self, username: str) -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM folders WHERE user = ? OR user = 'all_users'", (username,))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+    
+    def move_to_folder(self, email_id: str, folder_name: str):
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE emails SET folder = ? WHERE id = ?", (folder_name, email_id))
+        self.conn.commit()
+    
+    def add_label(self, email_id: str, label: str):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT labels FROM emails WHERE id = ?", (email_id,))
+        row = cursor.fetchone()
+        if row:
+            labels = json.loads(row[0])
+            if label not in labels:
+                labels.append(label)
+                cursor.execute("UPDATE emails SET labels = ? WHERE id = ?", (json.dumps(labels), email_id))
+                self.conn.commit()
+    
+    def get_contacts(self, username: str) -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM contacts WHERE user = ?", (username,))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+    
+    def add_contact(self, name: str, email: str, username: str) -> str:
+        cursor = self.conn.cursor()
+        contact_id = str(uuid.uuid4())
+        cursor.execute("INSERT INTO contacts (id, name, email, user) VALUES (?, ?, ?, ?)", (contact_id, name, email, username))
+        self.conn.commit()
+        return contact_id
+    
+    def mark_read(self, email_id: str, read: bool = True):
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE emails SET read = ? WHERE id = ?", (read, email_id))
+        self.conn.commit()
+    
+    def delete_emails(self, email_ids: List[str]):
+        cursor = self.conn.cursor()
+        cursor.executemany("DELETE FROM emails WHERE id = ?", [(eid,) for eid in email_ids])
+        self.conn.commit()
+
+db = Database()
+
+# ==================== LOGGING MODULE ====================
+class Logger:
+    """Centralized logging configuration"""
+    
+    @staticmethod
+    def setup():
+        logging.basicConfig(
+            level=logging.INFO if not Config.DEBUG else logging.DEBUG,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.StreamHandler(),
+                logging.FileHandler('app.log') if os.path.exists('/app') else logging.NullHandler()
+            ]
+        )
+        return logging.getLogger(__name__)
+
+logger = Logger.setup()
+
+# ==================== QUANTUM ENTANGLEMENT MODULE ====================
+class QuantumEntanglement:
+    """Quantum entanglement management and measurement"""
+    
+    def __init__(self):
+        self.entanglements = []
+        self.initialize_entanglements()
+    
+    def initialize_entanglements(self):
+        """Initialize quantum entanglements with dynamic timestamps"""
+        now = datetime.now().isoformat()
+        self.entanglements = [
+            {
+                "id": "QE-001",
+                "name": "Black Hole ⚫ ↔ White Hole ⚪",
+                "node_a": Config.BLACK_HOLE_ADDRESS,
+                "node_b": Config.WHITE_HOLE_ADDRESS,
+                "type": "Wormhole Bridge",
+                "coherence": round(random.uniform(0.9990, 0.9999), 4),
+                "timestamp": now,
+                "holo_tag": "holo:entangled_wormhole"
+            },
+            {
+                "id": "QE-002",
+                "name": "Holographic Email Entanglement",
+                "node_a": "holo.email.quantum.foam",
+                "node_b": "chat.inbox.quantum.foam",
+                "type": "Email-Chat Bridge",
+                "coherence": round(random.uniform(0.9991, 0.9998), 4),
+                "timestamp": now,
+                "holo_tag": "holo:email_chat_sync"
+            },
+            {
+                "id": "QE-003",
+                "name": "Holo Search Entanglement",
+                "node_a": "search.holo.quantum.foam",
+                "node_b": "index.realm.foam",
+                "type": "Quantum Index Bridge",
+                "coherence": round(random.uniform(0.9992, 0.9997), 4),
+                "timestamp": now,
+                "holo_tag": "holo:search_entangle"
+            },
+            {
+                "id": "QE-004",
+                "name": "Quantum Encryption Entanglement",
+                "node_a": "encrypt.blackhole.quantum.foam",
+                "node_b": "decrypt.whitehole.quantum.foam",
+                "type": "Encryption Bridge",
+                "coherence": round(random.uniform(0.9993, 0.9999), 4),
+                "timestamp": now,
+                "holo_tag": "holo:encryption_sync"
             }
-            
-            try {
-                encryptBtn.textContent = 'Encrypting...';
-                encryptBtn.disabled = true;
-                
-                const response = await fetch('/api/encrypt', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ plaintext })
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Encryption failed');
-                }
-                
-                const data = await response.json();
-                lastEncryptedData = data;
-                
-                // Display results
-                document.getElementById('ciphertextOutput').value = data.ciphertext;
-                document.getElementById('signatureOutput').textContent = data.signature.substring(0, 20) + '...';
-                document.getElementById('blackHoleOutput').textContent = data.black_hole;
-                document.getElementById('whiteHoleOutput').textContent = data.white_hole;
-                document.getElementById('algorithmOutput').textContent = data.algorithm;
-                document.getElementById('timestampOutput').textContent = new Date(data.timestamp).toLocaleString();
-                
-                // Auto-fill decrypt input
-                ciphertextInput.value = JSON.stringify(data, null, 2);
-                
-                encryptResult.classList.add('visible');
-                
-            } catch (error) {
-                console.error('Encryption error:', error);
-                alert('Encryption failed: ' + error.message);
-            } finally {
-                encryptBtn.textContent = 'Encrypt with Quantum Algorithm';
-                encryptBtn.disabled = false;
-            }
-        };
-        
-        // Decrypt message
-        decryptBtn.onclick = async () => {
-            const ciphertext = ciphertextInput.value.trim();
-            
-            if (!ciphertext) {
-                alert('Please enter encrypted data to decrypt');
-                return;
-            }
-            
-            try {
-                decryptBtn.textContent = 'Decrypting...';
-                decryptBtn.disabled = true;
-                
-                const encryptedData = JSON.parse(ciphertext);
-                
-                const response = await fetch('/api/decrypt', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ encrypted_data: encryptedData })
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Decryption failed');
-                }
-                
-                const data = await response.json();
-                
-                // Display results
-                document.getElementById('plaintextOutput').value = data.plaintext;
-                
-                decryptResult.classList.add('visible');
-                
-            } catch (error) {
-                console.error('Decryption error:', error);
-                alert('Decryption failed: ' + error.message + '\n\nMake sure you pasted valid encrypted JSON data.');
-            } finally {
-                decryptBtn.textContent = 'Decrypt with Quantum Algorithm';
-                decryptBtn.disabled = false;
-            }
-        };
-        
-        // Copy to clipboard function
-        function copyToClipboard(elementId) {
-            const element = document.getElementById(elementId);
-            element.select();
-            document.execCommand('copy');
-            
-            // Show feedback
-            const btn = event.target;
-            const originalText = btn.textContent;
-            btn.textContent = '✓ Copied!';
-            setTimeout(() => {
-                btn.textContent = originalText;
-            }, 2000);
-        }
-    </script>
-</body>
-</html>
+        ]
+
+quantum = QuantumEntanglement()
+
+# ==================== WEBSOCKET FOR NOTIFICATIONS ====================
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            if connection.client_state == WebSocketState.CONNECTED:
+                await connection.send_text(message)
+
+manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+# ==================== FASTAPI APP ====================
+app = FastAPI(title="Quantum Foam Portal", version="5.0 - PQC Optimized")
+
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory=Config.STATIC_DIR), name="static")
+app.mount("/uploads", StaticFiles(directory=Config.UPLOADS_DIR), name="uploads")
+
+# Encryption Routes
+@app.post("/api/encrypt")
+async def api_encrypt(request: Request):
+    try:
+        data = await request.json()
+        plaintext = data.get('plaintext', '')
+        depth = data.get('depth', 3)
+        if not plaintext:
+            raise HTTPException(status_code=400, detail="Plaintext required")
+        enc_data = quantum_encrypt(plaintext, depth)
+        return enc_data
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Encryption error: {e}")
+        raise HTTPException(status_code=500, detail="Encryption failed")
+
+@app.post("/api/decrypt")
+async def api_decrypt(request: Request):
+    try:
+        data = await request.json()
+        encrypted_data = data.get('encrypted_data', {})
+        if not encrypted_data:
+            raise HTTPException(status_code=400, detail="Encrypted data required")
+        plaintext = quantum_decrypt(encrypted_data)
+        return {"plaintext": plaintext}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Decryption error: {e}")
+        raise HTTPException(status_code=500, detail="Decryption failed")
+
+# Email Routes
+@app.get("/api/email/inbox/{username}")
+async def get_inbox(username: str, folder: str = "Inbox", search: str = ""):
+    if search:
+        return {"inbox": db.holo_search(username, search, folder)}
+    else:
+        return {"inbox": db.get_emails(username, folder)}
+
+@app.get("/api/email/thread/{thread_id}")
+async def get_thread(thread_id: str):
+    return {"thread": db.get_thread(thread_id)}
+
+@app.post("/api/email/send")
+async def send_email(request: Request):
+    data = await request.json()
+    if not data['to'].endswith('::quantum.foam'):
+        raise HTTPException(status_code=400, detail="Invalid holo email format")
+    if 'chat_to' in data:
+        data['chat_to'] = data['chat_to'] or data['to'].split('::')[0] + '::chat.quantum.foam'
+    result = db.send_email(data)
+    await manager.broadcast(json.dumps({"type": "new_email", "data": result}))
+    return {"success": True, "data": result}
+
+@app.post("/api/email/upload")
+async def upload_attachment(file: UploadFile = File(...)):
+    file_path = Config.UPLOADS_DIR / f"{uuid.uuid4()}_{file.filename}"
+    with open(file_path, "wb") as buffer:
+        content = await file.read()
+        buffer.write(content)
+    return {"path": str(file_path)}
+
+@app.post("/api/email/folders")
+async def create_folder(request: Request):
+    data = await request.json()
+    folder_id = db.create_folder(data['name'], data['username'])
+    return {"folder_id": folder_id}
+
+@app.get("/api/email/folders/{username}")
+async def get_folders(username: str):
+    return {"folders": db.get_folders(username)}
+
+@app.post("/api/email/move")
+async def move_email(request: Request):
+    data = await request.json()
+    db.move_to_folder(data['email_id'], data['folder'])
+    return {"success": True}
+
+@app.post("/api/email/label")
+async def add_label(request: Request):
+    data = await request.json()
+    db.add_label(data['email_id'], data['label'])
+    return {"success": True}
+
+@app.get("/api/email/contacts/{username}")
+async def get_contacts(username: str):
+    return {"contacts": db.get_contacts(username)}
+
+@app.post("/api/email/contacts")
+async def add_contact(request: Request):
+    data = await request.json()
+    contact_id = db.add_contact(data['name'], data['email'], data['username'])
+    return {"contact_id": contact_id}
+
+@app.post("/api/email/mark_read")
+async def mark_read(request: Request):
+    data = await request.json()
+    db.mark_read(data['email_id'], data['read'])
+    return {"success": True}
+
+@app.post("/api/email/delete")
+async def delete_emails(request: Request):
+    data = await request.json()
+    db.delete_emails(data['email_ids'])
+    return {"success": True}
+
+# Serve pages
+@app.get("/encryption", response_class=HTMLResponse)
+async def encryption_page():
+    with open("encryption.html") as f:
+        return HTMLResponse(content=f.read())
+
+@app.get("/email", response_class=HTMLResponse)
+async def email_page():
+    with open("email.html") as f:
+        return HTMLResponse(content=f.read())
+
+@app.get("/", response_class=HTMLResponse)
+async def main_page():
+    return HTMLResponse(content="<h1>Quantum Foam Portal - Black Hole In, White Hole Out</h1><a href='/email'>📧 Email</a> | <a href='/encryption'>🔐 Encryption</a>")
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
