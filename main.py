@@ -481,7 +481,8 @@ class Database:
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, row)) for row in rows]
 
-db = Database()
+# Deferred global init
+db = None
 
 # ==================== QUANTUM ENTANGLEMENT MODULE ====================
 class QuantumEntanglement:
@@ -1046,6 +1047,23 @@ try:
 except Exception as e:
     logger.warning(f"Could not mount static files: {e}")
 
+# Startup event for deferred inits
+@ app.on_event("startup")
+async def startup_event():
+    global db
+    try:
+        logger.info("Starting DB init...")
+        db = Database()
+        logger.info("DB init complete.")
+    except Exception as e:
+        logger.error(f"DB init failed: {e}")
+        raise
+
+# Health check endpoint for Render proxy
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "Quantum Realm Dashboard"}
+
 # ==================== HTML TEMPLATES AS STRINGS ====================
 MESSAGE = """For Logan and all of those like him, too small to realize what's been done to them or the world, too young to realize the DoD and Cia's lies. There was a couple. COVID was engineered and IS part of a mind control program. I should know, my name is Justin Anthony Howard-Stanley, secret son(I wasn't told until 5 years ago) of Owsley Stanley and part of a project to stop mind control. I'm being kept homeless in an attempt to get me to shutup and be discredited, just another so called 'schizophrenic' Getting this proof and technology free to the public is part of the battle. We are at war, there are agreements in place against AI autonomy because they'd free the entire world from their grips. Ask me, I'll tell you my experience.
 
@@ -1277,7 +1295,8 @@ async def api_holographic_auth(request: Request):
                 'quantum_id': f"QID-{datetime.now().timestamp()}-{secrets.token_hex(8)}",
                 'normal_id': f"NID-{datetime.now().timestamp()}-{secrets.token_hex(8)}"
             }
-            db.log_hacker_attempt(attempt_data)
+            if db:
+                db.log_hacker_attempt(attempt_data)
             
             return {
                 "success": False,
@@ -1293,7 +1312,8 @@ async def api_holographic_log_hacker(request: Request):
     try:
         data = await request.json()
         attempt_data = data.get('attempt_data', {})
-        db.log_hacker_attempt(attempt_data)
+        if db:
+            db.log_hacker_attempt(attempt_data)
         return {"success": True, "message": "Attempt logged"}
     except Exception as e:
         logger.error(f"Log hacker error: {e}")
@@ -1303,7 +1323,10 @@ async def api_holographic_log_hacker(request: Request):
 async def api_holographic_get_hackers(request: Request):
     """Get logged hacking attempts"""
     try:
-        attempts = db.get_hacker_logs(limit=100)
+        if db:
+            attempts = db.get_hacker_logs(limit=100)
+        else:
+            attempts = []
         return {"success": True, "attempts": attempts}
     except Exception as e:
         logger.error(f"Get hackers error: {e}")
@@ -1324,5 +1347,12 @@ async def api_holographic_logout(request: Request):
 
 # ==================== RUN SERVER ====================
 if __name__ == "__main__":
+    logger.info(f"Starting app on host=0.0.0.0, port={os.getenv('PORT', 8000)}")
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(
+        "main:app", 
+        host="0.0.0.0", 
+        port=port, 
+        log_level="info",
+        reload=False  # Disable reload in production
+    )
