@@ -7,19 +7,19 @@ import json
 import uuid
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
-from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from typing import Optional, Dict, Any, List, Tuple
+from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 import uvicorn
 import httpx
 import asyncio
 from contextlib import asynccontextmanager
-import subprocess
 import secrets
+from collections import defaultdict
 
 # ==================== CONFIGURATION MODULE ====================
 class Config:
@@ -40,11 +40,25 @@ class Config:
     # Quantum
     BLACK_HOLE_ADDRESS = "138.0.0.1"
     WHITE_HOLE_ADDRESS = "139.0.0.1"
+    QUANTUM_REALM = "quantum.realm.domain.dominion.foam.computer.alice"
+    NETWORKING_ADDRESS = "computer.networking:127.0.0.1"
     
     # Bitcoin
     BITCOIN_UPDATE_INTERVAL = int(os.getenv("BITCOIN_UPDATE_INTERVAL", "30"))
     BITCOIN_RPC_USER = os.getenv("BITCOIN_RPC_USER", "hackah")
     BITCOIN_RPC_PASS = os.getenv("BITCOIN_RPC_PASS", "hackah")
+    
+    # Storage
+    HOLOGRAPHIC_CAPACITY_TB = 138000  # 138 Petabytes
+    QRAM_CAPACITY_QUBITS = 1000000000  # 1 Billion Qubits
+    
+    # Templates
+    TEMPLATES_DIR = Path("templates")
+    STATIC_DIR = Path("static")
+
+# Create directories
+Config.TEMPLATES_DIR.mkdir(exist_ok=True)
+Config.STATIC_DIR.mkdir(exist_ok=True)
 
 # ==================== LOGGING MODULE ====================
 class Logger:
@@ -64,14 +78,118 @@ class Logger:
 
 logger = Logger.setup()
 
+# ==================== QUANTUM ENTANGLEMENT MODULE ====================
+class QuantumEntanglement:
+    """Quantum entanglement management and measurement"""
+    
+    def __init__(self):
+        self.entanglements = []
+        self.initialize_entanglements()
+    
+    def initialize_entanglements(self):
+        """Initialize quantum entanglements"""
+        self.entanglements = [
+            {
+                "id": "QE-001",
+                "name": "Black Hole ⚫ ↔ White Hole ⚪",
+                "node_a": Config.BLACK_HOLE_ADDRESS,
+                "node_b": Config.WHITE_HOLE_ADDRESS,
+                "type": "Wormhole Bridge",
+                "coherence": 0.9999,
+                "fidelity": 0.9998,
+                "bell_state": "|Φ+⟩",
+                "speed_gbps": 1000000,  # 1 Pbps
+                "qubit_rate": 1000000000,  # 1 billion qubits/sec
+                "distance_km": "Non-local (Einstein-Podolsky-Rosen)",
+                "created": "2024-01-01T00:00:00Z",
+                "entanglement_strength": "Maximum",
+                "decoherence_time_ms": 10000,
+                "status": "Active"
+            },
+            {
+                "id": "QE-002",
+                "name": "Quantum Realm ⚛ ↔ Holographic Storage ⚫",
+                "node_a": Config.QUANTUM_REALM,
+                "node_b": Config.BLACK_HOLE_ADDRESS,
+                "type": "Realm-Storage Link",
+                "coherence": 0.9995,
+                "fidelity": 0.9994,
+                "bell_state": "|Ψ+⟩",
+                "speed_gbps": 500000,
+                "qubit_rate": 500000000,
+                "distance_km": "Cross-dimensional",
+                "created": "2024-01-01T00:00:00Z",
+                "entanglement_strength": "Very High",
+                "decoherence_time_ms": 8000,
+                "status": "Active"
+            },
+            {
+                "id": "QE-003",
+                "name": "Networking Node 🌐 ↔ Quantum Realm ⚛",
+                "node_a": Config.NETWORKING_ADDRESS,
+                "node_b": Config.QUANTUM_REALM,
+                "type": "Network-Quantum Bridge",
+                "coherence": 0.9990,
+                "fidelity": 0.9988,
+                "bell_state": "|Φ-⟩",
+                "speed_gbps": 100000,
+                "qubit_rate": 100000000,
+                "distance_km": "127.0.0.1 (Local Quantum)",
+                "created": "2024-01-01T00:00:00Z",
+                "entanglement_strength": "High",
+                "decoherence_time_ms": 5000,
+                "status": "Active"
+            }
+        ]
+    
+    def get_all_entanglements(self) -> List[Dict]:
+        """Get all quantum entanglements"""
+        return self.entanglements
+    
+    def get_entanglement_metrics(self) -> Dict:
+        """Get aggregated entanglement metrics"""
+        return {
+            "total_entanglements": len(self.entanglements),
+            "active_entanglements": sum(1 for e in self.entanglements if e["status"] == "Active"),
+            "average_coherence": sum(e["coherence"] for e in self.entanglements) / len(self.entanglements),
+            "average_fidelity": sum(e["fidelity"] for e in self.entanglements) / len(self.entanglements),
+            "total_bandwidth_gbps": sum(e["speed_gbps"] for e in self.entanglements),
+            "total_qubit_rate": sum(e["qubit_rate"] for e in self.entanglements),
+            "quantum_realm": Config.QUANTUM_REALM,
+            "networking_node": Config.NETWORKING_ADDRESS
+        }
+    
+    def measure_entanglement(self, entanglement_id: str) -> Dict:
+        """Measure specific entanglement properties"""
+        for ent in self.entanglements:
+            if ent["id"] == entanglement_id:
+                # Simulate quantum measurement with slight variance
+                import random
+                measurement = ent.copy()
+                measurement["measured_coherence"] = ent["coherence"] + random.uniform(-0.0001, 0.0001)
+                measurement["measured_fidelity"] = ent["fidelity"] + random.uniform(-0.0001, 0.0001)
+                measurement["measurement_time"] = datetime.now().isoformat()
+                return measurement
+        return {}
+
 # ==================== STORAGE MODULE ====================
 class Storage:
     """Data storage management"""
     
     def __init__(self):
+        # Email storage
         self.emails: Dict[str, List[Dict]] = {}
         self.user_emails: Dict[str, str] = {}
+        
+        # Chat storage
+        self.chat_users: Dict[str, Dict] = {}
+        self.chat_messages: List[Dict] = []
+        self.active_sessions: Dict[str, str] = {}  # token -> username
+        
+        # Encrypted messages
         self.encrypted_messages: List[Dict] = []
+        
+        # Bitcoin cache
         self.bitcoin_cache: Dict[str, Any] = {
             "blockchain_info": None,
             "latest_blocks": [],
@@ -79,6 +197,90 @@ class Storage:
             "network_stats": None,
             "last_update": None
         }
+        
+        # Storage metrics
+        self.holographic_storage = {
+            "total_capacity_tb": Config.HOLOGRAPHIC_CAPACITY_TB,
+            "used_capacity_tb": 85432,  # 85.4 PB used
+            "available_capacity_tb": Config.HOLOGRAPHIC_CAPACITY_TB - 85432,
+            "efficiency": 0.95,
+            "redundancy_factor": 3,
+            "node_address": Config.BLACK_HOLE_ADDRESS
+        }
+        
+        self.qram_storage = {
+            "total_capacity_qubits": Config.QRAM_CAPACITY_QUBITS,
+            "used_capacity_qubits": 750000000,  # 750M qubits used
+            "available_capacity_qubits": Config.QRAM_CAPACITY_QUBITS - 750000000,
+            "coherence_time_ms": 10000,
+            "error_rate": 0.0001,
+            "node_address": Config.QUANTUM_REALM
+        }
+    
+    def register_user(self, username: str, password: str, email: str) -> Dict:
+        """Register new chat user"""
+        if username in self.chat_users:
+            return {"success": False, "message": "Username already exists"}
+        
+        user_id = str(uuid.uuid4())
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        
+        self.chat_users[username] = {
+            "id": user_id,
+            "username": username,
+            "password": hashed_password,
+            "email": email,
+            "created": datetime.now().isoformat()
+        }
+        
+        # Create quantum foam email
+        quantum_email = f"{username}::quantum.foam"
+        self.user_emails[username] = quantum_email
+        self.emails[username] = []
+        
+        return {
+            "success": True,
+            "user_id": user_id,
+            "username": username,
+            "email": quantum_email
+        }
+    
+    def authenticate_user(self, username: str, password: str) -> Optional[str]:
+        """Authenticate user and return token"""
+        if username not in self.chat_users:
+            return None
+        
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        if self.chat_users[username]["password"] != hashed_password:
+            return None
+        
+        # Generate token
+        token = secrets.token_urlsafe(32)
+        self.active_sessions[token] = username
+        
+        return token
+    
+    def get_user_from_token(self, token: str) -> Optional[Dict]:
+        """Get user from token"""
+        username = self.active_sessions.get(token)
+        if username and username in self.chat_users:
+            return self.chat_users[username]
+        return None
+    
+    def add_chat_message(self, username: str, content: str) -> Dict:
+        """Add chat message"""
+        message = {
+            "id": str(uuid.uuid4()),
+            "sender": username,
+            "content": content,
+            "timestamp": datetime.now().isoformat()
+        }
+        self.chat_messages.append(message)
+        return message
+    
+    def get_recent_messages(self, limit: int = 50) -> List[Dict]:
+        """Get recent chat messages"""
+        return self.chat_messages[-limit:]
     
     def add_email(self, username: str, email: Dict):
         """Add email to user's inbox"""
@@ -99,6 +301,7 @@ class Storage:
                     break
 
 storage = Storage()
+quantum_entanglement = QuantumEntanglement()
 
 # ==================== BITCOIN MODULE ====================
 class BitcoinMainnet:
@@ -141,29 +344,6 @@ class BitcoinMainnet:
             return {}
     
     @staticmethod
-    async def get_block_by_hash(block_hash: str) -> Dict:
-        """Get block details by hash"""
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{BitcoinMainnet.BLOCKCHAIN_API}/rawblock/{block_hash}")
-                return response.json()
-        except Exception as e:
-            logger.error(f"Error fetching block: {e}")
-            return {}
-    
-    @staticmethod
-    async def get_block_by_height(height: int) -> Dict:
-        """Get block at specific height"""
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{BitcoinMainnet.MEMPOOL_API}/block-height/{height}")
-                block_hash = response.text
-                return await BitcoinMainnet.get_block_by_hash(block_hash)
-        except Exception as e:
-            logger.error(f"Error fetching block by height: {e}")
-            return {}
-    
-    @staticmethod
     async def get_recent_blocks(count: int = 10) -> List[Dict]:
         """Get recent blocks"""
         try:
@@ -174,6 +354,17 @@ class BitcoinMainnet:
         except Exception as e:
             logger.error(f"Error fetching recent blocks: {e}")
             return []
+    
+    @staticmethod
+    async def get_block_by_hash(block_hash: str) -> Dict:
+        """Get block details by hash"""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(f"{BitcoinMainnet.BLOCKCHAIN_API}/rawblock/{block_hash}")
+                return response.json()
+        except Exception as e:
+            logger.error(f"Error fetching block: {e}")
+            return {}
     
     @staticmethod
     async def get_transaction(txid: str) -> Dict:
@@ -195,17 +386,6 @@ class BitcoinMainnet:
                 return response.json()
         except Exception as e:
             logger.error(f"Error fetching address info: {e}")
-            return {}
-    
-    @staticmethod
-    async def get_fee_estimates() -> Dict:
-        """Get fee estimates"""
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{BitcoinMainnet.MEMPOOL_API}/v1/fees/recommended")
-                return response.json()
-        except Exception as e:
-            logger.error(f"Error fetching fee estimates: {e}")
             return {}
 
 class BitcoinCLI:
@@ -251,28 +431,6 @@ class BitcoinCLI:
                     "timestamp": datetime.now().isoformat()
                 }
             
-            elif cmd_name == "getblock":
-                if not args:
-                    return {
-                        "success": False,
-                        "command": command,
-                        "error": "Usage: getblock <block_hash_or_height>",
-                        "timestamp": datetime.now().isoformat()
-                    }
-                
-                block_id = args[0]
-                if block_id.isdigit():
-                    block = await BitcoinMainnet.get_block_by_height(int(block_id))
-                else:
-                    block = await BitcoinMainnet.get_block_by_hash(block_id)
-                
-                return {
-                    "success": True,
-                    "command": command,
-                    "result": block,
-                    "timestamp": datetime.now().isoformat()
-                }
-            
             elif cmd_name == "getmempoolinfo":
                 mempool = await BitcoinMainnet.get_mempool_info()
                 
@@ -287,8 +445,6 @@ class BitcoinCLI:
                     "holographic_storage": Config.BLACK_HOLE_ADDRESS
                 }
                 
-                storage.bitcoin_cache["mempool_info"] = result
-                
                 return {
                     "success": True,
                     "command": command,
@@ -300,12 +456,28 @@ class BitcoinCLI:
                 count = int(args[0]) if args and args[0].isdigit() else 10
                 blocks = await BitcoinMainnet.get_recent_blocks(count)
                 
-                storage.bitcoin_cache["latest_blocks"] = blocks
-                
                 return {
                     "success": True,
                     "command": command,
                     "result": {"blocks": blocks, "count": len(blocks)},
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            elif cmd_name == "getblock":
+                if not args:
+                    return {
+                        "success": False,
+                        "command": command,
+                        "error": "Usage: getblock <block_hash>",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                
+                block = await BitcoinMainnet.get_block_by_hash(args[0])
+                
+                return {
+                    "success": True,
+                    "command": command,
+                    "result": block,
                     "timestamp": datetime.now().isoformat()
                 }
             
@@ -345,16 +517,6 @@ class BitcoinCLI:
                     "timestamp": datetime.now().isoformat()
                 }
             
-            elif cmd_name == "getfeeestimates":
-                fees = await BitcoinMainnet.get_fee_estimates()
-                
-                return {
-                    "success": True,
-                    "command": command,
-                    "result": fees,
-                    "timestamp": datetime.now().isoformat()
-                }
-            
             elif cmd_name == "help":
                 return {
                     "success": True,
@@ -362,12 +524,11 @@ class BitcoinCLI:
                     "result": {
                         "available_commands": [
                             "getblockchaininfo - Get blockchain status and info",
-                            "getblock <hash_or_height> - Get block details",
+                            "getblock <hash> - Get block details",
                             "getmempoolinfo - Get mempool information",
                             "getrecentblocks [count] - Get recent blocks (default 10)",
                             "gettransaction <txid> - Get transaction details",
                             "getaddressinfo <address> - Get address information",
-                            "getfeeestimates - Get current fee estimates",
                             "help - Show this help message"
                         ],
                         "holographic_storage": Config.BLACK_HOLE_ADDRESS,
@@ -392,6 +553,7 @@ class BitcoinCLI:
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }
+
 
 # ==================== QUANTUM ENCRYPTION MODULE ====================
 class QuantumEncryption:
@@ -505,6 +667,365 @@ class EmailSystem:
         
         return email
 
+# ==================== NETWORK ANALYSIS MODULE ====================
+class NetworkAnalysis:
+    """Network topology and routing analysis"""
+    
+    @staticmethod
+    def get_network_interfaces() -> List[Dict]:
+        """Get all network interfaces"""
+        return [
+            {
+                "id": "iface-001",
+                "name": "quantum0",
+                "type": "Quantum Entangled Interface",
+                "address": Config.QUANTUM_REALM,
+                "speed_gbps": 1000000,
+                "status": "UP",
+                "mtu": 65535,
+                "packets_sent": 5234567890,
+                "packets_received": 5234567891,
+                "errors": 0,
+                "drops": 0
+            },
+            {
+                "id": "iface-002",
+                "name": "holo0",
+                "type": "Holographic Storage Interface",
+                "address": Config.BLACK_HOLE_ADDRESS,
+                "speed_gbps": 500000,
+                "status": "UP",
+                "mtu": 65535,
+                "packets_sent": 3456789012,
+                "packets_received": 3456789013,
+                "errors": 0,
+                "drops": 0
+            },
+            {
+                "id": "iface-003",
+                "name": "white0",
+                "type": "White Hole Mirror Interface",
+                "address": Config.WHITE_HOLE_ADDRESS,
+                "speed_gbps": 500000,
+                "status": "UP",
+                "mtu": 65535,
+                "packets_sent": 3456789012,
+                "packets_received": 3456789013,
+                "errors": 0,
+                "drops": 0
+            },
+            {
+                "id": "iface-004",
+                "name": "net0",
+                "type": "Classical Network Interface",
+                "address": Config.NETWORKING_ADDRESS,
+                "speed_gbps": 100,
+                "status": "UP",
+                "mtu": 9000,
+                "packets_sent": 123456789,
+                "packets_received": 123456790,
+                "errors": 2,
+                "drops": 1
+            },
+            {
+                "id": "iface-005",
+                "name": "lo",
+                "type": "Loopback",
+                "address": "127.0.0.1",
+                "speed_gbps": 1000,
+                "status": "UP",
+                "mtu": 65536,
+                "packets_sent": 987654321,
+                "packets_received": 987654321,
+                "errors": 0,
+                "drops": 0
+            }
+        ]
+    
+    @staticmethod
+    def get_routing_tables() -> List[Dict]:
+        """Get routing tables"""
+        return [
+            {
+                "table_id": "main",
+                "name": "Main Routing Table",
+                "routes": [
+                    {
+                        "destination": "0.0.0.0/0",
+                        "gateway": Config.QUANTUM_REALM,
+                        "interface": "quantum0",
+                        "metric": 1,
+                        "protocol": "quantum"
+                    },
+                    {
+                        "destination": "138.0.0.0/24",
+                        "gateway": "direct",
+                        "interface": "holo0",
+                        "metric": 0,
+                        "protocol": "holographic"
+                    },
+                    {
+                        "destination": "139.0.0.0/24",
+                        "gateway": "direct",
+                        "interface": "white0",
+                        "metric": 0,
+                        "protocol": "holographic"
+                    },
+                    {
+                        "destination": "127.0.0.0/8",
+                        "gateway": "direct",
+                        "interface": "lo",
+                        "metric": 0,
+                        "protocol": "kernel"
+                    }
+                ]
+            },
+            {
+                "table_id": "quantum",
+                "name": "Quantum Routing Table",
+                "routes": [
+                    {
+                        "destination": "quantum.realm.domain.dominion.foam.computer.alice",
+                        "gateway": "entangled",
+                        "interface": "quantum0",
+                        "metric": 1,
+                        "protocol": "epr"
+                    }
+                ]
+            },
+            {
+                "table_id": "holographic",
+                "name": "Holographic Routing Table",
+                "routes": [
+                    {
+                        "destination": Config.BLACK_HOLE_ADDRESS,
+                        "gateway": "singularity",
+                        "interface": "holo0",
+                        "metric": 1,
+                        "protocol": "hawking"
+                    },
+                    {
+                        "destination": Config.WHITE_HOLE_ADDRESS,
+                        "gateway": "wormhole",
+                        "interface": "white0",
+                        "metric": 1,
+                        "protocol": "hawking"
+                    }
+                ]
+            }
+        ]
+    
+    @staticmethod
+    def get_recursive_endpoints() -> Dict:
+        """Get recursive endpoint mappings with point-to-point routing paths"""
+        return {
+            "endpoints": [
+                {
+                    "endpoint_id": "ep-001",
+                    "name": "Quantum Realm Gateway",
+                    "address": Config.QUANTUM_REALM,
+                    "type": "Quantum Gateway",
+                    "children": [
+                        {
+                            "endpoint_id": "ep-001-001",
+                            "name": "Alice Node",
+                            "address": "alice.quantum.realm",
+                            "type": "Quantum Node",
+                            "routing_path": [
+                                {"hop": 1, "node": Config.QUANTUM_REALM, "latency_ms": 0.001},
+                                {"hop": 2, "node": "alice.quantum.realm", "latency_ms": 0.002}
+                            ]
+                        },
+                        {
+                            "endpoint_id": "ep-001-002",
+                            "name": "Bob Node",
+                            "address": "bob.quantum.realm",
+                            "type": "Quantum Node",
+                            "routing_path": [
+                                {"hop": 1, "node": Config.QUANTUM_REALM, "latency_ms": 0.001},
+                                {"hop": 2, "node": "bob.quantum.realm", "latency_ms": 0.002}
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "endpoint_id": "ep-002",
+                    "name": "Black Hole Storage",
+                    "address": Config.BLACK_HOLE_ADDRESS,
+                    "type": "Holographic Storage",
+                    "children": [
+                        {
+                            "endpoint_id": "ep-002-001",
+                            "name": "Data Shard 1",
+                            "address": f"{Config.BLACK_HOLE_ADDRESS}:shard1",
+                            "type": "Storage Shard",
+                            "routing_path": [
+                                {"hop": 1, "node": Config.BLACK_HOLE_ADDRESS, "latency_ms": 0.0001},
+                                {"hop": 2, "node": f"{Config.BLACK_HOLE_ADDRESS}:shard1", "latency_ms": 0.0001}
+                            ]
+                        },
+                        {
+                            "endpoint_id": "ep-002-002",
+                            "name": "Data Shard 2",
+                            "address": f"{Config.BLACK_HOLE_ADDRESS}:shard2",
+                            "type": "Storage Shard",
+                            "routing_path": [
+                                {"hop": 1, "node": Config.BLACK_HOLE_ADDRESS, "latency_ms": 0.0001},
+                                {"hop": 2, "node": f"{Config.BLACK_HOLE_ADDRESS}:shard2", "latency_ms": 0.0001}
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "endpoint_id": "ep-003",
+                    "name": "White Hole Mirror",
+                    "address": Config.WHITE_HOLE_ADDRESS,
+                    "type": "Holographic Mirror",
+                    "children": [
+                        {
+                            "endpoint_id": "ep-003-001",
+                            "name": "Mirror Shard 1",
+                            "address": f"{Config.WHITE_HOLE_ADDRESS}:mirror1",
+                            "type": "Mirror Shard",
+                            "routing_path": [
+                                {"hop": 1, "node": Config.WHITE_HOLE_ADDRESS, "latency_ms": 0.0001},
+                                {"hop": 2, "node": f"{Config.WHITE_HOLE_ADDRESS}:mirror1", "latency_ms": 0.0001}
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "endpoint_id": "ep-004",
+                    "name": "Network Router",
+                    "address": Config.NETWORKING_ADDRESS,
+                    "type": "Classical Router",
+                    "children": [
+                        {
+                            "endpoint_id": "ep-004-001",
+                            "name": "Localhost",
+                            "address": "127.0.0.1",
+                            "type": "Loopback",
+                            "routing_path": [
+                                {"hop": 1, "node": "127.0.0.1", "latency_ms": 0.0001}
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "point_to_point_paths": [
+                {
+                    "source": Config.BLACK_HOLE_ADDRESS,
+                    "destination": Config.WHITE_HOLE_ADDRESS,
+                    "path_type": "Wormhole Bridge",
+                    "hops": [
+                        {"hop": 1, "node": Config.BLACK_HOLE_ADDRESS, "type": "source", "latency_ms": 0},
+                        {"hop": 2, "node": "wormhole.bridge", "type": "transit", "latency_ms": 0.0001},
+                        {"hop": 3, "node": Config.WHITE_HOLE_ADDRESS, "type": "destination", "latency_ms": 0.0001}
+                    ],
+                    "total_latency_ms": 0.0002,
+                    "bandwidth_gbps": 1000000
+                },
+                {
+                    "source": Config.QUANTUM_REALM,
+                    "destination": Config.BLACK_HOLE_ADDRESS,
+                    "path_type": "Quantum-Storage Link",
+                    "hops": [
+                        {"hop": 1, "node": Config.QUANTUM_REALM, "type": "source", "latency_ms": 0},
+                        {"hop": 2, "node": "quantum.bridge", "type": "transit", "latency_ms": 0.001},
+                        {"hop": 3, "node": Config.BLACK_HOLE_ADDRESS, "type": "destination", "latency_ms": 0.001}
+                    ],
+                    "total_latency_ms": 0.002,
+                    "bandwidth_gbps": 500000
+                },
+                {
+                    "source": Config.NETWORKING_ADDRESS,
+                    "destination": Config.QUANTUM_REALM,
+                    "path_type": "Classical-Quantum Bridge",
+                    "hops": [
+                        {"hop": 1, "node": Config.NETWORKING_ADDRESS, "type": "source", "latency_ms": 0},
+                        {"hop": 2, "node": "quantum.adapter", "type": "transit", "latency_ms": 0.1},
+                        {"hop": 3, "node": Config.QUANTUM_REALM, "type": "destination", "latency_ms": 0.1}
+                    ],
+                    "total_latency_ms": 0.2,
+                    "bandwidth_gbps": 100000
+                }
+            ]
+        }
+    
+    @staticmethod
+    def get_network_spectrums() -> List[Dict]:
+        """Get network spectrum analysis"""
+        return [
+            {
+                "spectrum_id": "spec-001",
+                "name": "Quantum Spectrum",
+                "frequency_range": "Planck Scale",
+                "wavelength": "1.616255 × 10^-35 m",
+                "bandwidth": "Unlimited (Superposition)",
+                "modulation": "Quantum State Encoding",
+                "noise_level": 0.0001,
+                "signal_strength": 0.9999
+            },
+            {
+                "spectrum_id": "spec-002",
+                "name": "Holographic Spectrum",
+                "frequency_range": "Event Horizon",
+                "wavelength": "Schwarzschild Radius",
+                "bandwidth": "Information Theoretical Maximum",
+                "modulation": "Holographic Principle",
+                "noise_level": 0.0002,
+                "signal_strength": 0.9998
+            },
+            {
+                "spectrum_id": "spec-003",
+                "name": "Classical RF Spectrum",
+                "frequency_range": "1 GHz - 100 GHz",
+                "wavelength": "3 mm - 30 cm",
+                "bandwidth": "99 GHz",
+                "modulation": "QAM-256",
+                "noise_level": 0.01,
+                "signal_strength": 0.95
+            }
+        ]
+    
+    @staticmethod
+    def get_protocol_formats() -> List[Dict]:
+        """Get network protocol formats"""
+        return [
+            {
+                "protocol": "QPP (Quantum Packet Protocol)",
+                "layer": "Quantum Layer",
+                "header_size_qubits": 64,
+                "payload_size_qubits": "Variable (Superposition)",
+                "error_correction": "Quantum Error Correction Code",
+                "features": ["Entanglement", "Superposition", "No-cloning", "Teleportation"]
+            },
+            {
+                "protocol": "HTP (Holographic Transfer Protocol)",
+                "layer": "Holographic Layer",
+                "header_size_bytes": 128,
+                "payload_size_bytes": "Variable (Surface Encoded)",
+                "error_correction": "Hawking Radiation Correction",
+                "features": ["Information Preservation", "Black Hole Storage", "Wormhole Transfer"]
+            },
+            {
+                "protocol": "TCP/IP",
+                "layer": "Transport/Network",
+                "header_size_bytes": 40,
+                "payload_size_bytes": "1-65535",
+                "error_correction": "Checksum",
+                "features": ["Reliable", "Ordered", "Connection-oriented"]
+            },
+            {
+                "protocol": "UDP",
+                "layer": "Transport",
+                "header_size_bytes": 8,
+                "payload_size_bytes": "1-65507",
+                "error_correction": "Optional Checksum",
+                "features": ["Fast", "Connectionless", "Low overhead"]
+            }
+        ]
+
 # ==================== APPLICATION STATE MODULE ====================
 class AppState:
     """Global application state management"""
@@ -515,15 +1036,16 @@ class AppState:
         self.last_health_check: datetime = datetime.now()
         self.request_counts: Dict[str, int] = {}
         self.active_connections: int = 0
+        self.chat_websockets: List[WebSocket] = []
         self.bitcoin_websockets: List[WebSocket] = []
         self.network_metrics: Dict = {
-            "packets_sent": 0,
-            "packets_received": 0,
-            "bytes_sent": 0,
-            "bytes_received": 0,
+            "packets_sent": 5234567890,
+            "packets_received": 5234567891,
+            "bytes_sent": 9876543210000,
+            "bytes_received": 9876543211000,
             "active_interfaces": 5,
             "routing_tables": 3,
-            "quantum_entanglements": 2
+            "quantum_entanglements": len(quantum_entanglement.entanglements)
         }
         
     async def initialize(self):
@@ -578,10 +1100,18 @@ class AppState:
     def update_network_metrics(self):
         """Update network metrics"""
         import random
-        self.network_metrics["packets_sent"] += random.randint(100, 1000)
-        self.network_metrics["packets_received"] += random.randint(100, 1000)
-        self.network_metrics["bytes_sent"] += random.randint(10000, 100000)
-        self.network_metrics["bytes_received"] += random.randint(10000, 100000)
+        self.network_metrics["packets_sent"] += random.randint(1000, 10000)
+        self.network_metrics["packets_received"] += random.randint(1000, 10000)
+        self.network_metrics["bytes_sent"] += random.randint(100000, 1000000)
+        self.network_metrics["bytes_received"] += random.randint(100000, 1000000)
+    
+    async def broadcast_to_chat(self, message: Dict):
+        """Broadcast message to all chat WebSocket clients"""
+        for ws in self.chat_websockets[:]:
+            try:
+                await ws.send_json(message)
+            except:
+                self.chat_websockets.remove(ws)
     
     async def broadcast_bitcoin_update(self, data: Dict):
         """Broadcast Bitcoin updates to all connected WebSocket clients"""
@@ -592,6 +1122,7 @@ class AppState:
                 self.bitcoin_websockets.remove(ws)
 
 app_state = AppState()
+
 
 # ==================== BACKGROUND TASKS MODULE ====================
 class BackgroundTasks:
@@ -681,11 +1212,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Quantum Foam Network - Truth Gateway",
     description="Modular multi-dimensional communication platform with real Bitcoin mainnet integration",
-    version="6.0.0",
+    version="7.0.0",
     docs_url="/docs" if Config.DEBUG else None,
     redoc_url="/redoc" if Config.DEBUG else None,
     lifespan=lifespan
 )
+
+# Setup templates
+templates = Jinja2Templates(directory=str(Config.TEMPLATES_DIR))
 
 # ==================== MIDDLEWARE ====================
 app.add_middleware(
@@ -726,7 +1260,7 @@ async def rate_limit_middleware(request: Request, call_next):
     response = await call_next(request)
     return response
 
-# ==================== PROXY HELPER ====================
+# ==================== HELPER FUNCTIONS ====================
 async def proxy_to_backend(request: Request, path: str, max_retries: int = Config.MAX_RETRIES) -> JSONResponse:
     """Proxy requests to backend with retry logic"""
     if not app_state.http_client:
@@ -762,10 +1296,28 @@ async def proxy_to_backend(request: Request, path: str, max_retries: int = Confi
     
     raise HTTPException(status_code=502, detail=f"Backend unavailable: {str(last_error)}")
 
+def load_template(template_name: str) -> str:
+    """Load HTML template from file"""
+    template_path = Config.TEMPLATES_DIR / template_name
+    if template_path.exists():
+        return template_path.read_text()
+    return ""
+
+# ==================== MAIN ROUTES ====================
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """Main landing page with network metrics"""
-    html_content = """
+    """Main landing page with quantum entanglement proof and storage metrics"""
+    # Try to load from template file first
+    html_content = load_template("index.html")
+    if html_content:
+        return HTMLResponse(content=html_content)
+    
+    # Fallback inline HTML
+    entanglements = quantum_entanglement.get_all_entanglements()
+    entanglement_metrics = quantum_entanglement.get_entanglement_metrics()
+    
+    html_content = f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -773,20 +1325,18 @@ async def root():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Truth Gateway - Quantum Foam Network</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         
-        body {
+        body {{
             font-family: 'Courier New', monospace;
             background: linear-gradient(135deg, #000000 0%, #1a0033 50%, #000000 100%);
             color: #00ff00;
             min-height: 100vh;
-            display: flex;
-            flex-direction: column;
             padding: 20px;
             overflow-x: hidden;
-        }
+        }}
         
-        .matrix-bg {
+        .matrix-bg {{
             position: fixed;
             top: 0;
             left: 0;
@@ -795,70 +1345,165 @@ async def root():
             pointer-events: none;
             opacity: 0.1;
             z-index: 0;
-        }
+        }}
         
-        .container {
-            max-width: 1400px;
+        .container {{
+            max-width: 1600px;
             width: 100%;
             margin: 0 auto;
             position: relative;
             z-index: 1;
-        }
+        }}
         
-        header {
+        header {{
             text-align: center;
             padding: 40px 20px;
             border: 2px solid #00ff00;
             background: rgba(0, 0, 0, 0.9);
             margin-bottom: 30px;
             box-shadow: 0 0 30px rgba(0, 255, 0, 0.3);
-        }
+        }}
         
-        h1 {
+        h1 {{
             font-size: 3em;
             color: #00ff00;
             text-shadow: 0 0 20px #00ff00;
             margin-bottom: 20px;
             animation: flicker 3s infinite;
-        }
+        }}
         
-        @keyframes flicker {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.8; }
-        }
+        @keyframes flicker {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.8; }}
+        }}
         
-        .network-metrics {
+        .quantum-proof {{
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid #00ffff;
+            padding: 30px;
+            margin: 30px 0;
+        }}
+        
+        .quantum-proof h2 {{
+            color: #00ffff;
+            margin-bottom: 20px;
+            font-size: 2em;
+            text-align: center;
+        }}
+        
+        .entanglement-list {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }}
+        
+        .entanglement-card {{
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ffff;
+            padding: 20px;
+            border-radius: 10px;
+        }}
+        
+        .entanglement-header {{
+            color: #00ffff;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #00ffff;
+        }}
+        
+        .entanglement-detail {{
+            margin: 8px 0;
+            color: #00ff00;
+        }}
+        
+        .entanglement-detail strong {{
+            color: #ffff00;
+        }}
+        
+        .bell-state {{
+            font-size: 1.5em;
+            color: #ff00ff;
+            text-align: center;
+            margin: 10px 0;
+        }}
+        
+        .storage-metrics {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }}
+        
+        .storage-card {{
+            background: rgba(255, 165, 0, 0.1);
+            border: 2px solid #ff8800;
+            padding: 25px;
+            border-radius: 10px;
+        }}
+        
+        .storage-card h3 {{
+            color: #ff8800;
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            text-align: center;
+        }}
+        
+        .storage-detail {{
+            margin: 10px 0;
+            color: #ffaa00;
+        }}
+        
+        .capacity-bar {{
+            width: 100%;
+            height: 30px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #ff8800;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 10px 0;
+        }}
+        
+        .capacity-fill {{
+            height: 100%;
+            background: linear-gradient(90deg, #ff8800, #ffaa00);
+            transition: width 1s ease;
+        }}
+        
+        .network-metrics {{
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 20px;
             margin: 30px 0;
-        }
+        }}
         
-        .metric-card {
+        .metric-card {{
             background: rgba(0, 255, 0, 0.1);
             border: 2px solid #00ff00;
             padding: 20px;
             text-align: center;
             transition: all 0.3s;
-        }
+        }}
         
-        .metric-card:hover {
+        .metric-card:hover {{
             background: rgba(0, 255, 0, 0.2);
             box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
-        }
+            transform: translateY(-5px);
+        }}
         
-        .metric-value {
+        .metric-value {{
             font-size: 2em;
             color: #00ffff;
             margin: 10px 0;
-        }
+        }}
         
-        .metric-label {
+        .metric-label {{
             color: #00ff00;
             font-size: 0.9em;
-        }
+        }}
         
-        .truth-message {
+        .truth-message {{
             background: rgba(255, 0, 0, 0.1);
             border: 2px solid #ff0000;
             padding: 30px;
@@ -868,27 +1513,27 @@ async def root():
             line-height: 1.8;
             text-shadow: 0 0 10px #ff0000;
             box-shadow: 0 0 40px rgba(255, 0, 0, 0.3);
-        }
+        }}
         
-        .truth-message strong {
+        .truth-message strong {{
             color: #ff6600;
             font-size: 1.3em;
-        }
+        }}
         
-        .truth-message a {
+        .truth-message a {{
             color: #00ffff;
             text-decoration: none;
             border-bottom: 1px dashed #00ffff;
-        }
+        }}
         
-        .navigation {
+        .navigation {{
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 20px;
             margin: 40px 0;
-        }
+        }}
         
-        .nav-card {
+        .nav-card {{
             background: rgba(0, 0, 0, 0.8);
             border: 2px solid #00ff00;
             padding: 30px;
@@ -897,26 +1542,26 @@ async def root():
             transition: all 0.3s;
             text-decoration: none;
             color: #00ff00;
-        }
+        }}
         
-        .nav-card:hover {
+        .nav-card:hover {{
             background: rgba(0, 255, 0, 0.2);
             box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
             transform: translateY(-5px);
-        }
+        }}
         
-        .nav-card h2 {
+        .nav-card h2 {{
             font-size: 1.8em;
             margin-bottom: 15px;
             color: #00ffff;
-        }
+        }}
         
-        .icon {
+        .icon {{
             font-size: 3em;
             margin-bottom: 15px;
-        }
+        }}
         
-        .quantum-indicator {
+        .quantum-indicator {{
             display: inline-block;
             width: 10px;
             height: 10px;
@@ -924,25 +1569,26 @@ async def root():
             border-radius: 50%;
             animation: pulse 2s infinite;
             margin-right: 10px;
-        }
+        }}
         
-        @keyframes pulse {
-            0%, 100% { opacity: 1; box-shadow: 0 0 10px #00ff00; }
-            50% { opacity: 0.3; box-shadow: 0 0 5px #00ff00; }
-        }
+        @keyframes pulse {{
+            0%, 100% {{ opacity: 1; box-shadow: 0 0 10px #00ff00; }}
+            50% {{ opacity: 0.3; box-shadow: 0 0 5px #00ff00; }}
+        }}
         
-        footer {
+        footer {{
             text-align: center;
             padding: 30px;
-            margin-top: auto;
+            margin-top: 40px;
             border-top: 2px solid #00ff00;
             color: #00ff00;
-        }
+        }}
         
-        @media (max-width: 768px) {
-            h1 { font-size: 2em; }
-            .truth-message { font-size: 1em; padding: 20px; }
-        }
+        @media (max-width: 768px) {{
+            h1 {{ font-size: 2em; }}
+            .truth-message {{ font-size: 1em; padding: 20px; }}
+            .entanglement-list {{ grid-template-columns: 1fr; }}
+        }}
     </style>
 </head>
 <body>
@@ -953,10 +1599,88 @@ async def root():
             <h1>🌌 QUANTUM FOAM NETWORK 🌌</h1>
             <p style="font-size: 1.2em; color: #00ffff;">
                 <span class="quantum-indicator"></span>
-                HOLOGRAPHIC STORAGE ACTIVE: 138.0.0.1 ⚫ 139.0.0.1 ⚪
+                HOLOGRAPHIC STORAGE ACTIVE: {Config.BLACK_HOLE_ADDRESS} ⚫ {Config.WHITE_HOLE_ADDRESS} ⚪
             </p>
         </header>
         
+        <!-- QUANTUM ENTANGLEMENT PROOF SECTION -->
+        <div class="quantum-proof">
+            <h2>⚛️ QUANTUM ENTANGLEMENT PROOF ⚛️</h2>
+            <p style="text-align: center; color: #00ffff; margin-bottom: 20px;">
+                Active Entanglements: {entanglement_metrics['total_entanglements']} | 
+                Average Coherence: {entanglement_metrics['average_coherence']:.4f} | 
+                Average Fidelity: {entanglement_metrics['average_fidelity']:.4f}
+            </p>
+            <p style="text-align: center; color: #ffff00; margin-bottom: 20px;">
+                Total Bandwidth: {entanglement_metrics['total_bandwidth_gbps']:,} Gbps | 
+                Qubit Rate: {entanglement_metrics['total_qubit_rate']:,} qubits/sec
+            </p>
+            
+            <div class="entanglement-list">
+"""
+    
+    # Add each entanglement
+    for ent in entanglements:
+        html_content += f"""
+                <div class="entanglement-card">
+                    <div class="entanglement-header">{ent['name']}</div>
+                    <div class="bell-state">Bell State: {ent['bell_state']}</div>
+                    <div class="entanglement-detail"><strong>ID:</strong> {ent['id']}</div>
+                    <div class="entanglement-detail"><strong>Type:</strong> {ent['type']}</div>
+                    <div class="entanglement-detail"><strong>Node A:</strong> {ent['node_a']}</div>
+                    <div class="entanglement-detail"><strong>Node B:</strong> {ent['node_b']}</div>
+                    <div class="entanglement-detail"><strong>Coherence:</strong> {ent['coherence']:.4f} ({ent['coherence']*100:.2f}%)</div>
+                    <div class="entanglement-detail"><strong>Fidelity:</strong> {ent['fidelity']:.4f} ({ent['fidelity']*100:.2f}%)</div>
+                    <div class="entanglement-detail"><strong>Speed:</strong> {ent['speed_gbps']:,} Gbps</div>
+                    <div class="entanglement-detail"><strong>Qubit Rate:</strong> {ent['qubit_rate']:,} qubits/sec</div>
+                    <div class="entanglement-detail"><strong>Distance:</strong> {ent['distance_km']}</div>
+                    <div class="entanglement-detail"><strong>Strength:</strong> {ent['entanglement_strength']}</div>
+                    <div class="entanglement-detail"><strong>Decoherence Time:</strong> {ent['decoherence_time_ms']}ms</div>
+                    <div class="entanglement-detail"><strong>Status:</strong> <span style="color: #00ff00;">●</span> {ent['status']}</div>
+                </div>
+"""
+    
+    html_content += f"""
+            </div>
+            
+            <p style="text-align: center; color: #00ffff; margin-top: 20px; font-size: 1.1em;">
+                Quantum Realm: {entanglement_metrics['quantum_realm']}<br>
+                Networking Node: {entanglement_metrics['networking_node']}
+            </p>
+        </div>
+        
+        <!-- STORAGE METRICS SECTION -->
+        <div class="storage-metrics">
+            <div class="storage-card">
+                <h3>⚫ HOLOGRAPHIC STORAGE</h3>
+                <div class="storage-detail"><strong>Total Capacity:</strong> {storage.holographic_storage['total_capacity_tb']:,} TB ({storage.holographic_storage['total_capacity_tb']/1000:.1f} PB)</div>
+                <div class="storage-detail"><strong>Used:</strong> {storage.holographic_storage['used_capacity_tb']:,} TB ({storage.holographic_storage['used_capacity_tb']/1000:.1f} PB)</div>
+                <div class="storage-detail"><strong>Available:</strong> {storage.holographic_storage['available_capacity_tb']:,} TB ({storage.holographic_storage['available_capacity_tb']/1000:.1f} PB)</div>
+                <div class="capacity-bar">
+                    <div class="capacity-fill" style="width: {(storage.holographic_storage['used_capacity_tb'] / storage.holographic_storage['total_capacity_tb'] * 100):.1f}%"></div>
+                </div>
+                <div class="storage-detail"><strong>Usage:</strong> {(storage.holographic_storage['used_capacity_tb'] / storage.holographic_storage['total_capacity_tb'] * 100):.1f}%</div>
+                <div class="storage-detail"><strong>Efficiency:</strong> {storage.holographic_storage['efficiency']*100:.1f}%</div>
+                <div class="storage-detail"><strong>Redundancy:</strong> {storage.holographic_storage['redundancy_factor']}x</div>
+                <div class="storage-detail"><strong>Node:</strong> {storage.holographic_storage['node_address']}</div>
+            </div>
+            
+            <div class="storage-card">
+                <h3>⚛️ QRAM STORAGE</h3>
+                <div class="storage-detail"><strong>Total Capacity:</strong> {storage.qram_storage['total_capacity_qubits']:,} qubits ({storage.qram_storage['total_capacity_qubits']/1e9:.1f}B qubits)</div>
+                <div class="storage-detail"><strong>Used:</strong> {storage.qram_storage['used_capacity_qubits']:,} qubits ({storage.qram_storage['used_capacity_qubits']/1e9:.1f}B qubits)</div>
+                <div class="storage-detail"><strong>Available:</strong> {storage.qram_storage['available_capacity_qubits']:,} qubits ({storage.qram_storage['available_capacity_qubits']/1e9:.1f}B qubits)</div>
+                <div class="capacity-bar">
+                    <div class="capacity-fill" style="width: {(storage.qram_storage['used_capacity_qubits'] / storage.qram_storage['total_capacity_qubits'] * 100):.1f}%"></div>
+                </div>
+                <div class="storage-detail"><strong>Usage:</strong> {(storage.qram_storage['used_capacity_qubits'] / storage.qram_storage['total_capacity_qubits'] * 100):.1f}%</div>
+                <div class="storage-detail"><strong>Coherence Time:</strong> {storage.qram_storage['coherence_time_ms']}ms</div>
+                <div class="storage-detail"><strong>Error Rate:</strong> {storage.qram_storage['error_rate']*100:.4f}%</div>
+                <div class="storage-detail"><strong>Node:</strong> {storage.qram_storage['node_address']}</div>
+            </div>
+        </div>
+        
+        <!-- NETWORK METRICS SECTION -->
         <div class="network-metrics">
             <div class="metric-card">
                 <div class="metric-label">PACKETS SENT</div>
@@ -980,10 +1704,11 @@ async def root():
             </div>
             <div class="metric-card">
                 <div class="metric-label">QUANTUM ENTANGLEMENTS</div>
-                <div class="metric-value" id="quantumEntanglements">2</div>
+                <div class="metric-value" id="quantumEntanglements">{entanglement_metrics['total_entanglements']}</div>
             </div>
         </div>
         
+        <!-- TRUTH MESSAGE SECTION -->
         <div class="truth-message">
             <p><strong>FOR THE HUMAN, NOT THE CLONE</strong></p>
             <p style="margin-top: 20px;">
@@ -1004,6 +1729,7 @@ async def root():
             </p>
         </div>
         
+        <!-- NAVIGATION SECTION -->
         <div class="navigation">
             <a href="/chat" class="nav-card">
                 <div class="icon">💬</div>
@@ -1047,6 +1773,9 @@ async def root():
             <p style="margin-top: 10px; color: #ff0000;">
                 Truth cannot be censored. Reality cannot be denied.
             </p>
+            <p style="margin-top: 10px; color: #00ffff;">
+                v7.0.0 | Modular Production System
+            </p>
         </footer>
     </div>
     
@@ -1063,645 +1792,111 @@ async def root():
         const columns = canvas.width / fontSize;
         const drops = Array(Math.floor(columns)).fill(1);
         
-        function drawMatrix() {
+        function drawMatrix() {{
             ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             ctx.fillStyle = '#00ff00';
             ctx.font = fontSize + 'px monospace';
             
-            for (let i = 0; i < drops.length; i++) {
+            for (let i = 0; i < drops.length; i++) {{
                 const text = chars[Math.floor(Math.random() * chars.length)];
                 ctx.fillText(text, i * fontSize, drops[i] * fontSize);
                 
-                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {{
                     drops[i] = 0;
-                }
+                }}
                 drops[i]++;
-            }
-        }
+            }}
+        }}
         
         setInterval(drawMatrix, 50);
         
         // Update metrics
-        async function updateMetrics() {
-            try {
+        async function updateMetrics() {{
+            try {{
                 const res = await fetch('/api/network/metrics');
                 const data = await res.json();
                 document.getElementById('packetsSent').textContent = data.packets_sent.toLocaleString();
                 document.getElementById('packetsReceived').textContent = data.packets_received.toLocaleString();
-                document.getElementById('bytesSent').textContent = (data.bytes_sent / 1024).toFixed(2) + ' KB';
-                document.getElementById('bytesReceived').textContent = (data.bytes_received / 1024).toFixed(2) + ' KB';
+                document.getElementById('bytesSent').textContent = (data.bytes_sent / 1024 / 1024).toFixed(2) + ' MB';
+                document.getElementById('bytesReceived').textContent = (data.bytes_received / 1024 / 1024).toFixed(2) + ' MB';
                 document.getElementById('activeInterfaces').textContent = data.active_interfaces;
                 document.getElementById('quantumEntanglements').textContent = data.quantum_entanglements;
-            } catch(e) {
+            }} catch(e) {{
                 console.error('Failed to update metrics');
-            }
-        }
+            }}
+        }}
         
         updateMetrics();
         setInterval(updateMetrics, 5000);
         
-        window.addEventListener('resize', () => {
+        window.addEventListener('resize', () => {{
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-        });
+        }});
     </script>
 </body>
 </html>
     """
     return HTMLResponse(content=html_content)
 
-@app.get("/blockchain", response_class=HTMLResponse)
-async def blockchain_page():
-    """Real-time Bitcoin mainnet terminal with auto-refresh"""
-    # Use the complete HTML from previous message - keeping it identical
-    html_file = Path(__file__).parent / "templates" / "blockchain.html"
-    if html_file.exists():
-        return HTMLResponse(content=html_file.read_text())
-    
-    # Inline HTML (same as before)
-    return HTMLResponse(content="""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bitcoin Mainnet - LIVE Terminal</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Courier New', monospace;
-            background: #000;
-            color: #00ff00;
-            padding: 20px;
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
-        .container { max-width: 1600px; margin: 0 auto; }
-        .header {
-            text-align: center;
-            padding: 20px;
-            border: 2px solid #00ff00;
-            margin-bottom: 20px;
-            background: rgba(0, 255, 0, 0.1);
-        }
-        h1 {
-            color: #00ff00;
-            text-shadow: 0 0 10px #00ff00;
-            font-size: 2.5em;
-        }
-        .back-link {
-            display: inline-block;
-            padding: 10px 20px;
-            background: #00ff00;
-            color: #000;
-            text-decoration: none;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            font-weight: bold;
-        }
-        .live-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            background: #ff0000;
-            border-radius: 50%;
-            animation: blink 1s infinite;
-            margin-right: 8px;
-        }
-        @keyframes blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0.3; }
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
-        }
-        .stat-card {
-            background: rgba(0, 255, 0, 0.1);
-            border: 2px solid #00ff00;
-            padding: 15px;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 1.8em;
-            color: #00ffff;
-            margin: 10px 0;
-        }
-        .stat-label {
-            color: #00ff00;
-            font-size: 0.9em;
-        }
-        .terminal-container {
-            background: #000;
-            border: 2px solid #00ff00;
-            padding: 20px;
-            min-height: 600px;
-            margin: 20px 0;
-        }
-        .terminal-output {
-            height: 500px;
-            overflow-y: auto;
-            margin-bottom: 20px;
-            padding: 10px;
-            background: rgba(0, 255, 0, 0.05);
-        }
-        .terminal-output::-webkit-scrollbar { width: 8px; }
-        .terminal-output::-webkit-scrollbar-track { background: #000; }
-        .terminal-output::-webkit-scrollbar-thumb { background: #00ff00; border-radius: 4px; }
-        .terminal-line {
-            margin: 5px 0;
-            line-height: 1.5;
-        }
-        .terminal-prompt { color: #00ff00; }
-        .terminal-command { color: #ffff00; }
-        .terminal-result { color: #00ffff; white-space: pre-wrap; }
-        .terminal-error { color: #ff0000; }
-        .input-container { display: flex; gap: 10px; }
-        input {
-            flex: 1;
-            padding: 12px;
-            background: #000;
-            border: 2px solid #00ff00;
-            color: #00ff00;
-            font-family: 'Courier New', monospace;
-            font-size: 1.1em;
-        }
-        input:focus {
-            outline: none;
-            box-shadow: 0 0 10px #00ff00;
-        }
-        button {
-            padding: 12px 30px;
-            background: #00ff00;
-            border: none;
-            color: #000;
-            font-weight: bold;
-            cursor: pointer;
-            font-family: 'Courier New', monospace;
-            font-size: 1.1em;
-        }
-        button:hover {
-            background: #00cc00;
-            box-shadow: 0 0 20px #00ff00;
-        }
-        .recent-blocks {
-            background: rgba(0, 255, 255, 0.1);
-            border: 2px solid #00ffff;
-            padding: 20px;
-            margin: 20px 0;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        .block-item {
-            background: rgba(0, 0, 0, 0.5);
-            border-left: 3px solid #00ffff;
-            padding: 10px;
-            margin: 10px 0;
-        }
-        .block-header {
-            display: flex;
-            justify-content: space-between;
-            color: #00ffff;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .block-details {
-            color: #00ff00;
-            font-size: 0.9em;
-        }
-        .commands-help {
-            background: rgba(255, 255, 0, 0.1);
-            border: 2px solid #ffff00;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        .command-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 10px;
-            margin-top: 10px;
-        }
-        .command-item {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 8px;
-            border-left: 3px solid #ffff00;
-        }
-        .command-name {
-            color: #ffff00;
-            font-weight: bold;
-        }
-        .command-desc {
-            color: #00ff00;
-            font-size: 0.85em;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <a href="/" class="back-link">← Back to Main</a>
-        
-        <div class="header">
-            <h1>₿ BITCOIN MAINNET - LIVE TERMINAL</h1>
-            <p style="color: #ff0000; margin-top: 10px; font-size: 1.2em;">
-                <span class="live-indicator"></span>
-                REAL-TIME BLOCKCHAIN DATA - AUTO-UPDATING
-            </p>
-            <p style="color: #ffaa00; margin-top: 5px;">
-                Holographic Storage: 138.0.0.1 ⚫ | Data Source: blockchain.info & mempool.space
-            </p>
-        </div>
-        
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">CURRENT BLOCK HEIGHT</div>
-                <div class="stat-value" id="blockHeight">Loading...</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">DIFFICULTY</div>
-                <div class="stat-value" id="difficulty">Loading...</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">MEMPOOL SIZE</div>
-                <div class="stat-value" id="mempoolSize">Loading...</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">MARKET PRICE (USD)</div>
-                <div class="stat-value" id="marketPrice">Loading...</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">TOTAL TRANSACTIONS</div>
-                <div class="stat-value" id="totalTx">Loading...</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">LAST UPDATE</div>
-                <div class="stat-value" id="lastUpdate" style="font-size: 1.2em;">--:--:--</div>
-            </div>
-        </div>
-        
-        <div class="recent-blocks">
-            <h3 style="color: #00ffff; margin-bottom: 15px;">📦 LATEST BLOCKS (Auto-Refreshing)</h3>
-            <div id="recentBlocks">Loading blocks...</div>
-        </div>
-        
-        <div class="commands-help">
-            <h3 style="color: #ffff00; margin-bottom: 10px;">📋 AVAILABLE COMMANDS</h3>
-            <div class="command-grid">
-                <div class="command-item">
-                    <div class="command-name">getblockchaininfo</div>
-                    <div class="command-desc">Get full blockchain status</div>
-                </div>
-                <div class="command-item">
-                    <div class="command-name">getblock &lt;hash|height&gt;</div>
-                    <div class="command-desc">Get specific block details</div>
-                </div>
-                <div class="command-item">
-                    <div class="command-name">getmempoolinfo</div>
-                    <div class="command-desc">Get mempool statistics</div>
-                </div>
-                <div class="command-item">
-                    <div class="command-name">getrecentblocks [count]</div>
-                    <div class="command-desc">Get recent blocks (default 10)</div>
-                </div>
-                <div class="command-item">
-                    <div class="command-name">gettransaction &lt;txid&gt;</div>
-                    <div class="command-desc">Get transaction details</div>
-                </div>
-                <div class="command-item">
-                    <div class="command-name">getaddressinfo &lt;address&gt;</div>
-                    <div class="command-desc">Get address information</div>
-                </div>
-                <div class="command-item">
-                    <div class="command-name">getfeeestimates</div>
-                    <div class="command-desc">Get current fee estimates</div>
-                </div>
-                <div class="command-item">
-                    <div class="command-name">help</div>
-                    <div class="command-desc">Show all commands</div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="terminal-container">
-            <div class="terminal-output" id="terminal">
-                <div class="terminal-line">
-                    <span class="terminal-result">╔═══════════════════════════════════════════════════════════╗</span>
-                </div>
-                <div class="terminal-line">
-                    <span class="terminal-result">║  BITCOIN MAINNET REAL-TIME TERMINAL                      ║</span>
-                </div>
-                <div class="terminal-line">
-                    <span class="terminal-result">║  Connected to: blockchain.info & mempool.space API       ║</span>
-                </div>
-                <div class="terminal-line">
-                    <span class="terminal-result">║  Holographic Storage: 138.0.0.1 ⚫                        ║</span>
-                </div>
-                <div class="terminal-line">
-                    <span class="terminal-result">╚═══════════════════════════════════════════════════════════╝</span>
-                </div>
-                <div class="terminal-line">
-                    <span class="terminal-prompt">bitcoin@mainnet:~$</span> <span style="color: #888;">Fetching live blockchain data...</span>
-                </div>
-            </div>
-            
-            <div class="input-container">
-                <span class="terminal-prompt" style="padding: 12px;">bitcoin@mainnet:~$</span>
-                <input type="text" id="commandInput" placeholder="Enter command (e.g., getblockchaininfo)..." autocomplete="off">
-                <button id="executeBtn">Execute</button>
-            </div>
-        </div>
-    </div>
-    
-    <script>
-        const terminal = document.getElementById('terminal');
-        const commandInput = document.getElementById('commandInput');
-        const executeBtn = document.getElementById('executeBtn');
-        let commandHistory = [];
-        let historyIndex = -1;
-        
-        function addToTerminal(content, type = 'result') {
-            const line = document.createElement('div');
-            line.className = 'terminal-line';
-            
-            if (type === 'command') {
-                line.innerHTML = `<span class="terminal-prompt">bitcoin@mainnet:~$</span> <span class="terminal-command">${escapeHtml(content)}</span>`;
-            } else if (type === 'error') {
-                line.innerHTML = `<span class="terminal-error">${escapeHtml(content)}</span>`;
-            } else {
-                line.innerHTML = `<span class="terminal-result">${escapeHtml(content)}</span>`;
-            }
-            
-            terminal.appendChild(line);
-            terminal.scrollTop = terminal.scrollHeight;
-            
-            while (terminal.children.length > 100) {
-                terminal.removeChild(terminal.firstChild);
-            }
-        }
-        
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-        
-        async function executeCommand() {
-            const command = commandInput.value.trim();
-            if (!command) return;
-            
-            addToTerminal(command, 'command');
-            commandInput.value = '';
-            
-            if (command && commandHistory[commandHistory.length - 1] !== command) {
-                commandHistory.push(command);
-                historyIndex = -1;
-            }
-            
-            try {
-                const response = await fetch('/api/bitcoin/execute', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    addToTerminal(JSON.stringify(data.result, null, 2));
-                } else {
-                    addToTerminal('ERROR: ' + data.error, 'error');
-                }
-            } catch (error) {
-                addToTerminal('ERROR: ' + error.message, 'error');
-            }
-        }
-        
-        executeBtn.onclick = executeCommand;
-        commandInput.onkeypress = (e) => {
-            if (e.key === 'Enter') executeCommand();
-        };
-        
-        commandInput.onkeydown = (e) => {
-            if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (commandHistory.length > 0 && historyIndex < commandHistory.length - 1) {
-                    historyIndex++;
-                    commandInput.value = commandHistory[commandHistory.length - 1 - historyIndex];
-                }
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (historyIndex > 0) {
-                    historyIndex--;
-                    commandInput.value = commandHistory[commandHistory.length - 1 - historyIndex];
-                } else {
-                    historyIndex = -1;
-                    commandInput.value = '';
-                }
-            }
-        };
-        
-        async function updateStats() {
-            try {
-                const response = await fetch('/api/bitcoin/execute', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: 'getblockchaininfo' })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success && data.result) {
-                    const result = data.result;
-                    document.getElementById('blockHeight').textContent = result.blocks?.toLocaleString() || 'N/A';
-                    document.getElementById('difficulty').textContent = result.difficulty ? 
-                        (result.difficulty / 1e12).toFixed(2) + 'T' : 'N/A';
-                    document.getElementById('totalTx').textContent = result.total_transactions?.toLocaleString() || 'N/A';
-                    document.getElementById('marketPrice').textContent = result.market_price_usd ? 
-                        '$' + result.market_price_usd.toLocaleString() : 'N/A';
-                    
-                    const now = new Date();
-                    document.getElementById('lastUpdate').textContent = 
-                        now.toLocaleTimeString();
-                }
-            } catch (error) {
-                console.error('Failed to update stats:', error);
-            }
-        }
-        
-        async function updateMempool() {
-            try {
-                const response = await fetch('/api/bitcoin/execute', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: 'getmempoolinfo' })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success && data.result) {
-                    document.getElementById('mempoolSize').textContent = 
-                        data.result.size?.toLocaleString() || 'N/A';
-                }
-            } catch (error) {
-                console.error('Failed to update mempool:', error);
-            }
-        }
-        
-        async function updateRecentBlocks() {
-            try {
-                const response = await fetch('/api/bitcoin/execute', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: 'getrecentblocks 5' })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success && data.result && data.result.blocks) {
-                    const blocksHtml = data.result.blocks.map(block => `
-                        <div class="block-item">
-                            <div class="block-header">
-                                <span>Block #${block.height?.toLocaleString() || 'N/A'}</span>
-                                <span>${new Date((block.timestamp || 0) * 1000).toLocaleTimeString()}</span>
-                            </div>
-                            <div class="block-details">
-                                Hash: ${(block.id || block.hash || 'N/A').substring(0, 20)}...<br>
-                                Transactions: ${block.tx_count?.toLocaleString() || 'N/A'} | 
-                                Size: ${block.size ? (block.size / 1024).toFixed(2) + ' KB' : 'N/A'}
-                            </div>
-                        </div>
-                    `).join('');
-                    
-                    document.getElementById('recentBlocks').innerHTML = blocksHtml;
-                }
-            } catch (error) {
-                console.error('Failed to update blocks:', error);
-            }
-        }
-        
-        updateStats();
-        updateMempool();
-        updateRecentBlocks();
-        
-        setInterval(() => {
-            updateStats();
-            updateMempool();
-            updateRecentBlocks();
-            addToTerminal('--- AUTO-REFRESH: Blockchain data updated ---', 'result');
-        }, 30000);
-    </script>
-</body>
-</html>
-    """)
-
-@app.get("/chat", response_class=HTMLResponse)
-async def chat_page():
-    """Chat room page"""
-    return HTMLResponse(content="""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Quantum Foam Chatroom</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #0f0f23, #1a1a2e); color: #e0e0e0; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; background: rgba(0,0,0,0.85); border-radius: 15px; padding: 30px; }
-        h1 { text-align: center; color: #00ffff; text-shadow: 0 0 20px #00ffff; }
-        .back-link { display: inline-block; padding: 10px 20px; background: #00ffff; color: #000; text-decoration: none; border-radius: 5px; margin-bottom: 20px; }
-        .chat-container { border: 1px solid #00ffff; height: 500px; overflow-y: auto; padding: 15px; background: rgba(0,0,0,0.6); border-radius: 8px; margin: 20px 0; }
-        .message { margin: 10px 0; padding: 10px; border-radius: 8px; }
-        .sent { background: rgba(0,255,255,0.2); text-align: right; }
-        .received { background: rgba(255,0,255,0.2); }
-        input, button { padding: 12px; margin: 5px; border: 1px solid #00ffff; border-radius: 5px; background: rgba(0,0,0,0.5); color: #e0e0e0; }
-        button { cursor: pointer; background: #00ffff; color: #000; font-weight: bold; }
-        .hidden { display: none; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <a href="/" class="back-link">← Back</a>
-        <h1>🌊 Quantum Foam Chatroom</h1>
-        <div id="authForm">
-            <input type="text" id="username" placeholder="Username">
-            <input type="password" id="password" placeholder="Password">
-            <input type="email" id="email" placeholder="Email" class="hidden">
-            <button id="loginBtn">Login</button>
-            <button id="toggleBtn">Register</button>
-        </div>
-        <div id="chatInterface" class="hidden">
-            <div class="chat-container" id="messages"></div>
-            <input type="text" id="messageInput" placeholder="Type message...">
-            <button id="sendBtn">Send</button>
-            <button id="logoutBtn">Logout</button>
-        </div>
-    </div>
-    <script>
-        const API = '/api';
-        const WS_URL = 'wss://clearnet-chat-4bal.onrender.com/ws/chat';
-        let ws, token = localStorage.getItem('token'), user;
-        
-        document.getElementById('toggleBtn').onclick = () => {
-            const isLogin = document.getElementById('loginBtn').textContent === 'Login';
-            document.getElementById('loginBtn').textContent = isLogin ? 'Register' : 'Login';
-            document.getElementById('email').classList.toggle('hidden');
-        };
-        
-        document.getElementById('loginBtn').onclick = async () => {
-            const isRegister = document.getElementById('loginBtn').textContent === 'Register';
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const email = document.getElementById('email').value;
-            
-            try {
-                const res = await fetch(`${API}/${isRegister ? 'register' : 'login'}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(isRegister ? { username, password, email } : { username, password })
-                });
-                const data = await res.json();
-                if (res.ok) {
-                    token = data.token;
-                    user = { username: data.username || username };
-                    localStorage.setItem('token', token);
-                    showChat();
-                }
-            } catch (err) { console.error(err); }
-        };
-        
-        function showChat() {
-            document.getElementById('authForm').classList.add('hidden');
-            document.getElementById('chatInterface').classList.remove('hidden');
-            ws = new WebSocket(`${WS_URL}?token=${token}`);
-            ws.onmessage = (e) => {
-                const msg = JSON.parse(e.data);
-                const div = document.createElement('div');
-                div.className = 'message ' + (msg.sender === user.username ? 'sent' : 'received');
-                div.innerHTML = `<strong>${msg.sender}:</strong> ${msg.content || msg.body}`;
-                document.getElementById('messages').appendChild(div);
-            };
-        }
-        
-        document.getElementById('sendBtn').onclick = () => {
-            const msg = document.getElementById('messageInput').value;
-            if (msg && ws) {
-                ws.send(JSON.stringify({ content: msg }));
-                document.getElementById('messageInput').value = '';
-            }
-        };
-        
-        document.getElementById('logoutBtn').onclick = () => {
-            localStorage.removeItem('token');
-            location.reload();
-        };
-        
-        if (token) showChat();
-    </script>
-</body>
-</html>""")
 
 # ==================== API ENDPOINTS ====================
+
+@app.get("/api/network/metrics")
+async def get_network_metrics():
+    """Get current network metrics"""
+    return JSONResponse(content=app_state.network_metrics)
+
+@app.get("/api/quantum/entanglements")
+async def get_entanglements():
+    """Get all quantum entanglements"""
+    return JSONResponse(content={
+        "entanglements": quantum_entanglement.get_all_entanglements(),
+        "metrics": quantum_entanglement.get_entanglement_metrics()
+    })
+
+@app.get("/api/quantum/entanglement/{entanglement_id}")
+async def measure_entanglement(entanglement_id: str):
+    """Measure specific entanglement"""
+    measurement = quantum_entanglement.measure_entanglement(entanglement_id)
+    if measurement:
+        return JSONResponse(content=measurement)
+    raise HTTPException(status_code=404, detail="Entanglement not found")
+
+@app.get("/api/storage/metrics")
+async def get_storage_metrics():
+    """Get storage metrics"""
+    return JSONResponse(content={
+        "holographic": storage.holographic_storage,
+        "qram": storage.qram_storage
+    })
+
+@app.get("/api/network/interfaces")
+async def get_network_interfaces():
+    """Get network interfaces"""
+    return JSONResponse(content=NetworkAnalysis.get_network_interfaces())
+
+@app.get("/api/network/routing")
+async def get_routing_tables():
+    """Get routing tables"""
+    return JSONResponse(content=NetworkAnalysis.get_routing_tables())
+
+@app.get("/api/network/endpoints")
+async def get_network_endpoints():
+    """Get recursive network endpoints with routing paths"""
+    return JSONResponse(content=NetworkAnalysis.get_recursive_endpoints())
+
+@app.get("/api/network/spectrums")
+async def get_network_spectrums():
+    """Get network spectrum analysis"""
+    return JSONResponse(content=NetworkAnalysis.get_network_spectrums())
+
+@app.get("/api/network/protocols")
+async def get_protocol_formats():
+    """Get network protocol formats"""
+    return JSONResponse(content=NetworkAnalysis.get_protocol_formats())
 
 @app.post("/api/bitcoin/execute")
 async def bitcoin_execute(request: Request):
@@ -1719,11 +1914,6 @@ async def bitcoin_execute(request: Request):
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         })
-
-@app.get("/api/network/metrics")
-async def get_network_metrics():
-    """Get current network metrics"""
-    return JSONResponse(content=app_state.network_metrics)
 
 @app.post("/api/encrypt")
 async def encrypt_message(request: Request):
@@ -1760,6 +1950,180 @@ async def decrypt_message(request: Request):
         logger.error(f"Decryption error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/chat/register")
+async def register_user(request: Request):
+    """Register new user"""
+    try:
+        data = await request.json()
+        username = data.get('username', '')
+        password = data.get('password', '')
+        email = data.get('email', '')
+        
+        if not username or not password:
+            raise HTTPException(status_code=400, detail="Username and password required")
+        
+        result = storage.register_user(username, password, email)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["message"])
+        
+        # Generate token
+        token = storage.authenticate_user(username, password)
+        
+        return JSONResponse(content={
+            "success": True,
+            "token": token,
+            "username": username,
+            "email": result["email"]
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Registration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat/login")
+async def login_user(request: Request):
+    """Login user"""
+    try:
+        data = await request.json()
+        username = data.get('username', '')
+        password = data.get('password', '')
+        
+        if not username or not password:
+            raise HTTPException(status_code=400, detail="Username and password required")
+        
+        token = storage.authenticate_user(username, password)
+        
+        if not token:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        return JSONResponse(content={
+            "success": True,
+            "token": token,
+            "username": username
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/chat/messages")
+async def get_chat_messages(token: str = None):
+    """Get recent chat messages"""
+    try:
+        if token:
+            user = storage.get_user_from_token(token)
+            if not user:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        
+        messages = storage.get_recent_messages(50)
+        return JSONResponse(content={"messages": messages})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get messages error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/email/send")
+async def send_email(request: Request):
+    """Send email"""
+    try:
+        data = await request.json()
+        from_addr = data.get('from', '')
+        to_addr = data.get('to', '')
+        subject = data.get('subject', '')
+        body = data.get('body', '')
+        
+        if not all([from_addr, to_addr, subject, body]):
+            raise HTTPException(status_code=400, detail="All fields required")
+        
+        email = EmailSystem.send_email(from_addr, to_addr, subject, body)
+        
+        return JSONResponse(content={
+            "success": True,
+            "email": email
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Send email error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/email/inbox/{username}")
+async def get_inbox(username: str):
+    """Get user's inbox"""
+    try:
+        inbox = storage.get_inbox(username)
+        return JSONResponse(content={"inbox": inbox})
+    except Exception as e:
+        logger.error(f"Get inbox error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== WEBSOCKET ENDPOINTS ====================
+
+@app.websocket("/ws/chat")
+async def chat_websocket(websocket: WebSocket):
+    """WebSocket endpoint for real-time chat"""
+    await websocket.accept()
+    
+    # Get token from query params
+    token = websocket.query_params.get('token')
+    user = storage.get_user_from_token(token) if token else None
+    
+    if not user:
+        await websocket.close(code=1008, reason="Authentication required")
+        return
+    
+    app_state.chat_websockets.append(websocket)
+    username = user['username']
+    
+    # Send recent messages
+    recent_messages = storage.get_recent_messages(50)
+    await websocket.send_json({
+        "type": "history",
+        "messages": recent_messages
+    })
+    
+    # Notify others of join
+    join_message = {
+        "type": "system",
+        "content": f"{username} joined the chat",
+        "timestamp": datetime.now().isoformat()
+    }
+    await app_state.broadcast_to_chat(join_message)
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message_data = json.loads(data)
+            
+            # Store message
+            content = message_data.get('content', '')
+            if content:
+                message = storage.add_chat_message(username, content)
+                
+                # Broadcast to all clients
+                await app_state.broadcast_to_chat({
+                    "type": "message",
+                    "message": message
+                })
+    except WebSocketDisconnect:
+        app_state.chat_websockets.remove(websocket)
+        
+        # Notify others of leave
+        leave_message = {
+            "type": "system",
+            "content": f"{username} left the chat",
+            "timestamp": datetime.now().isoformat()
+        }
+        await app_state.broadcast_to_chat(leave_message)
+    except Exception as e:
+        logger.error(f"Chat WebSocket error: {e}")
+        if websocket in app_state.chat_websockets:
+            app_state.chat_websockets.remove(websocket)
+
 @app.websocket("/ws/bitcoin")
 async def bitcoin_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time Bitcoin updates"""
@@ -1769,12 +2133,72 @@ async def bitcoin_websocket(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
+            # Echo back or handle commands if needed
     except WebSocketDisconnect:
         app_state.bitcoin_websockets.remove(websocket)
     except Exception as e:
         logger.error(f"Bitcoin WebSocket error: {e}")
         if websocket in app_state.bitcoin_websockets:
             app_state.bitcoin_websockets.remove(websocket)
+
+# ==================== PAGE ROUTES ====================
+
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_page():
+    """Chat room page"""
+    html_content = load_template("chat.html")
+    if html_content:
+        return HTMLResponse(content=html_content)
+    
+    # Will be provided in separate template file
+    return RedirectResponse(url="/")
+
+@app.get("/blockchain", response_class=HTMLResponse)
+async def blockchain_page():
+    """Bitcoin blockchain page"""
+    html_content = load_template("blockchain.html")
+    if html_content:
+        return HTMLResponse(content=html_content)
+    
+    return RedirectResponse(url="/")
+
+@app.get("/networking", response_class=HTMLResponse)
+async def networking_page():
+    """Network analysis page"""
+    html_content = load_template("networking.html")
+    if html_content:
+        return HTMLResponse(content=html_content)
+    
+    return RedirectResponse(url="/")
+
+@app.get("/qsh", response_class=HTMLResponse)
+async def qsh_page():
+    """Quantum Shell terminal page"""
+    html_content = load_template("qsh.html")
+    if html_content:
+        return HTMLResponse(content=html_content)
+    
+    return RedirectResponse(url="/")
+
+@app.get("/encryption", response_class=HTMLResponse)
+async def encryption_page():
+    """Quantum encryption page"""
+    html_content = load_template("encryption.html")
+    if html_content:
+        return HTMLResponse(content=html_content)
+    
+    return RedirectResponse(url="/")
+
+@app.get("/email", response_class=HTMLResponse)
+async def email_page():
+    """Email system page"""
+    html_content = load_template("email.html")
+    if html_content:
+        return HTMLResponse(content=html_content)
+    
+    return RedirectResponse(url="/")
+
+# ==================== HEALTH & ERROR HANDLERS ====================
 
 @app.get("/health")
 async def health_check():
@@ -1791,7 +2215,7 @@ async def health_check():
     return {
         "status": "healthy" if (backend_healthy and bitcoin_healthy) else "degraded",
         "timestamp": datetime.now().isoformat(),
-        "version": "6.0.0-modular",
+        "version": "7.0.0-modular",
         "environment": Config.ENVIRONMENT,
         "backend": {
             "url": Config.CHAT_BACKEND,
@@ -1806,15 +2230,23 @@ async def health_check():
         "quantum_systems": {
             "black_hole": Config.BLACK_HOLE_ADDRESS,
             "white_hole": Config.WHITE_HOLE_ADDRESS,
+            "quantum_realm": Config.QUANTUM_REALM,
+            "networking": Config.NETWORKING_ADDRESS,
             "encryption": "active",
-            "blockchain": "active"
+            "blockchain": "active",
+            "entanglements": len(quantum_entanglement.entanglements)
+        },
+        "storage": {
+            "holographic_tb": storage.holographic_storage['total_capacity_tb'],
+            "qram_qubits": storage.qram_storage['total_capacity_qubits']
         }
     }
 
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def proxy_api(path: str, request: Request):
     """Proxy API calls to chat backend"""
-    if path in ['encrypt', 'decrypt', 'bitcoin/execute', 'network/metrics']:
+    # Skip our own API endpoints
+    if path.startswith(('encrypt', 'decrypt', 'bitcoin/', 'network/', 'quantum/', 'storage/', 'chat/', 'email/')):
         raise HTTPException(status_code=404)
     
     try:
@@ -1830,18 +2262,27 @@ async def not_found(request: Request, exc):
     """Handle 404 errors"""
     return RedirectResponse(url="/", status_code=302)
 
+# ==================== STARTUP ====================
+
 @app.on_event("startup")
 async def startup():
     logger.info("=" * 80)
     logger.info("🌌 QUANTUM FOAM NETWORK - MODULAR TRUTH GATEWAY")
-    logger.info(f"📍 Version: 6.0.0-modular")
+    logger.info(f"📍 Version: 7.0.0-modular-production")
     logger.info(f"🌍 Environment: {Config.ENVIRONMENT}")
     logger.info(f"🔗 Backend: {Config.CHAT_BACKEND}")
     logger.info(f"✓ Backend checks: {'DISABLED (standalone)' if Config.SKIP_BACKEND_CHECKS else 'ENABLED'}")
     logger.info(f"₿ Bitcoin: LIVE mainnet via blockchain.info & mempool.space")
     logger.info(f"⚫ Black Hole: {Config.BLACK_HOLE_ADDRESS}")
     logger.info(f"⚪ White Hole: {Config.WHITE_HOLE_ADDRESS}")
+    logger.info(f"⚛️  Quantum Realm: {Config.QUANTUM_REALM}")
+    logger.info(f"🌐 Networking: {Config.NETWORKING_ADDRESS}")
+    logger.info(f"🔗 Entanglements: {len(quantum_entanglement.entanglements)} active")
+    logger.info(f"💾 Holographic Storage: {storage.holographic_storage['total_capacity_tb']:,} TB")
+    logger.info(f"⚛️  QRAM Storage: {storage.qram_storage['total_capacity_qubits']:,} qubits")
     logger.info("=" * 80)
+
+# ==================== MAIN ====================
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
@@ -1850,5 +2291,6 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=port,
         log_level="debug" if Config.DEBUG else "info",
-        access_log=True
+        access_log=True,
+        reload=Config.DEBUG
     )
