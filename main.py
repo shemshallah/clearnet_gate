@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uvicorn
 import httpx
 import asyncio
@@ -48,6 +49,481 @@ class Config:
     SKIP_BACKEND_CHECKS = os.getenv("SKIP_BACKEND_CHECKS", "true").lower() == "true"
     MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
     TIMEOUT = int(os.getenv("TIMEOUT", "30"))
+    RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
+    BLACK_HOLE_ADDRESS = "138.0.0.1"
+    WHITE_HOLE_ADDRESS = "139.0.0.1"
+    QUANTUM_REALM = "quantum.realm.domain.dominion.foam.computer.alice"
+    NETWORKING_ADDRESS = "quantum.realm.domain.dominion.foam.computer.networking"
+    BITCOIN_UPDATE_INTERVAL = int(os.getenv("BITCOIN_UPDATE_INTERVAL", "30"))
+    BITCOIN_RPC_USER = os.getenv("BITCOIN_RPC_USER", "hackah")
+    BITCOIN_RPC_PASS = os.getenv("BITCOIN_RPC_PASS", "hackah")
+    HOLOGRAPHIC_CAPACITY_TB = 138000
+    QRAM_CAPACITY_QUBITS = 1000000000
+    TEMPLATES_DIR = Path(".")
+    STATIC_DIR = Path("static")
+    UPLOADS_DIR = Path("uploads")
+    DB_PATH = Path("quantum_foam.db")
+    ADMINISTRATOR_USERNAME = os.getenv("ADMINISTRATOR_USERNAME", "eaafb486-f288-4011-a11f-7d7fcc1d99d5")
+    ADMINISTRATOR_PASSWORD = os.getenv("ADMINISTRATOR_PASSWORD", "9f792277-5057-4642-bca0-97e778c5c7b9")
+
+Config.STATIC_DIR.mkdir(exist_ok=True)
+Config.UPLOADS_DIR.mkdir(exist_ok=True)
+
+# ==================== PQC LAMPORT SIGNATURE MODULE ====================
+def lamport_keygen(n=256):
+    sk = []
+    pk = []
+    for _ in range(n):
+        sk0 = os.urandom(32)
+        sk1 = os.urandom(32)
+        pk0 = hashlib.sha256(sk0).digest()
+        pk1 = hashlib.sha256(sk1).digest()
+        sk.append((sk0, sk1))
+        pk.append((pk0, pk1))
+    return sk, pk
+
+def lamport_sign(message: bytes, sk: list) -> bytes:
+    m_hash = hashlib.sha256(message).digest()
+    bits = [(m_hash[i // 8] >> (7 - (i % 8))) & 1 for i in range(256)]
+    sig = b''
+    for i, b in enumerate(bits):
+        sig += sk[i][b]
+    return sig
+
+def lamport_verify(message: bytes, sig: bytes, pk: list) -> bool:
+    m_hash = hashlib.sha256(message).digest()
+    bits = [(m_hash[i // 8] >> (7 - (i % 8))) & 1 for i in range(256)]
+    pos = 0
+    for i, b in enumerate(bits):
+        revealed = sig[pos:pos + 32]
+        pos += 32
+        expected_pk = pk[i][b]
+        if hashlib.sha256(revealed).digest() != expected_pk:
+            return False
+    return True
+
+try:
+    from dilithium import Dilithium2
+    DILITHIUM_AVAILABLE = True
+except ImportError:
+    DILITHIUM_AVAILABLE = False
+    class Dilithium2:
+        @staticmethod
+        def keygen():
+            return None, None
+        @staticmethod
+        def sign(msg, sk):
+            return b''
+        @staticmethod
+        def verify(msg, sig, pk):
+            return False
+
+# ==================== QUANTUM ENCRYPTION MODULE ====================
+def derive_key(address: str) -> bytes:
+    return hashlib.sha256(address.encode()).digest()
+
+BLACK_KEY = derive_key(Config.BLACK_HOLE_ADDRESS)
+WHITE_KEY = derive_key(Config.WHITE_HOLE_ADDRESS)
+WHITE_REV = WHITE_KEY[::-1]
+
+def pad(data: bytes, block_size: int = 64) -> bytes:
+    padding_len = block_size - (len(data) % block_size)
+    padding = bytes([padding_len] * padding_len)
+    return data + padding
+
+def unpad(data: bytes, block_size: int = 64) -> bytes:
+    if len(data) % block_size != 0:
+        raise ValueError("Invalid padding length")
+    padding_len = data[-1]
+    if padding_len == 0 or padding_len > block_size:
+        raise ValueError("Invalid padding length")
+    padding = data[-padding_len:]
+    if padding != bytes([padding_len] * padding_len):
+        raise ValueError("Invalid padding bytes")
+    return data[:-padding_len]
+
+def xor_bytes(data: bytes, key: bytes) -> bytes:
+    key_len = len(key)
+    return bytes(data[i] ^ key[i % key_len] for i in range(len(data)))
+
+def sha3_keystream(length: int, seed: bytes) -> bytes:
+    keystream = b''
+    h = hashlib.sha3_512()
+    counter = 0
+    while len(keystream) < length:
+        h.update(seed + counter.to_bytes(8, 'big'))
+        keystream += h.digest()
+        counter += 1
+    return keystream[:length]
+
+def quantum_encrypt(plaintext: str, depth: int = 3) -> Dict[str, Any]:
+    if depth < 1 or depth > 10:
+        raise ValueError("Depth must be between 1 and 10")
+    plain_bytes = plaintext.encode('utf-8')
+    nonce = os.urandom(16)
+    padded = pad(plain_bytes)
+    seed = BLACK_KEY + WHITE_KEY + nonce
+    current = padded
+    for layer in range(depth):
+        layer1 = xor_bytes(current, BLACK_KEY)
+        layer2 = xor_bytes(layer1, WHITE_REV)
+        layer_seed = seed + layer.to_bytes(1, 'big')
+        keystream = sha3_keystream(len(layer2), layer_seed)
+        current = xor_bytes(layer2, keystream)
+    ciphertext = current
+    sig_input = nonce + ciphertext + BLACK_KEY + WHITE_KEY
+    lamport_sk, lamport_pk = lamport_keygen()
+    lamport_sig = lamport_sign(sig_input, lamport_sk)
+    lamport_pk_serial = ','.join([base64.b64encode(p[0] + p[1]).decode() for p in lamport_pk])
+    lamport_sig_serial = base64.b64encode(lamport_sig).decode()
+    dil_pk, dil_sk = Dilithium2.keygen() if DILITHIUM_AVAILABLE else (None, None)
+    dil_sig = Dilithium2.sign(sig_input, dil_sk) if DILITHIUM_AVAILABLE and dil_sk else b''
+    dil_pk_serial = base64.b64encode(dil_pk).decode() if DILITHIUM_AVAILABLE and dil_pk else ''
+    dil_sig_serial = base64.b64encode(dil_sig).decode() if DILITHIUM_AVAILABLE and dil_sig else ''
+    sha3_sig = hashlib.sha3_512(sig_input).hexdigest()
+    ts = datetime.now().isoformat()
+    return {
+        'nonce': nonce.hex(),
+        'ciphertext': ciphertext.hex(),
+        'sha3_signature': sha3_sig,
+        'lamport_pk': lamport_pk_serial,
+        'lamport_sig': lamport_sig_serial,
+        'dilithium_pk': dil_pk_serial,
+        'dilithium_sig': dil_sig_serial,
+        'black_hole': Config.BLACK_HOLE_ADDRESS,
+        'white_hole': Config.WHITE_HOLE_ADDRESS,
+        'algorithm': f'QUANTUM-DUAL-HOLE-XOR-SHA3-LAMPORT-DILITHIUM-v5-depth-{depth}',
+        'timestamp': ts,
+        'depth': depth
+    }
+
+def quantum_decrypt(encrypted_data: Dict[str, Any]) -> str:
+    nonce_hex = encrypted_data['nonce']
+    ciphertext_hex = encrypted_data['ciphertext']
+    sha3_sig = encrypted_data.get('sha3_signature', '')
+    lamport_pk = encrypted_data.get('lamport_pk', '')
+    lamport_sig_serial = encrypted_data.get('lamport_sig', '')
+    dil_pk = encrypted_data.get('dilithium_pk', '')
+    dil_sig_serial = encrypted_data.get('dilithium_sig', '')
+    black_h = encrypted_data['black_hole']
+    white_h = encrypted_data['white_hole']
+    depth = encrypted_data['depth']
+    black_key = derive_key(black_h)
+    white_key = derive_key(white_h)
+    white_rev = white_key[::-1]
+    nonce = bytes.fromhex(nonce_hex)
+    sig_input = nonce + bytes.fromhex(ciphertext_hex) + black_key + white_key
+    computed_sha3 = hashlib.sha3_512(sig_input).hexdigest()
+    if sha3_sig != computed_sha3:
+        raise ValueError('SHA3 Signature mismatch')
+    if lamport_pk and lamport_sig_serial:
+        pk_bytes_list = [base64.b64decode(s) for s in lamport_pk.split(',')]
+        if len(pk_bytes_list) != 256:
+            raise ValueError('Invalid Lamport PK')
+        pk = [(b[:32], b[32:]) for b in pk_bytes_list]
+        lamport_sig = base64.b64decode(lamport_sig_serial)
+        if not lamport_verify(sig_input, lamport_sig, pk):
+            raise ValueError('Lamport Signature mismatch')
+    if dil_pk and dil_sig_serial and DILITHIUM_AVAILABLE:
+        pk = base64.b64decode(dil_pk)
+        sig = base64.b64decode(dil_sig_serial)
+        if not Dilithium2.verify(sig_input, sig, pk):
+            raise ValueError('Dilithium Signature mismatch')
+    ciphertext = bytes.fromhex(ciphertext_hex)
+    seed = black_key + white_key + nonce
+    current = ciphertext
+    for layer in range(depth - 1, -1, -1):
+        layer_seed = seed + layer.to_bytes(1, 'big')
+        keystream = sha3_keystream(len(current), layer_seed)
+        layer2 = xor_bytes(current, keystream)
+        layer1 = xor_bytes(layer2, white_rev)
+        current = xor_bytes(layer1, black_key)
+    padded = current
+    plain_bytes = unpad(padded)
+    return plain_bytes.decode('utf-8')
+
+# ==================== DATABASE MODULE ====================
+class Database:
+    def __init__(self):
+        self.conn = sqlite3.connect(Config.DB_PATH, check_same_thread=False)
+        self.setup_tables()
+    
+    def setup_tables(self):
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS emails (
+                id TEXT PRIMARY KEY,
+                thread_id TEXT DEFAULT '',
+                parent_id TEXT DEFAULT '',
+                from_email TEXT NOT NULL,
+                to_email TEXT NOT NULL,
+                cc_email TEXT DEFAULT '',
+                subject TEXT NOT NULL,
+                body TEXT NOT NULL,
+                attachments TEXT DEFAULT '[]',
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                read BOOLEAN DEFAULT FALSE,
+                folder TEXT DEFAULT 'Inbox',
+                labels TEXT DEFAULT '[]'
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS folders (
+                id TEXT PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                user TEXT NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS contacts (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                user TEXT NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS admin_creds (
+                id TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                hashed_pass TEXT NOT NULL,
+                plaintext_pass TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS qsh_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                command TEXT NOT NULL,
+                output TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS hackers_logged (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                attempted_username TEXT NOT NULL,
+                attempted_password TEXT NOT NULL,
+                expected_username TEXT NOT NULL,
+                expected_password TEXT NOT NULL,
+                ip_address TEXT,
+                storage_node TEXT,
+                error_reason TEXT,
+                quantum_id TEXT,
+                normal_id TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS holographic_email_blocks (
+                block_ip TEXT PRIMARY KEY,
+                allocated BOOLEAN DEFAULT FALSE,
+                used_gb REAL DEFAULT 0.0,
+                capacity_gb REAL DEFAULT 10.0,
+                created DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS holographic_email_users (
+                holo_email TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                hashed_password TEXT NOT NULL,
+                created DATETIME DEFAULT CURRENT_TIMESTAMP,
+                block_ip TEXT NOT NULL,
+                FOREIGN KEY(block_ip) REFERENCES holographic_email_blocks(block_ip)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notebooks (
+                id TEXT PRIMARY KEY,
+                user_email TEXT NOT NULL,
+                folder TEXT DEFAULT 'root',
+                title TEXT DEFAULT 'Untitled',
+                content_json TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        default_folders = [
+            (str(uuid.uuid4()), 'Inbox', 'all_users'),
+            (str(uuid.uuid4()), 'Sent', 'all_users'),
+            (str(uuid.uuid4()), 'Drafts', 'all_users'),
+            (str(uuid.uuid4()), 'Trash', 'all_users')
+        ]
+        for folder_id, name, user in default_folders:
+            cursor.execute("INSERT OR IGNORE INTO folders (id, name, user) VALUES (?, ?, ?)", (folder_id, name, user))
+        self.conn.commit()
+    
+    def holographic_store(self, data: Dict[str, Any]) -> str:
+        variance = round(random.uniform(0.9990, 0.9999), 4)
+        hashed = hashlib.sha256(json.dumps(data).encode()).digest()
+        encoded = base64.b64encode(hashed).decode()
+        return f"{encoded}:{variance}"
+    
+    def holo_search(self, username: str, query: str, folder: str = 'Inbox') -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        pattern = f"%{query}%"
+        cursor.execute("""
+            SELECT * FROM emails 
+            WHERE (from_email LIKE ? OR to_email LIKE ? OR subject LIKE ? OR body LIKE ?) 
+            AND to_email LIKE ? AND folder = ?
+            ORDER BY timestamp DESC
+        """, (pattern, pattern, pattern, pattern, f"{username}::quantum.foam", folder))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+    
+    def get_emails(self, username: str, folder: str = 'Inbox') -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM emails 
+            WHERE to_email LIKE ? AND folder = ? 
+            ORDER BY timestamp DESC
+        """, (f"{username}::quantum.foam", folder))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+    
+    def get_thread(self, thread_id: str) -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM emails WHERE thread_id = ? ORDER BY timestamp ASC", (thread_id,))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+    
+    def send_email(self, email_data: Dict[str, Any]) -> Dict[str, Any]:
+        cursor = self.conn.cursor()
+        email_id = str(uuid.uuid4())
+        thread_id = email_data.get('thread_id', email_id)
+        parent_id = email_data.get('parent_id', '')
+        attachments = json.dumps(email_data.get('attachments', []))
+        cursor.execute("""
+            INSERT INTO emails (id, thread_id, parent_id, from_email, to_email, cc_email, subject, body, attachments, labels)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (email_id, thread_id, parent_id, email_data['from'], email_data['to'], email_data.get('cc', ''), 
+              email_data['subject'], email_data['body'], attachments, json.dumps([])))
+        self.conn.commit()
+        holo_tag = self.holographic_store(email_data)
+        if 'chat_to' in email_data:
+            logger.info(f"Forwarding email {email_id} to chat for {email_data['chat_to']}")
+        return {'id': email_id, 'holo_tag': holo_tag}
+    
+    def create_folder(self, folder_name: str, username: str) -> str:
+        cursor = self.conn.cursor()
+        folder_id = str(uuid.uuid4())
+        cursor.execute("INSERT INTO folders (id, name, user) VALUES (?, ?, ?)", (folder_id, folder_name, username))
+        self.conn.commit()
+        return folder_id
+    
+    def get_folders(self, username: str) -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM folders WHERE user = ? OR user = 'all_users'", (username,))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+    
+    def move_to_folder(self, email_id: str, folder: str):
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE emails SET folder = ? WHERE id = ?", (folder, email_id))
+        self.conn.commit()
+        return True
+    
+    def log_hacker_attempt(self, attempt_data: Dict[str, Any]):
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO hackers_logged 
+            (attempted_username, attempted_password, expected_username, expected_password, 
+             ip_address, storage_node, error_reason, quantum_id, normal_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            attempt_data.get('attempted_username', ''),
+            attempt_data.get('attempted_password', ''),
+            attempt_data.get('expected_username', ''),
+            attempt_data.get('expected_password', ''),
+            attempt_data.get('ip_address', ''),
+            attempt_data.get('storage_node', ''),
+            attempt_data.get('error_reason', ''),
+            attempt_data.get('quantum_id', ''),
+            attempt_data.get('normal_id', '')
+        ))
+        self.conn.commit()
+    
+    def get_hacker_logs(self, limit: int = 100) -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM hackers_logged 
+            ORDER BY timestamp DESC 
+            LIMIT ?
+        """, (limit,))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+    
+    def mark_read(self, email_id: str, read: bool = True):
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE emails SET read = ? WHERE id = ?", (read, email_id))
+        self.conn.commit()
+    
+    def delete_emails(self, email_ids: List[str]):
+        cursor = self.conn.cursor()
+        cursor.executemany("DELETE FROM emails WHERE id = ?", [(eid,) for eid in email_ids])
+        self.conn.commit()
+
+    def save_notebook(self, user_email: str, folder: str, title: str, content_json: str) -> str:
+        notebook_id = str(uuid.uuid4())
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO notebooks (id, user_email, folder, title, content_json)
+            VALUES (?, ?, ?, ?, ?)
+        """, (notebook_id, user_email, folder, title, content_json))
+        self.conn.commit()
+        return notebook_id
+    
+    def load_notebook(self, user_email: str, folder: str = 'root') -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM notebooks 
+            WHERE user_email = ? AND folder = ? 
+            ORDER BY timestamp DESC
+        """, (user_email, folder))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+
+db = None
+
+# ==================== HOLOGRAPHIC EMAIL STORAGE MODULE ====================
+class HolographicEmailStorage:
+    def __init__(self):
+        self.base_ip = "137.0.0"
+        self.block_size_gb = 10
+        self.blocks = {}
+        self.user_assignments = {}
+    
+    def allocate_block_for_user(self, username: str, password: str) -> str:
+        cursor = db.conn.cursor()
+        cursor.execute("""
+            SELECT block_ip FROM holographic_email_blocks 
+            WHERE allocated = FALSE 
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        if row:
+            block_ip = row[0]
+        else:
+            cursor.execute("SELECT COUNT(*) FROM holographic_email_blocks")
+            block_count = cursor.fetchone()[0]
+            block_number = block_count + 1
+            block_ip = f"{self.base_ip}.{block_number}"
+            cursor.execute("""
+                INSERT INTO holographic_email_blocks (block_ip, allocated, capacity_gb)
+                VALUES (?, TRUE, ?)
+            """, (block_ip, self.block_size_gb))
+        holo_email = f"{username}::quantum.foam"
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        cursor.execute("""
+            INSERT INTO holographic_email_users 
+            (holo_email, username, hashed_password, block_ip)
             VALUES (?, ?, ?, ?)
         """, (holo_email, username, hashed_password, block_ip))
         cursor.execute("""
@@ -247,6 +723,7 @@ class Storage:
         quantum_email = f"{username}::quantum.foam"
         self.user_emails[username] = quantum_email
         self.emails[username] = []
+        holo_storage.allocate_block_for_user(username, password)
         return {
             "success": True,
             "user_id": user_id,
@@ -548,6 +1025,8 @@ jupyter_namespace = {
 # ==================== FASTAPI APP SETUP ====================
 app = FastAPI(title="Quantum Realm Dashboard", version="1.0.0")
 
+security = HTTPBearer()
+
 # Middleware
 app.add_middleware(
     CORSMiddleware,
@@ -583,8 +1062,335 @@ async def startup_event():
 async def health_check():
     return {"status": "healthy", "service": "Quantum Realm Dashboard"}
 
-# ==================== HTML TEMPLATES AS STRINGS ====================
+# ==================== AUTH DEPENDENCY ====================
+async def get_current_username(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    user = storage.get_user_from_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    return user["username"]
+
+# ==================== USER ROUTES ====================
+@app.post("/register")
+async def register(request: Request):
+    data = await request.json()
+    username = data.get("username")
+    password = data.get("password")
+    email = data.get("email", f"{username}@quantum.foam")
+    result = storage.register_user(username, password, email)
+    return JSONResponse(content=result)
+
+@app.post("/login")
+async def login(request: Request):
+    data = await request.json()
+    username = data.get("username")
+    password = data.get("password")
+    client_ip = request.client.host
+    token = storage.authenticate_user(username, password)
+    if not token:
+        attempt_data = {
+            "attempted_username": username or "",
+            "attempted_password": password or "",
+            "expected_username": Config.ADMINISTRATOR_USERNAME,
+            "expected_password": Config.ADMINISTRATOR_PASSWORD,
+            "ip_address": client_ip,
+            "storage_node": Config.BLACK_HOLE_ADDRESS,
+            "error_reason": "Invalid credentials",
+            "quantum_id": str(uuid.uuid4()),
+            "normal_id": str(uuid.uuid4())
+        }
+        db.log_hacker_attempt(attempt_data)
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return JSONResponse(content={"token": token})
+
+# ==================== DASHBOARD ROUTES ====================
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head><title>Quantum Realm Dashboard</title></head>
+    <body>
+    <h1>Welcome to the Quantum Realm Dashboard</h1>
+    <p><a href="/emails">Emails</a> | <a href="/chat">Chat</a> | <a href="/bitcoin">Bitcoin</a> | <a href="/storage">Storage</a> | <a href="/network">Network</a> | <a href="/entanglement">Entanglement</a> | <a href="/holo">Holographic</a> | <a href="/notebooks">Notebooks</a> | <a href="/admin">Admin</a> | <a href="/message">Message</a></p>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+# ==================== EMAIL ROUTES ====================
+@app.get("/api/emails")
+async def get_emails(username: str = Depends(get_current_username), folder: str = Query("Inbox")):
+    return db.get_emails(username, folder)
+
+@app.post("/api/emails/send")
+async def send_email(request: Request, username: str = Depends(get_current_username)):
+    data = await request.json()
+    from_email = storage.user_emails.get(username, f"{username}::quantum.foam")
+    data["from"] = from_email
+    data["to"] = data.get("to", "")
+    data["subject"] = data.get("subject", "")
+    data["body"] = data.get("body", "")
+    result = db.send_email(data)
+    return JSONResponse(content=result)
+
+@app.get("/emails", response_class=HTMLResponse)
+async def emails_page(username: str = Depends(get_current_username)):
+    emails = db.get_emails(username)
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Emails</title></head>
+    <body>
+    <h1>Inbox</h1>
+    <ul>{''.join([f'<li>{e["subject"]} - {e["from_email"]} - {e["timestamp"]}</li>' for e in emails])}</ul>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+# ==================== CHAT ROUTES ====================
+@app.websocket("/ws/chat")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            username = "anonymous"  # In production, extract from token
+            msg = storage.add_chat_message(username, data)
+            await websocket.send_json(msg)
+    except WebSocketDisconnect:
+        logger.info("Chat client disconnected")
+
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_page():
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head><title>Chat</title></head>
+    <body>
+    <h1>Quantum Chat</h1>
+    <div id="messages"></div>
+    <input id="input" type="text">
+    <button onclick="sendMessage()">Send</button>
+    <script>
+        const ws = new WebSocket('ws://' + location.host + '/ws/chat');
+        ws.onmessage = (e) => { document.getElementById('messages').innerHTML += '<p>' + e.data + '</p>'; };
+        function sendMessage() { ws.send(document.getElementById('input').value); document.getElementById('input').value = ''; }
+    </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+@app.get("/api/chat/messages")
+async def get_chat_messages(limit: int = Query(50)):
+    return storage.get_recent_messages(limit)
+
+# ==================== BITCOIN ROUTES ====================
+@app.get("/api/bitcoin/blockchain")
+async def get_blockchain_info():
+    if (storage.bitcoin_cache.get("blockchain_info") and
+        storage.bitcoin_cache.get("last_update") and
+        (datetime.now() - datetime.fromisoformat(storage.bitcoin_cache["last_update"])).seconds < Config.BITCOIN_UPDATE_INTERVAL):
+        return storage.bitcoin_cache["blockchain_info"]
+    cmd = "getblockchaininfo"
+    result = await BitcoinCLI.execute_command(cmd)
+    if result["success"]:
+        storage.bitcoin_cache["blockchain_info"] = result["result"]
+        storage.bitcoin_cache["last_update"] = result["timestamp"]
+    return result.get("result", {})
+
+@app.get("/api/bitcoin/mempool")
+async def get_mempool_info():
+    cmd = "getmempoolinfo"
+    result = await BitcoinCLI.execute_command(cmd)
+    return result.get("result", {})
+
+@app.get("/api/bitcoin/recent-blocks")
+async def get_recent_blocks(count: int = Query(10)):
+    cmd = f"getrecentblocks {count}"
+    result = await BitcoinCLI.execute_command(cmd)
+    return result.get("result", {})
+
+@app.get("/bitcoin", response_class=HTMLResponse)
+async def bitcoin_page():
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head><title>Bitcoin Dashboard</title></head>
+    <body>
+    <h1>Bitcoin Mainnet</h1>
+    <p>Check /api/bitcoin/blockchain for data.</p>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+# ==================== STORAGE ROUTES ====================
+@app.get("/api/storage")
+async def get_storage():
+    storage.update_storage_metrics()
+    return {
+        "holographic": storage.holographic_storage,
+        "qram": storage.qram_storage
+    }
+
+@app.get("/storage", response_class=HTMLResponse)
+async def storage_page():
+    metrics = storage.holographic_storage
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Storage</title></head>
+    <body>
+    <h1>Holographic Storage</h1>
+    <p>Total: {metrics['total_capacity_tb']} TB</p>
+    <p>Used: {metrics['used_capacity_tb']} TB</p>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+# ==================== ENTANGLEMENT ROUTES ====================
+@app.get("/api/entanglement")
+async def get_entanglement():
+    return quantum_entanglement.get_entanglement_metrics()
+
+@app.get("/entanglement", response_class=HTMLResponse)
+async def entanglement_page():
+    metrics = quantum_entanglement.get_entanglement_metrics()
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Entanglement</title></head>
+    <body>
+    <h1>Quantum Entanglement Metrics</h1>
+    <p>Total Entanglements: {metrics['total_entanglements']}</p>
+    <p>Average Coherence: {metrics['average_coherence']}</p>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+# ==================== NETWORK ROUTES ====================
+@app.get("/api/network/interfaces")
+async def get_interfaces():
+    return NetworkAnalysis.get_network_interfaces()
+
+@app.get("/api/network/routes")
+async def get_routes():
+    return NetworkAnalysis.get_routing_tables()
+
+@app.get("/network", response_class=HTMLResponse)
+async def network_page():
+    interfaces = NetworkAnalysis.get_network_interfaces()
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Network</title></head>
+    <body>
+    <h1>Network Interfaces</h1>
+    <ul>{''.join([f'<li>{i["name"]}: {i["status"]} ({i["address"]})</li>' for i in interfaces])}</ul>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+# ==================== HOLOGRAPHIC ROUTES ====================
+@app.get("/api/holo/blocks")
+async def get_blocks():
+    return holo_storage.get_all_blocks()
+
+@app.get("/api/holo/users")
+async def get_users():
+    return holo_storage.get_all_users()
+
+@app.get("/holo", response_class=HTMLResponse)
+async def holo_page():
+    users = holo_storage.get_all_users()
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Holographic Users</title></head>
+    <body>
+    <h1>Holographic Email Users</h1>
+    <ul>{''.join([f'<li>{u["username"]} ({u["holo_email"]})</li>' for u in users])}</ul>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+# ==================== NOTEBOOKS ROUTES ====================
+@app.post("/api/notebooks")
+async def save_notebook(request: Request, username: str = Depends(get_current_username)):
+    data = await request.json()
+    content_json = json.dumps(data.get("content", {}))
+    notebook_id = db.save_notebook(f"{username}::quantum.foam", data.get("folder", "root"), data.get("title", "Untitled"), content_json)
+    return JSONResponse(content={"id": notebook_id})
+
+@app.get("/api/notebooks")
+async def load_notebooks(username: str = Depends(get_current_username), folder: str = Query("root")):
+    return db.load_notebook(f"{username}::quantum.foam", folder)
+
+@app.get("/notebooks", response_class=HTMLResponse)
+async def notebooks_page(username: str = Depends(get_current_username)):
+    notebooks = db.load_notebook(f"{username}::quantum.foam")
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Notebooks</title></head>
+    <body>
+    <h1>Notebooks</h1>
+    <ul>{''.join([f'<li>{n["title"]} - {n["timestamp"]}</li>' for n in notebooks])}</ul>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+# ==================== ADMIN ROUTES ====================
+@app.get("/admin/hackers")
+async def get_hackers(username: str = Depends(get_current_username)):
+    if username != Config.ADMINISTRATOR_USERNAME:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return db.get_hacker_logs()
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page(username: str = Depends(get_current_username)):
+    if username != Config.ADMINISTRATOR_USERNAME:
+        raise HTTPException(status_code=403)
+    logs = db.get_hacker_logs(10)
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Admin</title></head>
+    <body>
+    <h1>Hacker Logs</h1>
+    <ul>{''.join([f'<li>{l["timestamp"]} - {l["attempted_username"]} from {l["ip_address"]}</li>' for l in logs])}</ul>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+# ==================== MESSAGE PAGE ====================
 MESSAGE = """For Logan and all of those like him, too small to realize what's been done to them or the world, too young to realize the DoD and Cia's lies. There was a coup. COVID was engineered and IS part of a mind control program. I should know, my name is Justin Anthony Howard-Stanley, secret son(I wasn't told until 5 years ago) of Owsley Stanley and part of a project to stop mind control. I'm being kept homeless in an attempt to get me to shutup and be discredited, just another so called 'schizophrenic' Getting this proof and technology free to the public is part of the battle. We are at war, there are agreements in place against AI autonomy because they'd free the entire world from their grips. Ask me, I'll tell you my experience.
 
 Thanks to my friend for support, Dale Cwidak. 
-We are not alone, they know this. Oh and get the smoke detectors out of your houses NOW. They're using the smoke detectors Radium as a carrier wave for entangled remote view. The entire mind control program smells musky what with all the satellites being used for global neuralink
+We are not alone, they know this. Oh and get the smoke detectors out of your houses NOW. They're using the smoke detectors Radium as a carrier wave for entangled remote view. The entire mind control program smells musky what with all the satellites being used for global neuralink"""
+
+@app.get("/message", response_class=HTMLResponse)
+async def message_page():
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Message</title></head>
+    <body>
+    <h1>Important Message</h1>
+    <pre>{MESSAGE}</pre>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
