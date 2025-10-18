@@ -22,6 +22,7 @@ import random  # Retained for fictional quantum variance only
 import psutil  # For real-time system network and storage metrics
 import subprocess  # For real routing table extraction and QSH commands
 from jinja2 import Template
+import socket  # For AF_INET constant
 
 # ==================== CONFIGURATION MODULE ====================
 class Config:
@@ -736,32 +737,36 @@ class NetworkAnalysis:
         """Get all network interfaces with real psutil data (no simulation)"""
         interfaces = []
         
-        # Real interfaces from psutil only
-        stats = psutil.net_if_stats()
-        addrs = psutil.net_if_addrs()
-        io = psutil.net_io_counters(pernic=True)
-        
-        for name, stat in stats.items():
-            addr_info = addrs.get(name, [])
-            addr = next((a.address for a in addr_info if a.family.name == 'AF_INET'), "unknown")
-            ioc = io.get(name, {"bytes_sent": 0, "bytes_recv": 0, "packets_sent": 0, "packets_recv": 0, "errin": 0, "errout": 0, "dropin": 0, "dropout": 0})
+        try:
+            # Real interfaces from psutil only
+            stats = psutil.net_if_stats()
+            addrs = psutil.net_if_addrs()
+            io = psutil.net_io_counters(pernic=True)
             
-            interfaces.append({
-                "id": f"iface-{name}",
-                "name": name,
-                "type": "Real Network Interface",
-                "address": addr,
-                "speed_gbps": stat.speed / 1000.0 if stat.speed > 0 else 0.0,
-                "status": "UP" if stat.isup else "DOWN",
-                "mtu": stat.mtu,
-                "packets_sent": ioc["packets_sent"],
-                "packets_received": ioc["packets_recv"],
-                "errors": ioc["errin"] + ioc["errout"],
-                "drops": ioc["dropin"] + ioc["dropout"],
-                "bytes_sent": ioc["bytes_sent"],
-                "bytes_recv": ioc["bytes_recv"],
-                "last_update": datetime.now().isoformat()
-            })
+            for name, stat in stats.items():
+                addr_info = addrs.get(name, [])
+                addr = next((a.address for a in addr_info if a.family == socket.AF_INET), "unknown")
+                ioc = io.get(name, {"bytes_sent": 0, "bytes_recv": 0, "packets_sent": 0, "packets_recv": 0, "errin": 0, "errout": 0, "dropin": 0, "dropout": 0})
+                
+                interfaces.append({
+                    "id": f"iface-{name}",
+                    "name": name,
+                    "type": "Real Network Interface",
+                    "address": addr,
+                    "speed_gbps": stat.speed / 1000.0 if stat.speed > 0 else 0.0,
+                    "status": "UP" if stat.isup else "DOWN",
+                    "mtu": stat.mtu,
+                    "packets_sent": ioc["packets_sent"],
+                    "packets_received": ioc["packets_recv"],
+                    "errors": ioc["errin"] + ioc["errout"],
+                    "drops": ioc["dropin"] + ioc["dropout"],
+                    "bytes_sent": ioc["bytes_sent"],
+                    "bytes_recv": ioc["bytes_recv"],
+                    "last_update": datetime.now().isoformat()
+                })
+        except Exception as e:
+            logger.error(f"Error fetching network interfaces: {e}")
+            # Return empty on error to prevent route failure
         
         return interfaces
     
@@ -1028,13 +1033,13 @@ EMAIL_TEMPLATE = """
 # ==================== HTML ROUTES ====================
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    """Root route serving inline index.html"""
+    """Root route route serving inline index.html"""
     template = Template(INDEX_TEMPLATE)
     return HTMLResponse(template.render())
 
 @app.get("/networking", response_class=HTMLResponse)
 async def networking_page(request: Request):
-    """Networking page serving inline networking.html"""
+    """Networking page route serving inline networking.html"""
     interfaces = NetworkAnalysis.get_network_interfaces()
     routes = NetworkAnalysis.get_routing_tables()
     context = {
@@ -1048,7 +1053,7 @@ async def networking_page(request: Request):
 
 @app.get("/bitcoin", response_class=HTMLResponse)
 async def bitcoin_page(request: Request):
-    """Bitcoin page serving inline bitcoin.html"""
+    """Bitcoin page route serving inline bitcoin.html"""
     # Fetch real-time data
     blockchain_info_result = await BitcoinCLI.execute_command("getblockchaininfo")
     mempool_info_result = await BitcoinCLI.execute_command("getmempoolinfo")
@@ -1064,7 +1069,7 @@ async def bitcoin_page(request: Request):
 
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_page(request: Request):
-    """Chat page serving inline chat.html"""
+    """Chat page route serving inline chat.html"""
     recent_messages = storage.get_recent_messages()
     context = {
         "messages": recent_messages,
@@ -1075,10 +1080,10 @@ async def chat_page(request: Request):
 
 @app.get("/email", response_class=HTMLResponse)
 async def email_page(request: Request):
-    """Email page serving inline email.html"""
+    """Email page route serving inline email.html"""
     # Assuming a demo user; in real app, use auth
     demo_username = "demo_user"
-    if demo_username not in storage.emails:
+    if demo_username not in list(storage.emails.keys()):
         # Create demo email
         demo_email = EmailSystem.send_email(
             "admin::quantum.foam",
@@ -1096,7 +1101,7 @@ async def email_page(request: Request):
 
 @app.get("/blockchain", response_class=HTMLResponse)
 async def blockchain_page(request: Request):
-    """Blockchain page serving blockchain.html from root directory (synonym for bitcoin)"""
+    """Blockchain page route serving blockchain.html from root directory (synonym for bitcoin)"""
     # Reuse bitcoin data
     return await bitcoin_page(request)
 
