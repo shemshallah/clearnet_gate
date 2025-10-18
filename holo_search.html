@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Holo File Explorer</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #login-modal { display: block; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4); }
+        #login-form { background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 300px; }
+        #explorer { display: none; }
+        #file-list { max-height: 400px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; }
+        .file-item { display: flex; align-items: center; margin-bottom: 10px; }
+        .file-item input[type="checkbox"] { margin-right: 10px; }
+        #search-input { width: 200px; margin-bottom: 10px; }
+        button { margin: 5px; }
+        #preview-modal { display: none; position: fixed; z-index: 2; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4); }
+        #preview-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #ccc; width: 90%; max-width: 800px; height: 80%; overflow: auto; }
+        #preview-content img { max-width: 100%; height: auto; }
+        #preview-content embed { width: 100%; height: 100%; }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: black; }
+    </style>
+</head>
+<body>
+    <div id="login-modal">
+        <div id="login-form">
+            <h2>Holo Explorer Login</h2>
+            <form id="login-form-post">
+                <label>Username: <input type="text" id="username" required></label><br><br>
+                <label>Password: <input type="password" id="password" required></label><br><br>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+    </div>
+    <div id="explorer">
+        <h1>Holographic File Explorer</h1>
+        <input type="text" id="search-input" placeholder="Search files..." oninput="searchFiles()">
+        <button onclick="selectAll()">Select All</button>
+        <button onclick="downloadSelected()">Download Selected</button>
+        <input type="file" id="upload-input" onchange="uploadFile()">
+        <button onclick="document.getElementById('upload-input').click()">Upload</button>
+        <div id="file-list"></div>
+    </div>
+    <div id="preview-modal">
+        <div id="preview-content">
+            <span class="close" onclick="closePreview()">&times;</span>
+            <div id="preview-body"></div>
+        </div>
+    </div>
+    <script>
+        let files = [];
+        let token = null;
+        document.getElementById('login-form-post').onsubmit = async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            if (!username || !password) {
+                alert('Username and password are needed.');
+                return;
+            }
+            // Simulate login - in real app, call /holo/login
+            // For standalone, assume success or add mock
+            token = 'mock-token-' + Math.random();
+            document.getElementById('login-modal').style.display = 'none';
+            document.getElementById('explorer').style.display = 'block';
+            loadFiles(); // Load mock files
+        };
+        async function loadFiles() {
+            // Mock files for standalone HTML
+            files = [
+                {id: '1', filename: 'example1.txt', size_bytes: 1024, upload_timestamp: '2025-10-18T10:00:00'},
+                {id: '2', filename: 'example2.pdf', size_bytes: 2048, upload_timestamp: '2025-10-17T15:30:00'},
+                {id: '3', filename: 'example3.jpg', size_bytes: 3072, upload_timestamp: '2025-10-16T09:45:00'}
+            ];
+            renderFiles();
+        }
+        function renderFiles(filteredFiles = files) {
+            const list = document.getElementById('file-list');
+            list.innerHTML = filteredFiles.map(f => `
+                <div class="file-item">
+                    <input type="checkbox" value="${f.id}" class="file-checkbox">
+                    <span>${f.filename} (${f.size_bytes} bytes) - ${f.upload_timestamp}</span>
+                    <button onclick="previewFile('${f.id}')">Preview</button>
+                    <button onclick="downloadFile('${f.id}')">Download</button>
+                </div>
+            `).join('');
+        }
+        function searchFiles() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const filtered = files.filter(f => f.filename.toLowerCase().includes(query) || (f.file_path || '').toLowerCase().includes(query));
+            renderFiles(filtered);
+        }
+        function selectAll() {
+            const checkboxes = document.querySelectorAll('.file-checkbox');
+            checkboxes.forEach(cb => cb.checked = true);
+        }
+        async function downloadSelected() {
+            const selected = Array.from(document.querySelectorAll('.file-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) return alert('No files selected');
+            selected.forEach(id => downloadFile(id));
+        }
+        function downloadFile(id) {
+            // Mock download - in real app, call /api/holo/download/{id}
+            alert(`Downloading file ${id}`);
+        }
+        async function uploadFile() {
+            const input = document.getElementById('upload-input');
+            if (!input.files[0]) return;
+            // Mock upload
+            alert('Upload successful (mock)');
+            loadFiles(); // Reload to simulate adding file
+            input.value = ''; // Reset input
+        }
+        async function previewFile(id) {
+            const file = files.find(f => f.id === id);
+            if (!file) return;
+            const modal = document.getElementById('preview-modal');
+            const body = document.getElementById('preview-body');
+            body.innerHTML = `<h3>Preview: ${file.filename}</h3>`;
+            // Mock preview based on file type
+            const ext = file.filename.split('.').pop().toLowerCase();
+            if (ext === 'txt') {
+                body.innerHTML += '<pre>Mock text content for ' + file.filename + '...</pre>';
+            } else if (ext === 'jpg' || ext === 'png' || ext === 'gif') {
+                body.innerHTML += `<img src="data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==" alt="Mock Image">`;
+            } else if (ext === 'pdf') {
+                // For PDF, use embed with a sample PDF URL for mock
+                // In real app, fetch blob from /api/holo/download/{id} and create object URL
+                const samplePdfUrl = 'https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf';
+                body.innerHTML += `<embed src="${samplePdfUrl}" type="application/pdf" width="100%" height="500px">`;
+                // To make it real: 
+                // const resp = await fetch(`/api/holo/download/${id}`, {headers: {'Authorization': `Bearer ${token}`}});
+                // const blob = await resp.blob();
+                // const url = URL.createObjectURL(blob);
+                // body.innerHTML += `<embed src="${url}" type="application/pdf" width="100%" height="500px">`;
+                // URL.revokeObjectURL(url); // cleanup later
+            } else {
+                body.innerHTML += '<p>Preview not available for this file type.</p>';
+            }
+            modal.style.display = 'block';
+        }
+        function closePreview() {
+            document.getElementById('preview-modal').style.display = 'none';
+            // Cleanup object URLs if any
+            document.getElementById('preview-body').innerHTML = '';
+        }
+        // Close modal if clicked outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('preview-modal');
+            if (event.target === modal) {
+                closePreview();
+            }
+        }
+    </script>
+</body>
+</html>
