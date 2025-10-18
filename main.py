@@ -1264,7 +1264,7 @@ ENCRYPTION_TEMPLATE = """
     <style>
         body { font-family: Arial, sans-serif; background: #000; color: #ff00ff; padding: 20px; }
         h1 { color: #ff00ff; text-align: center; }
-        .form-group { margin: 20px 0; }
+        form-group { margin: 20px 0; }
         label { display: block; color: #ff00ff; margin-bottom: 5px; }
         input[type="text"], textarea { width: 100%; padding: 10px; background: #111; color: #ff00ff; border: 1px solid #ff00ff; box-sizing: border-box; }
         button { padding: 10px 20px; background: #ff00ff; color: #000; border: none; cursor: pointer; margin: 10px 0; }
