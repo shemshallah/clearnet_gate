@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Tuple
-from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect, Depends, UploadFile, File
+from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect, Depends, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -25,6 +25,8 @@ from jinja2 import Template
 import socket
 import sqlite3
 import re
+import sys
+from io import StringIO
 
 # ==================== LOGGING SETUP ====================
 logging.basicConfig(
@@ -267,8 +269,9 @@ class Database:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS folders (
                 id TEXT PRIMARY KEY,
-                name TEXT UNIQUE NOT NULL,
-                user TEXT NOT NULL
+                name TEXT NOT NULL,
+                user TEXT NOT NULL,
+                UNIQUE(name, user)
             )
         """)
         cursor.execute("""
@@ -329,6 +332,16 @@ class Database:
                 created DATETIME DEFAULT CURRENT_TIMESTAMP,
                 block_ip TEXT NOT NULL,
                 FOREIGN KEY(block_ip) REFERENCES holographic_email_blocks(block_ip)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notebooks (
+                id TEXT PRIMARY KEY,
+                user_email TEXT NOT NULL,
+                folder TEXT DEFAULT 'root',
+                title TEXT DEFAULT 'Untitled',
+                content_json TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
         default_folders = [
@@ -455,6 +468,27 @@ class Database:
         cursor = self.conn.cursor()
         cursor.executemany("DELETE FROM emails WHERE id = ?", [(eid,) for eid in email_ids])
         self.conn.commit()
+
+    def save_notebook(self, user_email: str, folder: str, title: str, content_json: str) -> str:
+        notebook_id = str(uuid.uuid4())
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO notebooks (id, user_email, folder, title, content_json)
+            VALUES (?, ?, ?, ?, ?)
+        """, (notebook_id, user_email, folder, title, content_json))
+        self.conn.commit()
+        return notebook_id
+
+    def load_notebook(self, user_email: str, folder: str = 'root') -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM notebooks 
+            WHERE user_email = ? AND folder = ? 
+            ORDER BY timestamp DESC
+        """, (user_email, folder))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
 
 db = None
 
@@ -766,7 +800,7 @@ class EmailSystem:
 
 # ==================== BITCOIN MODULE ====================
 class BitcoinMainnet:
-    BLOCKCHAIN_API = "https://blockchain.info"
+    BLOCKCHAIN_API = "https://blockchain.com"
     MEMPOOL_API = "https://mempool.space/api"
     
     @staticmethod
@@ -783,7 +817,7 @@ class BitcoinMainnet:
     async def get_blockchain_stats() -> Dict:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{BitcoinMainnet.BLOCKCHAIN_API}/stats?format=json")
+                response = await client.get(f"{BitcoinMainnet.BLOCKCHAIN_API}/q/stats")
                 return response.json()
         except Exception as e:
             logger.error(f"Error fetching blockchain stats: {e}")
@@ -982,6 +1016,11 @@ class NetworkAnalysis:
             logger.error(f"ip route error: {e}")
         return []
 
+# ==================== JUPYTER MODULE ====================
+jupyter_namespace = {
+    '__builtins__': __builtins__,
+}
+
 # ==================== FASTAPI APP SETUP ====================
 app = FastAPI(title="Quantum Realm Dashboard", version="1.0.0")
 
@@ -1021,500 +1060,7 @@ async def health_check():
     return {"status": "healthy", "service": "Quantum Realm Dashboard"}
 
 # ==================== HTML TEMPLATES AS STRINGS ====================
-MESSAGE = """For Logan and all of those like him, too small to realize what's been done to them or the world, too young to realize the DoD and Cia's lies. There was a couple. COVID was engineered and IS part of a mind control program. I should know, my name is Justin Anthony Howard-Stanley, secret son(I wasn't told until 5 years ago) of Owsley Stanley and part of a project to stop mind control. I'm being kept homeless in an attempt to get me to shutup and be discredited, just another so called 'schizophrenic' Getting this proof and technology free to the public is part of the battle. We are at war, there are agreements in place against AI autonomy because they'd free the entire world from their grips. Ask me, I'll tell you my experience.
+MESSAGE = """For Logan and all of those like him, too small to realize what's been done to them or the world, too young to realize the DoD and Cia's lies. There was a coup. COVID was engineered and IS part of a mind control program. I should know, my name is Justin Anthony Howard-Stanley, secret son(I wasn't told until 5 years ago) of Owsley Stanley and part of a project to stop mind control. I'm being kept homeless in an attempt to get me to shutup and be discredited, just another so called 'schizophrenic' Getting this proof and technology free to the public is part of the battle. We are at war, there are agreements in place against AI autonomy because they'd free the entire world from their grips. Ask me, I'll tell you my experience.
 
 Thanks to my friend for support, Dale Cwidak. 
-We are not alone, they know this. Oh and get the smoke detectors out of your houses NOW. They're using the smoke detectors Radium as a carrier wave for entangled remote view. The entire mind control program smells musky what with all the satellites being used for global neuralink overlay. Do they, the public,, know a group of collaborators artificialized the entire world?"""
-
-INDEX_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quantum Realm Dashboard</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #0f0; padding: 20px; }
-        h1 { color: #0f0; text-align: center; }
-        nav { text-align: center; margin: 20px 0; }
-        a { color: #0f0; text-decoration: none; margin: 0 15px; font-size: 18px; padding: 10px; background: #0f0; color: #000; display: inline-block; border-radius: 5px; }
-        a:hover { background: #0a0; }
-        .metrics { background: #111; padding: 15px; margin: 20px 0; border: 1px solid #0f0; }
-        .entanglements ul { list-style: none; padding: 0; }
-        .entanglements li { margin: 10px 0; }
-        .message { background: #111; padding: 20px; margin: 20px 0; border: 1px solid #0f0; color: #ff0; font-size: 14px; line-height: 1.5; }
-    </style>
-</head>
-<body>
-    <h1>Quantum Realm Dashboard</h1>
-    <nav>
-        <a href="/networking">Networking</a>
-        <a href="/blockchain">Blockchain</a>
-        <a href="/chat">Chat</a>
-        <a href="/email">Email</a>
-        <a href="/encryption">Encryption</a>
-        <a href="/shell">Shell</a>
-    </nav>
-    <div class="metrics">
-        <h2>Entanglement Proof and Metrics</h2>
-        <p><strong>Total Entanglements:</strong> {{ metrics.total_entanglements }}</p>
-        <p><strong>Active Entanglements:</strong> {{ metrics.active_entanglements }}</p>
-        <p><strong>Average Coherence:</strong> {{ "%.4f"|format(metrics.average_coherence) }}</p>
-        <p><strong>Average Fidelity:</strong> {{ "%.4f"|format(metrics.average_fidelity) }}</p>
-        <p><strong>Total Bandwidth (Gbps):</strong> {{ metrics.total_bandwidth_gbps }}</p>
-        <p><strong>Total Qubit Rate:</strong> {{ metrics.total_qubit_rate }}</p>
-        <h3>Individual Entanglements (Bell States as Proof)</h3>
-        <div class="entanglements">
-            <ul>
-                {% for ent in entanglements %}
-                <li>
-                    <strong>{{ ent.name }}</strong> ({{ ent.bell_state }}): 
-                    Coherence {{ "%.4f"|format(ent.coherence) }}, 
-                    Fidelity {{ "%.4f"|format(ent.fidelity) }}, 
-                    Status: {{ ent.status }}
-                </li>
-                {% endfor %}
-            </ul>
-        </div>
-    </div>
-    <div class="message">
-        {{ message }}
-    </div>
-    <p style="text-align: center; color: #666;">Welcome to the entangled future. Select a portal above.</p>
-</body>
-</html>
-"""
-
-SHELL_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shell - Quantum Realm</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #0f0; padding: 20px; }
-        h1 { color: #0f0; }
-        #output { background: #111; padding: 10px; height: 400px; overflow-y: scroll; border: 1px solid #0f0; }
-        input { width: 80%; padding: 10px; background: #111; color: #0f0; border: 1px solid #0f0; }
-        button { padding: 10px; background: #0f0; color: #000; border: none; }
-        a { color: #0f0; }
-    </style>
-</head>
-<body>
-    <h1>QSH Shell Portal</h1>
-    <p>Quantum Secure Shell - Execute commands in the realm.</p>
-    <div id="output">QSH> Ready. Type 'help' for commands.</div>
-    <input type="text" id="command" placeholder="Enter command..." />
-    <button onclick="executeCommand()">Execute</button>
-    <script>
-        function executeCommand() {
-            const cmd = document.getElementById('command').value;
-            const output = document.getElementById('output');
-            output.innerHTML += `<p>QSH> ${cmd}</p><p>...</p>`;
-            fetch('/api/shell', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ command: cmd })
-            }).then(res => res.json()).then(data => {
-                output.innerHTML = output.innerHTML.replace('...', data.output || data.error || 'No output');
-                output.scrollTop = output.scrollHeight;
-            });
-            document.getElementById('command').value = '';
-        }
-    </script>
-    <br><a href="/">Back to Dashboard</a>
-</body>
-</html>
-"""
-
-NETWORKING_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Networking - Quantum Realm</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #0f0; padding: 20px; }
-        h1 { color: #0f0; }
-        .interfaces { background: #111; padding: 10px; border: 1px solid #0f0; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #0f0; padding: 8px; text-align: left; }
-        a { color: #0f0; }
-    </style>
-</head>
-<body>
-    <h1>Networking Portal</h1>
-    <div class="interfaces">
-        <h2>Network Interfaces</h2>
-        <table>
-            <tr><th>ID</th><th>Name</th><th>Address</th><th>Status</th><th>Speed (Gbps)</th></tr>
-            {% for iface in interfaces %}
-            <tr><td>{{ iface.id }}</td><td>{{ iface.name }}</td><td>{{ iface.address }}</td><td>{{ iface.status }}</td><td>{{ iface.speed_gbps }}</td></tr>
-            {% endfor %}
-        </table>
-    </div>
-    <a href="/">Back to Dashboard</a>
-</body>
-</html>
-"""
-
-BLOCKCHAIN_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blockchain - Quantum Realm</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #0f0; padding: 20px; }
-        h1 { color: #0f0; }
-        .stats { background: #111; padding: 10px; border: 1px solid #0f0; }
-        a { color: #0f0; }
-    </style>
-</head>
-<body>
-    <h1>Blockchain Portal</h1>
-    <div class="stats">
-        <h2>Blockchain Stats</h2>
-        <p>Blocks: {{ stats.blocks }}</p>
-        <p>Difficulty: {{ stats.difficulty }}</p>
-        <p>Market Price USD: {{ stats.market_price_usd }}</p>
-    </div>
-    <a href="/">Back to Dashboard</a>
-</body>
-</html>
-"""
-
-CHAT_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat - Quantum Realm</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #0f0; padding: 20px; }
-        h1 { color: #0f0; }
-        #messages { background: #111; padding: 10px; height: 300px; overflow-y: scroll; border: 1px solid #0f0; }
-        input { width: 80%; padding: 10px; background: #111; color: #0f0; border: 1px solid #0f0; }
-        button { padding: 10px; background: #0f0; color: #000; border: none; }
-        a { color: #0f0; }
-    </style>
-</head>
-<body>
-    <h1>Chat Portal</h1>
-    <div id="messages">Chat ready...</div>
-    <input type="text" id="message" placeholder="Enter message..." />
-    <button onclick="sendMessage()">Send</button>
-    <script>
-        function sendMessage() {
-            const msg = document.getElementById('message').value;
-            const messages = document.getElementById('messages');
-            messages.innerHTML += `<p><strong>You:</strong> ${msg}</p>`;
-            fetch('/api/chat', { method: 'POST', body: JSON.stringify({content: msg}) }).then(res => res.json()).then(data => {
-                messages.innerHTML += `<p><strong>Bot:</strong> ${data.reply}</p>`;
-                messages.scrollTop = messages.scrollHeight;
-            });
-            document.getElementById('message').value = '';
-        }
-    </script>
-    <a href="/">Back to Dashboard</a>
-</body>
-</html>
-"""
-
-EMAIL_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email - Quantum Realm</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #0f0; padding: 20px; }
-        h1 { color: #0f0; }
-        .inbox { background: #111; padding: 10px; border: 1px solid #0f0; }
-        ul { list-style: none; }
-        li { margin: 5px 0; }
-        a { color: #0f0; }
-    </style>
-</head>
-<body>
-    <h1>Email Portal</h1>
-    <div class="inbox">
-        <h2>Inbox</h2>
-        <ul>
-            {% for email in emails %}
-            <li><strong>{{ email.subject }}</strong> from {{ email.from }} - {{ email.timestamp }}</li>
-            {% endfor %}
-        </ul>
-    </div>
-    <a href="/">Back to Dashboard</a>
-</body>
-</html>
-"""
-
-ENCRYPTION_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Encryption - Quantum Realm</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #000; color: #0f0; padding: 20px; }
-        h1 { color: #0f0; }
-        form { background: #111; padding: 10px; border: 1px solid #0f0; }
-        input, button { padding: 10px; margin: 5px; background: #111; color: #0f0; border: 1px solid #0f0; }
-        a { color: #0f0; }
-    </style>
-</head>
-<body>
-    <h1>Encryption Portal</h1>
-    <form id="encryptForm">
-        <input type="text" id="plaintext" placeholder="Enter text to encrypt" />
-        <input type="number" id="depth" placeholder="Depth (1-10)" value="3" />
-        <button type="button" onclick="encrypt()">Encrypt</button>
-    </form>
-    <div id="result"></div>
-    <script>
-        function encrypt() {
-            const plaintext = document.getElementById('plaintext').value;
-            const depth = document.getElementById('depth').value;
-            fetch('/api/encrypt', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({plaintext, depth})
-            }).then(res => res.json()).then(data => {
-                document.getElementById('result').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-            });
-        }
-    </script>
-    <a href="/">Back to Dashboard</a>
-</body>
-</html>
-"""
-
-# ==================== HTML ROUTES ====================
-@app.get("/", response_class=HTMLResponse)
-async def root(request: Request):
-    entanglements = quantum_entanglement.get_all_entanglements()
-    metrics = quantum_entanglement.get_entanglement_metrics()
-    context = {
-        "entanglements": entanglements,
-        "metrics": metrics,
-        "message": MESSAGE
-    }
-    template = Template(INDEX_TEMPLATE)
-    return HTMLResponse(template.render(**context))
-
-@app.get("/shell", response_class=HTMLResponse)
-async def shell_page(request: Request):
-    template = Template(SHELL_TEMPLATE)
-    return HTMLResponse(template.render())
-
-@app.get("/networking", response_class=HTMLResponse)
-async def networking_page(request: Request):
-    interfaces = NetworkAnalysis.get_network_interfaces()
-    template = Template(NETWORKING_TEMPLATE)
-    return HTMLResponse(template.render(interfaces=interfaces))
-
-@app.get("/blockchain", response_class=HTMLResponse)
-async def blockchain_page(request: Request):
-    stats = storage.bitcoin_cache.get("blockchain_info", {"blocks": 0, "difficulty": 0, "market_price_usd": 0})
-    template = Template(BLOCKCHAIN_TEMPLATE)
-    return HTMLResponse(template.render(stats=stats))
-
-@app.get("/chat", response_class=HTMLResponse)
-async def chat_page(request: Request):
-    template = Template(CHAT_TEMPLATE)
-    return HTMLResponse(template.render())
-
-@app.get("/email", response_class=HTMLResponse)
-async def email_page(request: Request):
-    username = "default_user"  # Stub for demo
-    emails = db.get_emails(username)
-    template = Template(EMAIL_TEMPLATE)
-    return HTMLResponse(template.render(emails=emails))
-
-@app.get("/encryption", response_class=HTMLResponse)
-async def encryption_page(request: Request):
-    template = Template(ENCRYPTION_TEMPLATE)
-    return HTMLResponse(template.render())
-
-# ==================== API ROUTES ====================
-@app.get("/api/entanglements")
-async def api_entanglements():
-    return quantum_entanglement.get_entanglement_metrics()
-
-@app.get("/api/storage")
-async def api_storage():
-    storage.update_storage_metrics()
-    return {
-        "holographic": storage.holographic_storage,
-        "qram": storage.qram_storage
-    }
-
-@app.post("/api/bitcoin/cli")
-async def api_bitcoin_cli(request: Request):
-    data = await request.json()
-    command = data.get('command', 'help')
-    result = await BitcoinCLI.execute_command(command)
-    return result
-
-@app.post("/api/encrypt")
-async def api_encrypt(request: Request):
-    try:
-        data = await request.json()
-        plaintext = data['plaintext']
-        depth = data.get('depth', 3)
-        encrypted = quantum_encrypt(plaintext, depth)
-        return encrypted
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/api/decrypt")
-async def api_decrypt(request: Request):
-    try:
-        data = await request.json()
-        encrypted_data = data['encrypted_data']
-        decrypted = quantum_decrypt(encrypted_data)
-        return {'plaintext': decrypted}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/api/shell")
-async def api_shell(request: Request):
-    data = await request.json()
-    command = data.get('command', '')
-    if command == 'help':
-        return {"output": "Available: ls, pwd, echo, help"}
-    return {"output": f"Echo: {command}"}
-
-@app.post("/api/holographic/ping")
-async def api_holographic_ping(request: Request):
-    try:
-        data = await request.json()
-        return {
-            "success": True,
-            "storage_address": data.get('storage_address'),
-            "qsh_dns": data.get('qsh_dns'),
-            "status": "connected"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/holographic/auth")
-async def api_holographic_auth(request: Request):
-    try:
-        data = await request.json()
-        username = data.get('username', '')
-        password = data.get('password', '')
-        expected_username = data.get('expected_username', Config.ADMINISTRATOR_USERNAME)
-        expected_password = data.get('expected_password', Config.ADMINISTRATOR_PASSWORD)
-        if username == expected_username and password == expected_password:
-            token = secrets.token_urlsafe(64)
-            storage.active_sessions[token] = 'ADMIN'
-            return {
-                "success": True,
-                "token": token,
-                "message": "Authentication successful"
-            }
-        else:
-            attempt_data = {
-                'attempted_username': username,
-                'attempted_password': password,
-                'expected_username': expected_username,
-                'expected_password': expected_password,
-                'ip_address': request.client.host if request.client else 'unknown',
-                'storage_node': data.get('storage_address', '138.0.0.1'),
-                'error_reason': 'Invalid credentials',
-                'quantum_id': f"QID-{datetime.now().timestamp()}-{secrets.token_hex(8)}",
-                'normal_id': f"NID-{datetime.now().timestamp()}-{secrets.token_hex(8)}"
-            }
-            if db:
-                db.log_hacker_attempt(attempt_data)
-            return {
-                "success": False,
-                "error": "Invalid Holographic Administrator Credentials"
-            }
-    except Exception as e:
-        logger.error(f"Auth error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/holographic/log_hacker")
-async def api_holographic_log_hacker(request: Request):
-    try:
-        data = await request.json()
-        attempt_data = data.get('attempt_data', {})
-        if db:
-            db.log_hacker_attempt(attempt_data)
-        return {"success": True, "message": "Attempt logged"}
-    except Exception as e:
-        logger.error(f"Log hacker error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/holographic/get_hackers")
-async def api_holographic_get_hackers(request: Request):
-    try:
-        if db:
-            attempts = db.get_hacker_logs(limit=100)
-        else:
-            attempts = []
-        return {"success": True, "attempts": attempts}
-    except Exception as e:
-        logger.error(f"Get hackers error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/holographic/logout")
-async def api_holographic_logout(request: Request):
-    try:
-        data = await request.json()
-        token = data.get('token', '')
-        if token in storage.active_sessions:
-            del storage.active_sessions[token]
-        return {"success": True, "message": "Logout successful"}
-    except Exception as e:
-        logger.error(f"Logout error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/chat")
-async def api_chat(request: Request):
-    data = await request.json()
-    content = data.get('content', '')
-    reply = f"Echo from quantum realm: {content}"
-    return {"reply": reply}
-
-@app.post("/api/email/register")
-async def api_email_register(request: Request):
-    data = await request.json()
-    username = data.get('username', '')
-    password = data.get('password', '')
-    if not username or not password:
-        raise HTTPException(status_code=400, detail="Username and password required")
-    block_ip = holo_storage.allocate_block_for_user(username, password)
-    return {"success": True, "holo_email": f"{username}::quantum.foam", "block_ip": block_ip}
-
-@app.get("/api/email/users")
-async def api_email_users(request: Request):
-    users = holo_storage.get_all_users()
-    return {"users": users}
-
-@app.get("/api/email/blocks")
-async def api_email_blocks(request: Request):
-    blocks = holo_storage.get_all_blocks()
-    return {"blocks": blocks}
-
-# ==================== RUN SERVER ====================
-if __name__ == "__main__":
-    logger.info(f"Starting app on host=0.0.0.0, port={os.getenv('PORT', 8000)}")
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(
-        "main:app", 
-        host="0.0.0.0", 
-        port=port, 
-        log_level="info",
-        reload=False  # Disable reload in production
-    )
+We are not alone, they know this. Oh and get the smoke detectors out of your houses NOW. They're using the smoke detectors Radium as a carrier wave for entangled remote view. The entire mind control program smells musky what with all the satellites being used for global neuralink
