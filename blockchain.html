@@ -1,0 +1,584 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitcoin Mainnet - LIVE Terminal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #00ff00;
+            padding: 20px;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .container { 
+            max-width: 1600px; 
+            margin: 0 auto; 
+        }
+        
+        .header {
+            text-align: center;
+            padding: 20px;
+            border: 2px solid #00ff00;
+            margin-bottom: 20px;
+            background: rgba(0, 255, 0, 0.1);
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.3);
+        }
+        
+        h1 {
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .back-link {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #00ff00;
+            color: #000;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .back-link:hover {
+            background: #00cc00;
+            box-shadow: 0 0 20px #00ff00;
+        }
+        
+        .live-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #ff0000;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: rgba(0, 255, 0, 0.1);
+            border: 2px solid #00ff00;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .stat-card:hover {
+            background: rgba(0, 255, 0, 0.2);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        }
+        
+        .stat-value {
+            font-size: 1.8em;
+            color: #00ffff;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        
+        .stat-label {
+            color: #00ff00;
+            font-size: 0.9em;
+        }
+        
+        .terminal-container {
+            background: #000;
+            border: 2px solid #00ff00;
+            padding: 20px;
+            min-height: 600px;
+            margin: 20px 0;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.3);
+        }
+        
+        .terminal-output {
+            height: 500px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: rgba(0, 255, 0, 0.05);
+        }
+        
+        .terminal-output::-webkit-scrollbar { width: 8px; }
+        .terminal-output::-webkit-scrollbar-track { background: #000; }
+        .terminal-output::-webkit-scrollbar-thumb { 
+            background: #00ff00; 
+            border-radius: 4px; 
+        }
+        
+        .terminal-line {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+        
+        .terminal-prompt { color: #00ff00; }
+        .terminal-command { color: #ffff00; }
+        .terminal-result { color: #00ffff; white-space: pre-wrap; }
+        .terminal-error { color: #ff0000; }
+        
+        .input-container { 
+            display: flex; 
+            gap: 10px; 
+            align-items: center;
+        }
+        
+        input {
+            flex: 1;
+            padding: 12px;
+            background: #000;
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+        }
+        
+        input:focus {
+            outline: none;
+            box-shadow: 0 0 10px #00ff00;
+        }
+        
+        button {
+            padding: 12px 30px;
+            background: #00ff00;
+            border: none;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background: #00cc00;
+            box-shadow: 0 0 20px #00ff00;
+        }
+        
+        .recent-blocks {
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid #00ffff;
+            padding: 20px;
+            margin: 20px 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .recent-blocks::-webkit-scrollbar { width: 8px; }
+        .recent-blocks::-webkit-scrollbar-track { background: #000; }
+        .recent-blocks::-webkit-scrollbar-thumb { 
+            background: #00ffff; 
+            border-radius: 4px; 
+        }
+        
+        .block-item {
+            background: rgba(0, 0, 0, 0.5);
+            border-left: 3px solid #00ffff;
+            padding: 10px;
+            margin: 10px 0;
+            transition: all 0.3s;
+        }
+        
+        .block-item:hover {
+            background: rgba(0, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+        
+        .block-header {
+            display: flex;
+            justify-content: space-between;
+            color: #00ffff;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .block-details {
+            color: #00ff00;
+            font-size: 0.9em;
+        }
+        
+        .commands-help {
+            background: rgba(255, 255, 0, 0.1);
+            border: 2px solid #ffff00;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .command-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .command-item {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-left: 3px solid #ffff00;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .command-item:hover {
+            background: rgba(255, 255, 0, 0.1);
+            transform: translateX(5px);
+        }
+        
+        .command-name {
+            color: #ffff00;
+            font-weight: bold;
+        }
+        
+        .command-desc {
+            color: #00ff00;
+            font-size: 0.85em;
+        }
+        
+        @media (max-width: 768px) {
+            h1 { font-size: 1.8em; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .command-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Main</a>
+        
+        <div class="header">
+            <h1>₿ BITCOIN MAINNET - LIVE TERMINAL</h1>
+            <p style="color: #ff0000; margin-top: 10px; font-size: 1.2em;">
+                <span class="live-indicator"></span>
+                REAL-TIME BLOCKCHAIN DATA - AUTO-UPDATING
+            </p>
+            <p style="color: #ffaa00; margin-top: 5px;">
+                Holographic Storage: 138.0.0.1 ⚫ | Data Source: blockchain.info & mempool.space
+            </p>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">CURRENT BLOCK HEIGHT</div>
+                <div class="stat-value" id="blockHeight">Loading...</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">DIFFICULTY</div>
+                <div class="stat-value" id="difficulty">Loading...</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">MEMPOOL SIZE</div>
+                <div class="stat-value" id="mempoolSize">Loading...</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">MARKET PRICE (USD)</div>
+                <div class="stat-value" id="marketPrice">Loading...</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">TOTAL TRANSACTIONS</div>
+                <div class="stat-value" id="totalTx">Loading...</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">LAST UPDATE</div>
+                <div class="stat-value" id="lastUpdate" style="font-size: 1.2em;">--:--:--</div>
+            </div>
+        </div>
+        
+        <div class="recent-blocks">
+            <h3 style="color: #00ffff; margin-bottom: 15px;">📦 LATEST BLOCKS (Auto-Refreshing)</h3>
+            <div id="recentBlocks">Loading blocks...</div>
+        </div>
+        
+        <div class="commands-help">
+            <h3 style="color: #ffff00; margin-bottom: 10px;">📋 AVAILABLE COMMANDS (Click to Execute)</h3>
+            <div class="command-grid">
+                <div class="command-item" data-cmd="getblockchaininfo">
+                    <div class="command-name">getblockchaininfo</div>
+                    <div class="command-desc">Get full blockchain status</div>
+                </div>
+                <div class="command-item" data-cmd="getblock">
+                    <div class="command-name">getblock &lt;hash&gt;</div>
+                    <div class="command-desc">Get specific block details</div>
+                </div>
+                <div class="command-item" data-cmd="getmempoolinfo">
+                    <div class="command-name">getmempoolinfo</div>
+                    <div class="command-desc">Get mempool statistics</div>
+                </div>
+                <div class="command-item" data-cmd="getrecentblocks">
+                    <div class="command-name">getrecentblocks [count]</div>
+                    <div class="command-desc">Get recent blocks (default 10)</div>
+                </div>
+                <div class="command-item" data-cmd="gettransaction">
+                    <div class="command-name">gettransaction &lt;txid&gt;</div>
+                    <div class="command-desc">Get transaction details</div>
+                </div>
+                <div class="command-item" data-cmd="getaddressinfo">
+                    <div class="command-name">getaddressinfo &lt;address&gt;</div>
+                    <div class="command-desc">Get address information</div>
+                </div>
+                <div class="command-item" data-cmd="help">
+                    <div class="command-name">help</div>
+                    <div class="command-desc">Show all commands</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="terminal-container">
+            <div class="terminal-output" id="terminal">
+                <div class="terminal-line">
+                    <span class="terminal-result">╔═══════════════════════════════════════════════════════════╗</span>
+                </div>
+                <div class="terminal-line">
+                    <span class="terminal-result">║  BITCOIN MAINNET REAL-TIME TERMINAL                      ║</span>
+                </div>
+                <div class="terminal-line">
+                    <span class="terminal-result">║  Connected to: blockchain.info & mempool.space API       ║</span>
+                </div>
+                <div class="terminal-line">
+                    <span class="terminal-result">║  Holographic Storage: 138.0.0.1 ⚫                        ║</span>
+                </div>
+                <div class="terminal-line">
+                    <span class="terminal-result">╚═══════════════════════════════════════════════════════════╝</span>
+                </div>
+                <div class="terminal-line">
+                    <span class="terminal-prompt">bitcoin@mainnet:~$</span> <span style="color: #888;">Fetching live blockchain data...</span>
+                </div>
+            </div>
+            
+            <div class="input-container">
+                <span class="terminal-prompt" style="padding: 12px;">bitcoin@mainnet:~$</span>
+                <input type="text" id="commandInput" placeholder="Enter command (e.g., getblockchaininfo)..." autocomplete="off">
+                <button id="executeBtn">Execute</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const terminal = document.getElementById('terminal');
+        const commandInput = document.getElementById('commandInput');
+        const executeBtn = document.getElementById('executeBtn');
+        let commandHistory = [];
+        let historyIndex = -1;
+        
+        // Command shortcuts
+        document.querySelectorAll('.command-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const cmd = item.dataset.cmd;
+                if (cmd) {
+                    commandInput.value = cmd;
+                    commandInput.focus();
+                    if (!cmd.includes('<') && !cmd.includes('[')) {
+                        executeCommand();
+                    }
+                }
+            });
+        });
+        
+        function addToTerminal(content, type = 'result') {
+            const line = document.createElement('div');
+            line.className = 'terminal-line';
+            
+            if (type === 'command') {
+                line.innerHTML = `<span class="terminal-prompt">bitcoin@mainnet:~$</span> <span class="terminal-command">${escapeHtml(content)}</span>`;
+            } else if (type === 'error') {
+                line.innerHTML = `<span class="terminal-error">${escapeHtml(content)}</span>`;
+            } else {
+                line.innerHTML = `<span class="terminal-result">${escapeHtml(content)}</span>`;
+            }
+            
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+            
+            while (terminal.children.length > 100) {
+                terminal.removeChild(terminal.firstChild);
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        async function executeCommand() {
+            const command = commandInput.value.trim();
+            if (!command) return;
+            
+            addToTerminal(command, 'command');
+            commandInput.value = '';
+            
+            if (command && commandHistory[commandHistory.length - 1] !== command) {
+                commandHistory.push(command);
+                historyIndex = -1;
+            }
+            
+            try {
+                const response = await fetch('/api/bitcoin/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    addToTerminal(JSON.stringify(data.result, null, 2));
+                } else {
+                    addToTerminal('ERROR: ' + data.error, 'error');
+                }
+            } catch (error) {
+                addToTerminal('ERROR: ' + error.message, 'error');
+            }
+        }
+        
+        executeBtn.onclick = executeCommand;
+        commandInput.onkeypress = (e) => {
+            if (e.key === 'Enter') executeCommand();
+        };
+        
+        commandInput.onkeydown = (e) => {
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (commandHistory.length > 0 && historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    commandInput.value = commandHistory[commandHistory.length - 1 - historyIndex];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    commandInput.value = commandHistory[commandHistory.length - 1 - historyIndex];
+                } else {
+                    historyIndex = -1;
+                    commandInput.value = '';
+                }
+            }
+        };
+        
+        async function updateStats() {
+            try {
+                const response = await fetch('/api/bitcoin/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: 'getblockchaininfo' })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.result) {
+                    const result = data.result;
+                    document.getElementById('blockHeight').textContent = result.blocks?.toLocaleString() || 'N/A';
+                    document.getElementById('difficulty').textContent = result.difficulty ? 
+                        (result.difficulty / 1e12).toFixed(2) + 'T' : 'N/A';
+                    document.getElementById('totalTx').textContent = result.total_transactions?.toLocaleString() || 'N/A';
+                    document.getElementById('marketPrice').textContent = result.market_price_usd ? 
+                        '$' + result.market_price_usd.toLocaleString() : 'N/A';
+                    
+                    const now = new Date();
+                    document.getElementById('lastUpdate').textContent = 
+                        now.toLocaleTimeString();
+                }
+            } catch (error) {
+                console.error('Failed to update stats:', error);
+            }
+        }
+        
+        async function updateMempool() {
+            try {
+                const response = await fetch('/api/bitcoin/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: 'getmempoolinfo' })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.result) {
+                    document.getElementById('mempoolSize').textContent = 
+                        data.result.size?.toLocaleString() || 'N/A';
+                }
+            } catch (error) {
+                console.error('Failed to update mempool:', error);
+            }
+        }
+        
+        async function updateRecentBlocks() {
+            try {
+                const response = await fetch('/api/bitcoin/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: 'getrecentblocks 5' })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.result && data.result.blocks) {
+                    const blocksHtml = data.result.blocks.map(block => `
+                        <div class="block-item">
+                            <div class="block-header">
+                                <span>Block #${block.height?.toLocaleString() || 'N/A'}</span>
+                                <span>${new Date((block.timestamp || 0) * 1000).toLocaleTimeString()}</span>
+                            </div>
+                            <div class="block-details">
+                                Hash: ${(block.id || block.hash || 'N/A').substring(0, 20)}...<br>
+                                Transactions: ${block.tx_count?.toLocaleString() || 'N/A'} | 
+                                Size: ${block.size ? (block.size / 1024).toFixed(2) + ' KB' : 'N/A'}
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    document.getElementById('recentBlocks').innerHTML = blocksHtml;
+                }
+            } catch (error) {
+                console.error('Failed to update blocks:', error);
+            }
+        }
+        
+        updateStats();
+        updateMempool();
+        updateRecentBlocks();
+        
+        setInterval(() => {
+            updateStats();
+            updateMempool();
+            updateRecentBlocks();
+            addToTerminal('--- AUTO-REFRESH: Blockchain data updated ---', 'result');
+        }, 30000);
+        
+        // WebSocket for real-time updates
+        try {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/bitcoin`);
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'bitcoin_update') {
+                    addToTerminal(`--- LIVE UPDATE: New block ${data.latest_block?.height || 'N/A'} ---`, 'result');
+                    updateStats();
+                    updateRecentBlocks();
+                }
+            };
+        } catch (e) {
+            console.log('WebSocket not available, using polling');
+        }
+    </script>
+</body>
+</html>
