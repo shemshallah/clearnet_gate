@@ -54,12 +54,11 @@ class Config:
     HOLOGRAPHIC_CAPACITY_TB = 138000  # 138 Petabytes
     QRAM_CAPACITY_QUBITS = 1000000000  # 1 Billion Qubits
     
-    # Templates
-    TEMPLATES_DIR = Path("templates")
+    # Templates - changed to root directory
+    TEMPLATES_DIR = Path(".")
     STATIC_DIR = Path("static")
 
-# Create directories
-Config.TEMPLATES_DIR.mkdir(exist_ok=True)
+# Create static directory only
 Config.STATIC_DIR.mkdir(exist_ok=True)
 
 # ==================== LOGGING MODULE ====================
@@ -202,7 +201,7 @@ class Storage:
         self.active_sessions: Dict[str, str] = {}  # token -> username
         
         # Encrypted messages
-        self.encrypted_messages: List[Dict] = []
+        self.encrypted_messages: List[Dict]] = []
         
         # Bitcoin cache
         self.bitcoin_cache: Dict[str, Any] = {
@@ -818,12 +817,12 @@ app.mount("/static", StaticFiles(directory=str(Config.STATIC_DIR)), name="static
 # ==================== HTML ROUTES ====================
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    """Root route serving index.html"""
+    """Root route serving index.html from root directory"""
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/networking", response_class=HTMLResponse)
 async def networking_page(request: Request):
-    """Networking page serving networking.html"""
+    """Networking page serving networking.html from root directory"""
     interfaces = NetworkAnalysis.get_network_interfaces()
     routes = NetworkAnalysis.get_routing_tables()
     context = {
@@ -837,7 +836,7 @@ async def networking_page(request: Request):
 
 @app.get("/bitcoin", response_class=HTMLResponse)
 async def bitcoin_page(request: Request):
-    """Bitcoin page serving bitcoin.html"""
+    """Bitcoin page serving bitcoin.html from root directory"""
     # Fetch real-time data
     blockchain_info = await BitcoinCLI.execute_command("getblockchaininfo")
     mempool_info = await BitcoinCLI.execute_command("getmempoolinfo")
@@ -853,7 +852,7 @@ async def bitcoin_page(request: Request):
 
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_page(request: Request):
-    """Chat page serving chat.html"""
+    """Chat page serving chat.html from root directory"""
     recent_messages = storage.get_recent_messages()
     context = {
         "request": request,
@@ -864,7 +863,7 @@ async def chat_page(request: Request):
 
 @app.get("/email", response_class=HTMLResponse)
 async def email_page(request: Request):
-    """Email page serving email.html"""
+    """Email page serving email.html from root directory"""
     # Assuming a demo user; in real app, use auth
     demo_username = "demo_user"
     if demo_username not in storage.emails:
@@ -885,7 +884,7 @@ async def email_page(request: Request):
 
 @app.get("/blockchain", response_class=HTMLResponse)
 async def blockchain_page(request: Request):
-    """Blockchain page serving blockchain.html (synonym for bitcoin)"""
+    """Blockchain page serving blockchain.html from root directory (synonym for bitcoin)"""
     # Reuse bitcoin data
     return await bitcoin_page(request)
 
