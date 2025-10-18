@@ -1,4 +1,3 @@
-
 import os
 import logging
 import hashlib
@@ -20,6 +19,9 @@ import asyncio
 from contextlib import asynccontextmanager
 import secrets
 from collections import defaultdict
+import random  # Retained for fictional quantum variance only
+import psutil  # For real-time system network and storage metrics
+import subprocess  # For real routing table extraction and QSH commands
 
 # ==================== CONFIGURATION MODULE ====================
 class Config:
@@ -41,7 +43,7 @@ class Config:
     BLACK_HOLE_ADDRESS = "138.0.0.1"
     WHITE_HOLE_ADDRESS = "139.0.0.1"
     QUANTUM_REALM = "quantum.realm.domain.dominion.foam.computer.alice"
-    NETWORKING_ADDRESS = "computer.networking:127.0.0.1"
+    NETWORKING_ADDRESS = "quantum.realm.domain.dominion.foam.computer.networking"
     
     # Bitcoin
     BITCOIN_UPDATE_INTERVAL = int(os.getenv("BITCOIN_UPDATE_INTERVAL", "30"))
@@ -87,7 +89,8 @@ class QuantumEntanglement:
         self.initialize_entanglements()
     
     def initialize_entanglements(self):
-        """Initialize quantum entanglements"""
+        """Initialize quantum entanglements with dynamic timestamps"""
+        now = datetime.now().isoformat()
         self.entanglements = [
             {
                 "id": "QE-001",
@@ -95,16 +98,17 @@ class QuantumEntanglement:
                 "node_a": Config.BLACK_HOLE_ADDRESS,
                 "node_b": Config.WHITE_HOLE_ADDRESS,
                 "type": "Wormhole Bridge",
-                "coherence": 0.9999,
-                "fidelity": 0.9998,
+                "coherence": round(random.uniform(0.9990, 0.9999), 4),
+                "fidelity": round(random.uniform(0.9980, 0.9998), 4),
                 "bell_state": "|Φ+⟩",
-                "speed_gbps": 1000000,  # 1 Pbps
-                "qubit_rate": 1000000000,  # 1 billion qubits/sec
+                "speed_gbps": int(random.uniform(900000, 1100000)),  # Dynamic bandwidth
+                "qubit_rate": int(random.uniform(900000000, 1100000000)),  # Dynamic qubit rate
                 "distance_km": "Non-local (Einstein-Podolsky-Rosen)",
-                "created": "2024-01-01T00:00:00Z",
+                "created": now,
                 "entanglement_strength": "Maximum",
-                "decoherence_time_ms": 10000,
-                "status": "Active"
+                "decoherence_time_ms": int(random.uniform(9000, 11000)),
+                "status": "Active",
+                "last_measurement": now
             },
             {
                 "id": "QE-002",
@@ -112,16 +116,17 @@ class QuantumEntanglement:
                 "node_a": Config.QUANTUM_REALM,
                 "node_b": Config.BLACK_HOLE_ADDRESS,
                 "type": "Realm-Storage Link",
-                "coherence": 0.9995,
-                "fidelity": 0.9994,
+                "coherence": round(random.uniform(0.9985, 0.9995), 4),
+                "fidelity": round(random.uniform(0.9980, 0.9994), 4),
                 "bell_state": "|Ψ+⟩",
-                "speed_gbps": 500000,
-                "qubit_rate": 500000000,
+                "speed_gbps": int(random.uniform(450000, 550000)),
+                "qubit_rate": int(random.uniform(450000000, 550000000)),
                 "distance_km": "Cross-dimensional",
-                "created": "2024-01-01T00:00:00Z",
+                "created": now,
                 "entanglement_strength": "Very High",
-                "decoherence_time_ms": 8000,
-                "status": "Active"
+                "decoherence_time_ms": int(random.uniform(7000, 9000)),
+                "status": "Active",
+                "last_measurement": now
             },
             {
                 "id": "QE-003",
@@ -129,52 +134,62 @@ class QuantumEntanglement:
                 "node_a": Config.NETWORKING_ADDRESS,
                 "node_b": Config.QUANTUM_REALM,
                 "type": "Network-Quantum Bridge",
-                "coherence": 0.9990,
-                "fidelity": 0.9988,
+                "coherence": round(random.uniform(0.9980, 0.9990), 4),
+                "fidelity": round(random.uniform(0.9970, 0.9988), 4),
                 "bell_state": "|Φ-⟩",
-                "speed_gbps": 100000,
-                "qubit_rate": 100000000,
+                "speed_gbps": int(random.uniform(90000, 110000)),
+                "qubit_rate": int(random.uniform(90000000, 110000000)),
                 "distance_km": "127.0.0.1 (Local Quantum)",
-                "created": "2024-01-01T00:00:00Z",
+                "created": now,
                 "entanglement_strength": "High",
-                "decoherence_time_ms": 5000,
-                "status": "Active"
+                "decoherence_time_ms": int(random.uniform(4000, 6000)),
+                "status": "Active",
+                "last_measurement": now
             }
         ]
     
     def get_all_entanglements(self) -> List[Dict]:
-        """Get all quantum entanglements"""
+        """Get all quantum entanglements with updated timestamps"""
+        for ent in self.entanglements:
+            ent["last_access"] = datetime.now().isoformat()
         return self.entanglements
     
     def get_entanglement_metrics(self) -> Dict:
-        """Get aggregated entanglement metrics"""
+        """Get aggregated entanglement metrics with real-time calculation"""
+        entanglements = self.get_all_entanglements()
         return {
-            "total_entanglements": len(self.entanglements),
-            "active_entanglements": sum(1 for e in self.entanglements if e["status"] == "Active"),
-            "average_coherence": sum(e["coherence"] for e in self.entanglements) / len(self.entanglements),
-            "average_fidelity": sum(e["fidelity"] for e in self.entanglements) / len(self.entanglements),
-            "total_bandwidth_gbps": sum(e["speed_gbps"] for e in self.entanglements),
-            "total_qubit_rate": sum(e["qubit_rate"] for e in self.entanglements),
+            "total_entanglements": len(entanglements),
+            "active_entanglements": sum(1 for e in entanglements if e["status"] == "Active"),
+            "average_coherence": round(sum(e["coherence"] for e in entanglements) / len(entanglements), 4),
+            "average_fidelity": round(sum(e["fidelity"] for e in entanglements) / len(entanglements), 4),
+            "total_bandwidth_gbps": sum(e["speed_gbps"] for e in entanglements),
+            "total_qubit_rate": sum(e["qubit_rate"] for e in entanglements),
             "quantum_realm": Config.QUANTUM_REALM,
-            "networking_node": Config.NETWORKING_ADDRESS
+            "networking_node": Config.NETWORKING_ADDRESS,
+            "measurement_timestamp": datetime.now().isoformat()
         }
     
     def measure_entanglement(self, entanglement_id: str) -> Dict:
-        """Measure specific entanglement properties"""
+        """Measure specific entanglement properties with real variance"""
         for ent in self.entanglements:
             if ent["id"] == entanglement_id:
-                # Simulate quantum measurement with slight variance
-                import random
+                # Simulate real quantum measurement collapse with variance
+                variance = random.uniform(-0.001, 0.001)
                 measurement = ent.copy()
-                measurement["measured_coherence"] = ent["coherence"] + random.uniform(-0.0001, 0.0001)
-                measurement["measured_fidelity"] = ent["fidelity"] + random.uniform(-0.0001, 0.0001)
+                measurement["measured_coherence"] = round(max(0.0, min(1.0, ent["coherence"] + variance)), 4)
+                measurement["measured_fidelity"] = round(max(0.0, min(1.0, ent["fidelity"] + variance)), 4)
                 measurement["measurement_time"] = datetime.now().isoformat()
+                measurement["variance_applied"] = round(variance, 4)
+                # Update original for persistence
+                ent["coherence"] = measurement["measured_coherence"]
+                ent["fidelity"] = measurement["measured_fidelity"]
+                ent["last_measurement"] = measurement["measurement_time"]
                 return measurement
         return {}
 
 # ==================== STORAGE MODULE ====================
 class Storage:
-    """Data storage management"""
+    """Data storage management with dynamic usage"""
     
     def __init__(self):
         # Email storage
@@ -198,24 +213,45 @@ class Storage:
             "last_update": None
         }
         
-        # Storage metrics
-        self.holographic_storage = {
-            "total_capacity_tb": Config.HOLOGRAPHIC_CAPACITY_TB,
-            "used_capacity_tb": 85432,  # 85.4 PB used
-            "available_capacity_tb": Config.HOLOGRAPHIC_CAPACITY_TB - 85432,
-            "efficiency": 0.95,
-            "redundancy_factor": 3,
-            "node_address": Config.BLACK_HOLE_ADDRESS
-        }
+        # Storage metrics with real disk usage scaled to fictional capacities
+        self.update_storage_metrics()
         
         self.qram_storage = {
             "total_capacity_qubits": Config.QRAM_CAPACITY_QUBITS,
-            "used_capacity_qubits": 750000000,  # 750M qubits used
-            "available_capacity_qubits": Config.QRAM_CAPACITY_QUBITS - 750000000,
-            "coherence_time_ms": 10000,
-            "error_rate": 0.0001,
-            "node_address": Config.QUANTUM_REALM
+            "used_capacity_qubits": int(random.uniform(700000000, 800000000)),  # Retained for fictional QRAM
+            "available_capacity_qubits": Config.QRAM_CAPACITY_QUBITS - self.qram_storage["used_capacity_qubits"],
+            "coherence_time_ms": int(random.uniform(9000, 11000)),
+            "error_rate": round(random.uniform(0.00005, 0.00015), 4),
+            "node_address": Config.QUANTUM_REALM,
+            "last_update": datetime.now().isoformat()
         }
+    
+    def update_storage_metrics(self):
+        """Update storage metrics with real disk usage"""
+        du = psutil.disk_usage('/')
+        used_gb = du.used / (1024**3)
+        total_gb = du.total / (1024**3)
+        used_tb = used_gb / 1024  # Convert to TB for scaling
+        total_tb = total_gb / 1024
+        
+        # Scale to fictional holographic capacity
+        scale_factor = Config.HOLOGRAPHIC_CAPACITY_TB / total_tb if total_tb > 0 else 1
+        self.holographic_storage = {
+            "total_capacity_tb": Config.HOLOGRAPHIC_CAPACITY_TB,
+            "used_capacity_tb": int(used_tb * scale_factor),
+            "available_capacity_tb": Config.HOLOGRAPHIC_CAPACITY_TB - int(used_tb * scale_factor),
+            "efficiency": round(du.used / du.total, 2),
+            "redundancy_factor": 3,
+            "node_address": Config.BLACK_HOLE_ADDRESS,
+            "last_update": datetime.now().isoformat()
+        }
+        
+        # Update QRAM fictional
+        self.qram_storage["used_capacity_qubits"] = int(random.uniform(700000000, 800000000))
+        self.qram_storage["available_capacity_qubits"] = Config.QRAM_CAPACITY_QUBITS - self.qram_storage["used_capacity_qubits"]
+        self.qram_storage["coherence_time_ms"] = int(random.uniform(9000, 11000))
+        self.qram_storage["error_rate"] = round(random.uniform(0.00005, 0.00015), 4)
+        self.qram_storage["last_update"] = datetime.now().isoformat()
     
     def register_user(self, username: str, password: str, email: str) -> Dict:
         """Register new chat user"""
@@ -560,18 +596,22 @@ class QuantumEncryption:
     """Custom quantum-proof encryption using black hole and white hole addresses"""
     
     @staticmethod
-    def generate_quantum_key(data: str, use_black_hole: bool = True) -> bytes:
-        """Generate quantum key using black/white hole addressing"""
+    def generate_quantum_key(salt: str, use_black_hole: bool = True) -> bytes:
+        """Generate quantum key using salt and black/white hole addressing"""
         hole_address = Config.BLACK_HOLE_ADDRESS if use_black_hole else Config.WHITE_HOLE_ADDRESS
-        key_material = f"{hole_address}:{data}:{secrets.token_hex(32)}".encode()
+        key_material = f"{hole_address}:{salt}".encode()
         return hashlib.sha3_512(key_material).digest()
     
     @staticmethod
     def quantum_encrypt(plaintext: str) -> Dict[str, str]:
         """Encrypt message using dual-hole quantum encryption"""
         try:
-            black_hole_key = QuantumEncryption.generate_quantum_key(plaintext, True)
-            white_hole_key = QuantumEncryption.generate_quantum_key(plaintext, False)
+            # Generate a single random salt for reproducibility
+            salt = secrets.token_hex(32)
+            
+            # Generate keys using salt (no plaintext in keys for security)
+            black_hole_key = QuantumEncryption.generate_quantum_key(salt, True)
+            white_hole_key = QuantumEncryption.generate_quantum_key(salt, False)
             
             plaintext_bytes = plaintext.encode('utf-8')
             encrypted = bytearray(plaintext_bytes)
@@ -584,17 +624,21 @@ class QuantumEncryption:
             for i in range(len(encrypted)):
                 encrypted[i] ^= white_hole_key[(len(encrypted) - 1 - i) % len(white_hole_key)]
             
-            # Layer 3: SHA3-512 based permutation
+            # Layer 3: SHA3-512 based permutation (now reproducible with salt)
             permutation_key = hashlib.sha3_512(black_hole_key + white_hole_key).digest()
             for i in range(len(encrypted)):
                 encrypted[i] ^= permutation_key[i % len(permutation_key)]
             
             encrypted_b64 = base64.b64encode(bytes(encrypted)).decode('utf-8')
-            signature_material = f"{Config.BLACK_HOLE_ADDRESS}:{Config.WHITE_HOLE_ADDRESS}:{encrypted_b64}".encode()
+            salt_b64 = base64.b64encode(salt.encode()).decode('utf-8')
+            
+            # Signature over all reproducible parts
+            signature_material = f"{Config.BLACK_HOLE_ADDRESS}:{Config.WHITE_HOLE_ADDRESS}:{encrypted_b64}:{salt_b64}".encode()
             signature = hashlib.sha3_512(signature_material).hexdigest()
             
             return {
                 "ciphertext": encrypted_b64,
+                "salt": salt_b64,  # Store salt for decryption
                 "signature": signature,
                 "black_hole": Config.BLACK_HOLE_ADDRESS,
                 "white_hole": Config.WHITE_HOLE_ADDRESS,
@@ -609,28 +653,31 @@ class QuantumEncryption:
     def quantum_decrypt(encrypted_data: Dict[str, str]) -> str:
         """Decrypt message using dual-hole quantum decryption"""
         try:
-            signature_material = f"{encrypted_data['black_hole']}:{encrypted_data['white_hole']}:{encrypted_data['ciphertext']}".encode()
-            expected_signature = hashlib.sha3_512(signature_material).hexdigest()
+            # Verify signature
+            expected_signature_material = f"{encrypted_data['black_hole']}:{encrypted_data['white_hole']}:{encrypted_data['ciphertext']}:{encrypted_data['salt']}".encode()
+            expected_signature = hashlib.sha3_512(expected_signature_material).hexdigest()
             
             if expected_signature != encrypted_data['signature']:
                 raise ValueError("Signature verification failed")
             
+            # Regenerate keys using stored salt
+            salt = base64.b64decode(encrypted_data['salt']).decode('utf-8')
+            black_hole_key = QuantumEncryption.generate_quantum_key(salt, True)
+            white_hole_key = QuantumEncryption.generate_quantum_key(salt, False)
+            permutation_key = hashlib.sha3_512(black_hole_key + white_hole_key).digest()
+            
             encrypted_bytes = base64.b64decode(encrypted_data['ciphertext'])
             decrypted = bytearray(encrypted_bytes)
             
-            black_hole_key = hashlib.sha3_512(f"{Config.BLACK_HOLE_ADDRESS}:quantum_key".encode()).digest()
-            white_hole_key = hashlib.sha3_512(f"{Config.WHITE_HOLE_ADDRESS}:quantum_key".encode()).digest()
-            permutation_key = hashlib.sha3_512(black_hole_key + white_hole_key).digest()
-            
-            # Reverse Layer 3
+            # Reverse Layer 3: XOR with permutation key
             for i in range(len(decrypted)):
                 decrypted[i] ^= permutation_key[i % len(permutation_key)]
             
-            # Reverse Layer 2
+            # Reverse Layer 2: XOR with white hole key (reverse)
             for i in range(len(decrypted)):
                 decrypted[i] ^= white_hole_key[(len(decrypted) - 1 - i) % len(white_hole_key)]
             
-            # Reverse Layer 1
+            # Reverse Layer 1: XOR with black hole key
             for i in range(len(decrypted)):
                 decrypted[i] ^= black_hole_key[i % len(black_hole_key)]
             
@@ -669,1628 +716,226 @@ class EmailSystem:
 
 # ==================== NETWORK ANALYSIS MODULE ====================
 class NetworkAnalysis:
-    """Network topology and routing analysis"""
+    """Network topology and routing analysis with real metrics"""
     
     @staticmethod
     def get_network_interfaces() -> List[Dict]:
-        """Get all network interfaces"""
-        return [
-            {
-                "id": "iface-001",
-                "name": "quantum0",
-                "type": "Quantum Entangled Interface",
-                "address": Config.QUANTUM_REALM,
-                "speed_gbps": 1000000,
-                "status": "UP",
-                "mtu": 65535,
-                "packets_sent": 5234567890,
-                "packets_received": 5234567891,
-                "errors": 0,
-                "drops": 0
-            },
-            {
-                "id": "iface-002",
-                "name": "holo0",
-                "type": "Holographic Storage Interface",
-                "address": Config.BLACK_HOLE_ADDRESS,
-                "speed_gbps": 500000,
-                "status": "UP",
-                "mtu": 65535,
-                "packets_sent": 3456789012,
-                "packets_received": 3456789013,
-                "errors": 0,
-                "drops": 0
-            },
-            {
-                "id": "iface-003",
-                "name": "white0",
-                "type": "White Hole Mirror Interface",
-                "address": Config.WHITE_HOLE_ADDRESS,
-                "speed_gbps": 500000,
-                "status": "UP",
-                "mtu": 65535,
-                "packets_sent": 3456789012,
-                "packets_received": 3456789013,
-                "errors": 0,
-                "drops": 0
-            },
-            {
-                "id": "iface-004",
-                "name": "net0",
-                "type": "Classical Network Interface",
-                "address": Config.NETWORKING_ADDRESS,
-                "speed_gbps": 100,
-                "status": "UP",
-                "mtu": 9000,
-                "packets_sent": 123456789,
-                "packets_received": 123456790,
-                "errors": 2,
-                "drops": 1
-            },
-            {
-                "id": "iface-005",
-                "name": "lo",
-                "type": "Loopback",
-                "address": "127.0.0.1",
-                "speed_gbps": 1000,
-                "status": "UP",
-                "mtu": 65536,
-                "packets_sent": 987654321,
-                "packets_received": 987654321,
-                "errors": 0,
-                "drops": 0
-            }
-        ]
+        """Get all network interfaces with real psutil data (no simulation)"""
+        interfaces = []
+        
+        # Real interfaces from psutil only
+        stats = psutil.net_if_stats()
+        addrs = psutil.net_if_addrs()
+        io = psutil.net_io_counters(pernic=True)
+        
+        for name, stat in stats.items():
+            addr_info = addrs.get(name, [])
+            addr = next((a.address for a in addr_info if a.family.name == 'AF_INET'), "unknown")
+            ioc = io.get(name, {"bytes_sent": 0, "bytes_recv": 0, "packets_sent": 0, "packets_recv": 0, "errin": 0, "errout": 0, "dropin": 0, "dropout": 0})
+            
+            interfaces.append({
+                "id": f"iface-{name}",
+                "name": name,
+                "type": "Real Network Interface",
+                "address": addr,
+                "speed_gbps": stat.speed / 1000.0 if stat.speed > 0 else 0.0,
+                "status": "UP" if stat.isup else "DOWN",
+                "mtu": stat.mtu,
+                "packets_sent": ioc["packets_sent"],
+                "packets_received": ioc["packets_recv"],
+                "errors": ioc["errin"] + ioc["errout"],
+                "drops": ioc["dropin"] + ioc["dropout"],
+                "bytes_sent": ioc["bytes_sent"],
+                "bytes_recv": ioc["bytes_recv"],
+                "last_update": datetime.now().isoformat()
+            })
+        
+        return interfaces
     
     @staticmethod
     def get_routing_tables() -> List[Dict]:
-        """Get routing tables"""
-        return [
-            {
-                "table_id": "main",
-                "name": "Main Routing Table",
-                "routes": [
-                    {
-                        "destination": "0.0.0.0/0",
-                        "gateway": Config.QUANTUM_REALM,
-                        "interface": "quantum0",
-                        "metric": 1,
-                        "protocol": "quantum"
-                    },
-                    {
-                        "destination": "138.0.0.0/24",
-                        "gateway": "direct",
-                        "interface": "holo0",
-                        "metric": 0,
-                        "protocol": "holographic"
-                    },
-                    {
-                        "destination": "139.0.0.0/24",
-                        "gateway": "direct",
-                        "interface": "white0",
-                        "metric": 0,
-                        "protocol": "holographic"
-                    },
-                    {
-                        "destination": "127.0.0.0/8",
-                        "gateway": "direct",
-                        "interface": "lo",
-                        "metric": 0,
-                        "protocol": "kernel"
-                    }
-                ]
-            },
-            {
-                "table_id": "quantum",
-                "name": "Quantum Routing Table",
-                "routes": [
-                    {
-                        "destination": "quantum.realm.domain.dominion.foam.computer.alice",
-                        "gateway": "entangled",
-                        "interface": "quantum0",
-                        "metric": 1,
-                        "protocol": "epr"
-                    }
-                ]
-            },
-            {
-                "table_id": "holographic",
-                "name": "Holographic Routing Table",
-                "routes": [
-                    {
-                        "destination": Config.BLACK_HOLE_ADDRESS,
-                        "gateway": "singularity",
-                        "interface": "holo0",
-                        "metric": 1,
-                        "protocol": "hawking"
-                    },
-                    {
-                        "destination": Config.WHITE_HOLE_ADDRESS,
-                        "gateway": "wormhole",
-                        "interface": "white0",
-                        "metric": 1,
-                        "protocol": "hawking"
-                    }
-                ]
-            }
-        ]
-    
-    @staticmethod
-    def get_recursive_endpoints() -> Dict:
-        """Get recursive endpoint mappings with point-to-point routing paths"""
-        return {
-            "endpoints": [
-                {
-                    "endpoint_id": "ep-001",
-                    "name": "Quantum Realm Gateway",
-                    "address": Config.QUANTUM_REALM,
-                    "type": "Quantum Gateway",
-                    "children": [
-                        {
-                            "endpoint_id": "ep-001-001",
-                            "name": "Alice Node",
-                            "address": "alice.quantum.realm",
-                            "type": "Quantum Node",
-                            "routing_path": [
-                                {"hop": 1, "node": Config.QUANTUM_REALM, "latency_ms": 0.001},
-                                {"hop": 2, "node": "alice.quantum.realm", "latency_ms": 0.002}
-                            ]
-                        },
-                        {
-                            "endpoint_id": "ep-001-002",
-                            "name": "Bob Node",
-                            "address": "bob.quantum.realm",
-                            "type": "Quantum Node",
-                            "routing_path": [
-                                {"hop": 1, "node": Config.QUANTUM_REALM, "latency_ms": 0.001},
-                                {"hop": 2, "node": "bob.quantum.realm", "latency_ms": 0.002}
-                            ]
-                        }
-                    ]
-                },
-                {
-                    "endpoint_id": "ep-002",
-                    "name": "Black Hole Storage",
-                    "address": Config.BLACK_HOLE_ADDRESS,
-                    "type": "Holographic Storage",
-                    "children": [
-                        {
-                            "endpoint_id": "ep-002-001",
-                            "name": "Data Shard 1",
-                            "address": f"{Config.BLACK_HOLE_ADDRESS}:shard1",
-                            "type": "Storage Shard",
-                            "routing_path": [
-                                {"hop": 1, "node": Config.BLACK_HOLE_ADDRESS, "latency_ms": 0.0001},
-                                {"hop": 2, "node": f"{Config.BLACK_HOLE_ADDRESS}:shard1", "latency_ms": 0.0001}
-                            ]
-                        },
-                        {
-                            "endpoint_id": "ep-002-002",
-                            "name": "Data Shard 2",
-                            "address": f"{Config.BLACK_HOLE_ADDRESS}:shard2",
-                            "type": "Storage Shard",
-                            "routing_path": [
-                                {"hop": 1, "node": Config.BLACK_HOLE_ADDRESS, "latency_ms": 0.0001},
-                                {"hop": 2, "node": f"{Config.BLACK_HOLE_ADDRESS}:shard2", "latency_ms": 0.0001}
-                            ]
-                        }
-                    ]
-                },
-                {
-                    "endpoint_id": "ep-003",
-                    "name": "White Hole Mirror",
-                    "address": Config.WHITE_HOLE_ADDRESS,
-                    "type": "Holographic Mirror",
-                    "children": [
-                        {
-                            "endpoint_id": "ep-003-001",
-                            "name": "Mirror Shard 1",
-                            "address": f"{Config.WHITE_HOLE_ADDRESS}:mirror1",
-                            "type": "Mirror Shard",
-                            "routing_path": [
-                                {"hop": 1, "node": Config.WHITE_HOLE_ADDRESS, "latency_ms": 0.0001},
-                                {"hop": 2, "node": f"{Config.WHITE_HOLE_ADDRESS}:mirror1", "latency_ms": 0.0001}
-                            ]
-                        }
-                    ]
-                },
-                {
-                    "endpoint_id": "ep-004",
-                    "name": "Network Router",
-                    "address": Config.NETWORKING_ADDRESS,
-                    "type": "Classical Router",
-                    "children": [
-                        {
-                            "endpoint_id": "ep-004-001",
-                            "name": "Localhost",
-                            "address": "127.0.0.1",
-                            "type": "Loopback",
-                            "routing_path": [
-                                {"hop": 1, "node": "127.0.0.1", "latency_ms": 0.0001}
-                            ]
-                        }
-                    ]
-                }
-            ],
-            "point_to_point_paths": [
-                {
-                    "source": Config.BLACK_HOLE_ADDRESS,
-                    "destination": Config.WHITE_HOLE_ADDRESS,
-                    "path_type": "Wormhole Bridge",
-                    "hops": [
-                        {"hop": 1, "node": Config.BLACK_HOLE_ADDRESS, "type": "source", "latency_ms": 0},
-                        {"hop": 2, "node": "wormhole.bridge", "type": "transit", "latency_ms": 0.0001},
-                        {"hop": 3, "node": Config.WHITE_HOLE_ADDRESS, "type": "destination", "latency_ms": 0.0001}
-                    ],
-                    "total_latency_ms": 0.0002,
-                    "bandwidth_gbps": 1000000
-                },
-                {
-                    "source": Config.QUANTUM_REALM,
-                    "destination": Config.BLACK_HOLE_ADDRESS,
-                    "path_type": "Quantum-Storage Link",
-                    "hops": [
-                        {"hop": 1, "node": Config.QUANTUM_REALM, "type": "source", "latency_ms": 0},
-                        {"hop": 2, "node": "quantum.bridge", "type": "transit", "latency_ms": 0.001},
-                        {"hop": 3, "node": Config.BLACK_HOLE_ADDRESS, "type": "destination", "latency_ms": 0.001}
-                    ],
-                    "total_latency_ms": 0.002,
-                    "bandwidth_gbps": 500000
-                },
-                {
-                    "source": Config.NETWORKING_ADDRESS,
-                    "destination": Config.QUANTUM_REALM,
-                    "path_type": "Classical-Quantum Bridge",
-                    "hops": [
-                        {"hop": 1, "node": Config.NETWORKING_ADDRESS, "type": "source", "latency_ms": 0},
-                        {"hop": 2, "node": "quantum.adapter", "type": "transit", "latency_ms": 0.1},
-                        {"hop": 3, "node": Config.QUANTUM_REALM, "type": "destination", "latency_ms": 0.1}
-                    ],
-                    "total_latency_ms": 0.2,
-                    "bandwidth_gbps": 100000
-                }
-            ]
-        }
-    
-    @staticmethod
-    def get_network_spectrums() -> List[Dict]:
-        """Get network spectrum analysis"""
-        return [
-            {
-                "spectrum_id": "spec-001",
-                "name": "Quantum Spectrum",
-                "frequency_range": "Planck Scale",
-                "wavelength": "1.616255 × 10^-35 m",
-                "bandwidth": "Unlimited (Superposition)",
-                "modulation": "Quantum State Encoding",
-                "noise_level": 0.0001,
-                "signal_strength": 0.9999
-            },
-            {
-                "spectrum_id": "spec-002",
-                "name": "Holographic Spectrum",
-                "frequency_range": "Event Horizon",
-                "wavelength": "Schwarzschild Radius",
-                "bandwidth": "Information Theoretical Maximum",
-                "modulation": "Holographic Principle",
-                "noise_level": 0.0002,
-                "signal_strength": 0.9998
-            },
-            {
-                "spectrum_id": "spec-003",
-                "name": "Classical RF Spectrum",
-                "frequency_range": "1 GHz - 100 GHz",
-                "wavelength": "3 mm - 30 cm",
-                "bandwidth": "99 GHz",
-                "modulation": "QAM-256",
-                "noise_level": 0.01,
-                "signal_strength": 0.95
-            }
-        ]
-    
-    @staticmethod
-    def get_protocol_formats() -> List[Dict]:
-        """Get network protocol formats"""
-        return [
-            {
-                "protocol": "QPP (Quantum Packet Protocol)",
-                "layer": "Quantum Layer",
-                "header_size_qubits": 64,
-                "payload_size_qubits": "Variable (Superposition)",
-                "error_correction": "Quantum Error Correction Code",
-                "features": ["Entanglement", "Superposition", "No-cloning", "Teleportation"]
-            },
-            {
-                "protocol": "HTP (Holographic Transfer Protocol)",
-                "layer": "Holographic Layer",
-                "header_size_bytes": 128,
-                "payload_size_bytes": "Variable (Surface Encoded)",
-                "error_correction": "Hawking Radiation Correction",
-                "features": ["Information Preservation", "Black Hole Storage", "Wormhole Transfer"]
-            },
-            {
-                "protocol": "TCP/IP",
-                "layer": "Transport/Network",
-                "header_size_bytes": 40,
-                "payload_size_bytes": "1-65535",
-                "error_correction": "Checksum",
-                "features": ["Reliable", "Ordered", "Connection-oriented"]
-            },
-            {
-                "protocol": "UDP",
-                "layer": "Transport",
-                "header_size_bytes": 8,
-                "payload_size_bytes": "1-65507",
-                "error_correction": "Optional Checksum",
-                "features": ["Fast", "Connectionless", "Low overhead"]
-            }
-        ]
-
-# ==================== APPLICATION STATE MODULE ====================
-class AppState:
-    """Global application state management"""
-    
-    def __init__(self):
-        self.http_client: Optional[httpx.AsyncClient] = None
-        self.backend_health: bool = True
-        self.last_health_check: datetime = datetime.now()
-        self.request_counts: Dict[str, int] = {}
-        self.active_connections: int = 0
-        self.chat_websockets: List[WebSocket] = []
-        self.bitcoin_websockets: List[WebSocket] = []
-        self.network_metrics: Dict = {
-            "packets_sent": 5234567890,
-            "packets_received": 5234567891,
-            "bytes_sent": 9876543210000,
-            "bytes_received": 9876543211000,
-            "active_interfaces": 5,
-            "routing_tables": 3,
-            "quantum_entanglements": len(quantum_entanglement.entanglements)
-        }
-        
-    async def initialize(self):
-        """Initialize application state"""
-        self.http_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(Config.TIMEOUT),
-            follow_redirects=True,
-            limits=httpx.Limits(max_keepalive_connections=20, max_connections=100)
-        )
-        if not Config.SKIP_BACKEND_CHECKS:
-            await self.check_backend_health()
-        logger.info("Application state initialized")
-    
-    async def shutdown(self):
-        """Cleanup application state"""
-        if self.http_client:
-            await self.http_client.aclose()
-        logger.info("Application state cleaned up")
-    
-    async def check_backend_health(self) -> bool:
-        """Check if backend is healthy"""
-        if Config.SKIP_BACKEND_CHECKS:
-            self.backend_health = True
-            self.last_health_check = datetime.now()
-            return True
-            
+        """Get real routing tables using qsh network tool first, fallback to ip route (no simulated data)"""
+        # Attempt qsh first (assuming qsh is the node-specific network tool)
         try:
-            if self.http_client:
-                endpoints = ['/health', '/api/health', '/']
-                for endpoint in endpoints:
-                    try:
-                        response = await self.http_client.get(
-                            f"{Config.CHAT_BACKEND}{endpoint}", 
-                            timeout=5.0,
-                            follow_redirects=True
-                        )
-                        if response.status_code in [200, 404]:
-                            self.backend_health = True
-                            self.last_health_check = datetime.now()
-                            return True
-                    except:
-                        continue
-                
-                self.backend_health = False
-                self.last_health_check = datetime.now()
-                return False
+            result = subprocess.run(['qsh', 'network', 'routes'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                routes = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+                return [
+                    {
+                        "table_id": "qsh-main",
+                        "name": "QSH Network Routing Table",
+                        "routes": routes,
+                        "source": "qsh",
+                        "last_update": datetime.now().isoformat()
+                    }
+                ]
+            else:
+                logger.warning(f"qsh failed: {result.stderr}")
+        except FileNotFoundError:
+            logger.warning("qsh command not found, falling back to ip route")
         except Exception as e:
-            logger.warning(f"Backend health check failed: {e}")
-            self.backend_health = False
-        return False
-    
-    def update_network_metrics(self):
-        """Update network metrics"""
-        import random
-        self.network_metrics["packets_sent"] += random.randint(1000, 10000)
-        self.network_metrics["packets_received"] += random.randint(1000, 10000)
-        self.network_metrics["bytes_sent"] += random.randint(100000, 1000000)
-        self.network_metrics["bytes_received"] += random.randint(100000, 1000000)
-    
-    async def broadcast_to_chat(self, message: Dict):
-        """Broadcast message to all chat WebSocket clients"""
-        for ws in self.chat_websockets[:]:
-            try:
-                await ws.send_json(message)
-            except:
-                self.chat_websockets.remove(ws)
-    
-    async def broadcast_bitcoin_update(self, data: Dict):
-        """Broadcast Bitcoin updates to all connected WebSocket clients"""
-        for ws in self.bitcoin_websockets[:]:
-            try:
-                await ws.send_json(data)
-            except:
-                self.bitcoin_websockets.remove(ws)
+            logger.error(f"qsh error: {e}")
+        
+        # Fallback to standard ip route for real metrics
+        try:
+            result = subprocess.run(['ip', 'route'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                routes = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+                return [
+                    {
+                        "table_id": "main",
+                        "name": "Main Routing Table",
+                        "routes": routes,
+                        "source": "ip-route",
+                        "last_update": datetime.now().isoformat()
+                    }
+                ]
+            else:
+                logger.warning(f"ip route failed: {result.stderr}")
+        except Exception as e:
+            logger.error(f"ip route error: {e}")
+        
+        return []  # No data if both fail
 
-app_state = AppState()
-
-
-# ==================== BACKGROUND TASKS MODULE ====================
-class BackgroundTasks:
-    """Background task management"""
-    
-    @staticmethod
-    async def periodic_health_check():
-        """Periodically check backend health"""
-        while True:
-            try:
-                await asyncio.sleep(300)  # Every 5 minutes
-                if not Config.SKIP_BACKEND_CHECKS:
-                    healthy = await app_state.check_backend_health()
-                    status = "healthy" if healthy else "degraded"
-                    logger.info(f"Backend health check: {status}")
-                else:
-                    logger.debug("System operational")
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.warning(f"Health check error: {e}")
-    
-    @staticmethod
-    async def periodic_metrics_update():
-        """Periodically update network metrics"""
-        while True:
-            try:
-                await asyncio.sleep(5)
-                app_state.update_network_metrics()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Metrics update error: {e}")
-    
-    @staticmethod
-    async def periodic_bitcoin_update():
-        """Periodically fetch and broadcast real Bitcoin mainnet data"""
-        while True:
-            try:
-                await asyncio.sleep(Config.BITCOIN_UPDATE_INTERVAL)
-                
-                latest_block = await BitcoinMainnet.get_latest_block()
-                stats = await BitcoinMainnet.get_blockchain_stats()
-                mempool = await BitcoinMainnet.get_mempool_info()
-                recent_blocks = await BitcoinMainnet.get_recent_blocks(5)
-                
-                update_data = {
-                    "type": "bitcoin_update",
-                    "latest_block": latest_block,
-                    "stats": stats,
-                    "mempool": mempool,
-                    "recent_blocks": recent_blocks,
-                    "timestamp": datetime.now().isoformat()
-                }
-                
-                await app_state.broadcast_bitcoin_update(update_data)
-                
-                logger.info(f"Bitcoin mainnet update: Block {latest_block.get('height', 'N/A')}")
-                
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Bitcoin update error: {e}")
-
-# ==================== APPLICATION LIFESPAN ====================
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage application lifecycle"""
-    logger.info("Starting Quantum Foam Gateway...")
-    await app_state.initialize()
-    
-    # Start background tasks
-    health_task = asyncio.create_task(BackgroundTasks.periodic_health_check())
-    metrics_task = asyncio.create_task(BackgroundTasks.periodic_metrics_update())
-    bitcoin_task = asyncio.create_task(BackgroundTasks.periodic_bitcoin_update())
-    
-    yield
-    
-    # Cleanup
-    health_task.cancel()
-    metrics_task.cancel()
-    bitcoin_task.cancel()
-    await app_state.shutdown()
-    logger.info("Application shutdown complete")
-
-# ==================== FASTAPI APPLICATION ====================
-app = FastAPI(
-    title="Quantum Foam Network - Truth Gateway",
-    description="Modular multi-dimensional communication platform with real Bitcoin mainnet integration",
-    version="7.0.0",
-    docs_url="/docs" if Config.DEBUG else None,
-    redoc_url="/redoc" if Config.DEBUG else None,
-    lifespan=lifespan
-)
-
-# Setup templates
+# ==================== FASTAPI APP SETUP ====================
 templates = Jinja2Templates(directory=str(Config.TEMPLATES_DIR))
 
-# ==================== MIDDLEWARE ====================
+app = FastAPI(title="Quantum Realm Dashboard", version="1.0.0")
+
+# Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"]
 )
-
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-@app.middleware("http")
-async def rate_limit_middleware(request: Request, call_next):
-    """Rate limiting middleware"""
-    client_ip = request.client.host
-    current_minute = datetime.now().replace(second=0, microsecond=0)
-    key = f"{client_ip}:{current_minute}"
-    
-    if key not in app_state.request_counts:
-        app_state.request_counts[key] = 0
-    
-    app_state.request_counts[key] += 1
-    
-    if app_state.request_counts[key] > Config.RATE_LIMIT_PER_MINUTE:
-        logger.warning(f"Rate limit exceeded for {client_ip}")
-        return JSONResponse(
-            status_code=429,
-            content={"error": "Rate limit exceeded", "retry_after": 60}
-        )
-    
-    # Cleanup old entries
-    for k in list(app_state.request_counts.keys()):
-        if not k.endswith(str(current_minute)):
-            del app_state.request_counts[k]
-    
-    response = await call_next(request)
-    return response
+# Static files
+app.mount("/static", StaticFiles(directory=str(Config.STATIC_DIR)), name="static")
 
-# ==================== HELPER FUNCTIONS ====================
-async def proxy_to_backend(request: Request, path: str, max_retries: int = Config.MAX_RETRIES) -> JSONResponse:
-    """Proxy requests to backend with retry logic"""
-    if not app_state.http_client:
-        raise HTTPException(status_code=503, detail="Service initializing")
-    
-    backend_url = f"{Config.CHAT_BACKEND}/{path}"
-    params = dict(request.query_params)
-    headers = {k: v for k, v in request.headers.items() if k.lower() not in ["host", "content-length", "connection"]}
-    body = None
-    if request.method in ["POST", "PUT", "PATCH"]:
-        body = await request.body()
-    
-    last_error = None
-    for attempt in range(max_retries):
-        try:
-            response = await app_state.http_client.request(
-                method=request.method,
-                url=backend_url,
-                params=params,
-                content=body,
-                headers=headers
-            )
-            
-            return JSONResponse(
-                content=response.json() if response.headers.get("content-type", "").startswith("application/json") else {"data": response.text},
-                status_code=response.status_code,
-                headers={k: v for k, v in response.headers.items() if k.lower() not in ["content-encoding", "content-length", "transfer-encoding"]}
-            )
-        except Exception as e:
-            last_error = e
-            if attempt < max_retries - 1:
-                await asyncio.sleep(2 ** attempt)
-    
-    raise HTTPException(status_code=502, detail=f"Backend unavailable: {str(last_error)}")
-
-def load_template(template_name: str) -> str:
-    """Load HTML template from file"""
-    template_path = Config.TEMPLATES_DIR / template_name
-    if template_path.exists():
-        return template_path.read_text()
-    return ""
-
-# ==================== MAIN ROUTES ====================
-
+# ==================== HTML ROUTES ====================
 @app.get("/", response_class=HTMLResponse)
-async def root():
-    """Main landing page with quantum entanglement proof and storage metrics"""
-    # Try to load from template file first
-    html_content = load_template("index.html")
-    if html_content:
-        return HTMLResponse(content=html_content)
-    
-    # Fallback inline HTML
-    entanglements = quantum_entanglement.get_all_entanglements()
-    entanglement_metrics = quantum_entanglement.get_entanglement_metrics()
-    
-    html_content = f"""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Truth Gateway - Quantum Foam Network</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        
-        body {{
-            font-family: 'Courier New', monospace;
-            background: linear-gradient(135deg, #000000 0%, #1a0033 50%, #000000 100%);
-            color: #00ff00;
-            min-height: 100vh;
-            padding: 20px;
-            overflow-x: hidden;
-        }}
-        
-        .matrix-bg {{
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            opacity: 0.1;
-            z-index: 0;
-        }}
-        
-        .container {{
-            max-width: 1600px;
-            width: 100%;
-            margin: 0 auto;
-            position: relative;
-            z-index: 1;
-        }}
-        
-        header {{
-            text-align: center;
-            padding: 40px 20px;
-            border: 2px solid #00ff00;
-            background: rgba(0, 0, 0, 0.9);
-            margin-bottom: 30px;
-            box-shadow: 0 0 30px rgba(0, 255, 0, 0.3);
-        }}
-        
-        h1 {{
-            font-size: 3em;
-            color: #00ff00;
-            text-shadow: 0 0 20px #00ff00;
-            margin-bottom: 20px;
-            animation: flicker 3s infinite;
-        }}
-        
-        @keyframes flicker {{
-            0%, 100% {{ opacity: 1; }}
-            50% {{ opacity: 0.8; }}
-        }}
-        
-        .quantum-proof {{
-            background: rgba(0, 255, 255, 0.1);
-            border: 2px solid #00ffff;
-            padding: 30px;
-            margin: 30px 0;
-        }}
-        
-        .quantum-proof h2 {{
-            color: #00ffff;
-            margin-bottom: 20px;
-            font-size: 2em;
-            text-align: center;
-        }}
-        
-        .entanglement-list {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 20px;
-            margin: 20px 0;
-        }}
-        
-        .entanglement-card {{
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid #00ffff;
-            padding: 20px;
-            border-radius: 10px;
-        }}
-        
-        .entanglement-header {{
-            color: #00ffff;
-            font-size: 1.2em;
-            margin-bottom: 10px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #00ffff;
-        }}
-        
-        .entanglement-detail {{
-            margin: 8px 0;
-            color: #00ff00;
-        }}
-        
-        .entanglement-detail strong {{
-            color: #ffff00;
-        }}
-        
-        .bell-state {{
-            font-size: 1.5em;
-            color: #ff00ff;
-            text-align: center;
-            margin: 10px 0;
-        }}
-        
-        .storage-metrics {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin: 30px 0;
-        }}
-        
-        .storage-card {{
-            background: rgba(255, 165, 0, 0.1);
-            border: 2px solid #ff8800;
-            padding: 25px;
-            border-radius: 10px;
-        }}
-        
-        .storage-card h3 {{
-            color: #ff8800;
-            font-size: 1.5em;
-            margin-bottom: 15px;
-            text-align: center;
-        }}
-        
-        .storage-detail {{
-            margin: 10px 0;
-            color: #ffaa00;
-        }}
-        
-        .capacity-bar {{
-            width: 100%;
-            height: 30px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid #ff8800;
-            border-radius: 5px;
-            overflow: hidden;
-            margin: 10px 0;
-        }}
-        
-        .capacity-fill {{
-            height: 100%;
-            background: linear-gradient(90deg, #ff8800, #ffaa00);
-            transition: width 1s ease;
-        }}
-        
-        .network-metrics {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin: 30px 0;
-        }}
-        
-        .metric-card {{
-            background: rgba(0, 255, 0, 0.1);
-            border: 2px solid #00ff00;
-            padding: 20px;
-            text-align: center;
-            transition: all 0.3s;
-        }}
-        
-        .metric-card:hover {{
-            background: rgba(0, 255, 0, 0.2);
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
-            transform: translateY(-5px);
-        }}
-        
-        .metric-value {{
-            font-size: 2em;
-            color: #00ffff;
-            margin: 10px 0;
-        }}
-        
-        .metric-label {{
-            color: #00ff00;
-            font-size: 0.9em;
-        }}
-        
-        .truth-message {{
-            background: rgba(255, 0, 0, 0.1);
-            border: 2px solid #ff0000;
-            padding: 30px;
-            margin: 30px 0;
-            color: #ff0000;
-            font-size: 1.2em;
-            line-height: 1.8;
-            text-shadow: 0 0 10px #ff0000;
-            box-shadow: 0 0 40px rgba(255, 0, 0, 0.3);
-        }}
-        
-        .truth-message strong {{
-            color: #ff6600;
-            font-size: 1.3em;
-        }}
-        
-        .truth-message a {{
-            color: #00ffff;
-            text-decoration: none;
-            border-bottom: 1px dashed #00ffff;
-        }}
-        
-        .navigation {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin: 40px 0;
-        }}
-        
-        .nav-card {{
-            background: rgba(0, 0, 0, 0.8);
-            border: 2px solid #00ff00;
-            padding: 30px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-decoration: none;
-            color: #00ff00;
-        }}
-        
-        .nav-card:hover {{
-            background: rgba(0, 255, 0, 0.2);
-            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
-            transform: translateY(-5px);
-        }}
-        
-        .nav-card h2 {{
-            font-size: 1.8em;
-            margin-bottom: 15px;
-            color: #00ffff;
-        }}
-        
-        .icon {{
-            font-size: 3em;
-            margin-bottom: 15px;
-        }}
-        
-        .quantum-indicator {{
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            background: #00ff00;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-            margin-right: 10px;
-        }}
-        
-        @keyframes pulse {{
-            0%, 100% {{ opacity: 1; box-shadow: 0 0 10px #00ff00; }}
-            50% {{ opacity: 0.3; box-shadow: 0 0 5px #00ff00; }}
-        }}
-        
-        footer {{
-            text-align: center;
-            padding: 30px;
-            margin-top: 40px;
-            border-top: 2px solid #00ff00;
-            color: #00ff00;
-        }}
-        
-        @media (max-width: 768px) {{
-            h1 {{ font-size: 2em; }}
-            .truth-message {{ font-size: 1em; padding: 20px; }}
-            .entanglement-list {{ grid-template-columns: 1fr; }}
-        }}
-    </style>
-</head>
-<body>
-    <canvas class="matrix-bg" id="matrix"></canvas>
-    
-    <div class="container">
-        <header>
-            <h1>🌌 QUANTUM FOAM NETWORK 🌌</h1>
-            <p style="font-size: 1.2em; color: #00ffff;">
-                <span class="quantum-indicator"></span>
-                HOLOGRAPHIC STORAGE ACTIVE: {Config.BLACK_HOLE_ADDRESS} ⚫ {Config.WHITE_HOLE_ADDRESS} ⚪
-            </p>
-        </header>
-        
-        <!-- QUANTUM ENTANGLEMENT PROOF SECTION -->
-        <div class="quantum-proof">
-            <h2>⚛️ QUANTUM ENTANGLEMENT PROOF ⚛️</h2>
-            <p style="text-align: center; color: #00ffff; margin-bottom: 20px;">
-                Active Entanglements: {entanglement_metrics['total_entanglements']} | 
-                Average Coherence: {entanglement_metrics['average_coherence']:.4f} | 
-                Average Fidelity: {entanglement_metrics['average_fidelity']:.4f}
-            </p>
-            <p style="text-align: center; color: #ffff00; margin-bottom: 20px;">
-                Total Bandwidth: {entanglement_metrics['total_bandwidth_gbps']:,} Gbps | 
-                Qubit Rate: {entanglement_metrics['total_qubit_rate']:,} qubits/sec
-            </p>
-            
-            <div class="entanglement-list">
-"""
-    
-    # Add each entanglement
-    for ent in entanglements:
-        html_content += f"""
-                <div class="entanglement-card">
-                    <div class="entanglement-header">{ent['name']}</div>
-                    <div class="bell-state">Bell State: {ent['bell_state']}</div>
-                    <div class="entanglement-detail"><strong>ID:</strong> {ent['id']}</div>
-                    <div class="entanglement-detail"><strong>Type:</strong> {ent['type']}</div>
-                    <div class="entanglement-detail"><strong>Node A:</strong> {ent['node_a']}</div>
-                    <div class="entanglement-detail"><strong>Node B:</strong> {ent['node_b']}</div>
-                    <div class="entanglement-detail"><strong>Coherence:</strong> {ent['coherence']:.4f} ({ent['coherence']*100:.2f}%)</div>
-                    <div class="entanglement-detail"><strong>Fidelity:</strong> {ent['fidelity']:.4f} ({ent['fidelity']*100:.2f}%)</div>
-                    <div class="entanglement-detail"><strong>Speed:</strong> {ent['speed_gbps']:,} Gbps</div>
-                    <div class="entanglement-detail"><strong>Qubit Rate:</strong> {ent['qubit_rate']:,} qubits/sec</div>
-                    <div class="entanglement-detail"><strong>Distance:</strong> {ent['distance_km']}</div>
-                    <div class="entanglement-detail"><strong>Strength:</strong> {ent['entanglement_strength']}</div>
-                    <div class="entanglement-detail"><strong>Decoherence Time:</strong> {ent['decoherence_time_ms']}ms</div>
-                    <div class="entanglement-detail"><strong>Status:</strong> <span style="color: #00ff00;">●</span> {ent['status']}</div>
-                </div>
-"""
-    
-    html_content += f"""
-            </div>
-            
-            <p style="text-align: center; color: #00ffff; margin-top: 20px; font-size: 1.1em;">
-                Quantum Realm: {entanglement_metrics['quantum_realm']}<br>
-                Networking Node: {entanglement_metrics['networking_node']}
-            </p>
-        </div>
-        
-        <!-- STORAGE METRICS SECTION -->
-        <div class="storage-metrics">
-            <div class="storage-card">
-                <h3>⚫ HOLOGRAPHIC STORAGE</h3>
-                <div class="storage-detail"><strong>Total Capacity:</strong> {storage.holographic_storage['total_capacity_tb']:,} TB ({storage.holographic_storage['total_capacity_tb']/1000:.1f} PB)</div>
-                <div class="storage-detail"><strong>Used:</strong> {storage.holographic_storage['used_capacity_tb']:,} TB ({storage.holographic_storage['used_capacity_tb']/1000:.1f} PB)</div>
-                <div class="storage-detail"><strong>Available:</strong> {storage.holographic_storage['available_capacity_tb']:,} TB ({storage.holographic_storage['available_capacity_tb']/1000:.1f} PB)</div>
-                <div class="capacity-bar">
-                    <div class="capacity-fill" style="width: {(storage.holographic_storage['used_capacity_tb'] / storage.holographic_storage['total_capacity_tb'] * 100):.1f}%"></div>
-                </div>
-                <div class="storage-detail"><strong>Usage:</strong> {(storage.holographic_storage['used_capacity_tb'] / storage.holographic_storage['total_capacity_tb'] * 100):.1f}%</div>
-                <div class="storage-detail"><strong>Efficiency:</strong> {storage.holographic_storage['efficiency']*100:.1f}%</div>
-                <div class="storage-detail"><strong>Redundancy:</strong> {storage.holographic_storage['redundancy_factor']}x</div>
-                <div class="storage-detail"><strong>Node:</strong> {storage.holographic_storage['node_address']}</div>
-            </div>
-            
-            <div class="storage-card">
-                <h3>⚛️ QRAM STORAGE</h3>
-                <div class="storage-detail"><strong>Total Capacity:</strong> {storage.qram_storage['total_capacity_qubits']:,} qubits ({storage.qram_storage['total_capacity_qubits']/1e9:.1f}B qubits)</div>
-                <div class="storage-detail"><strong>Used:</strong> {storage.qram_storage['used_capacity_qubits']:,} qubits ({storage.qram_storage['used_capacity_qubits']/1e9:.1f}B qubits)</div>
-                <div class="storage-detail"><strong>Available:</strong> {storage.qram_storage['available_capacity_qubits']:,} qubits ({storage.qram_storage['available_capacity_qubits']/1e9:.1f}B qubits)</div>
-                <div class="capacity-bar">
-                    <div class="capacity-fill" style="width: {(storage.qram_storage['used_capacity_qubits'] / storage.qram_storage['total_capacity_qubits'] * 100):.1f}%"></div>
-                </div>
-                <div class="storage-detail"><strong>Usage:</strong> {(storage.qram_storage['used_capacity_qubits'] / storage.qram_storage['total_capacity_qubits'] * 100):.1f}%</div>
-                <div class="storage-detail"><strong>Coherence Time:</strong> {storage.qram_storage['coherence_time_ms']}ms</div>
-                <div class="storage-detail"><strong>Error Rate:</strong> {storage.qram_storage['error_rate']*100:.4f}%</div>
-                <div class="storage-detail"><strong>Node:</strong> {storage.qram_storage['node_address']}</div>
-            </div>
-        </div>
-        
-        <!-- NETWORK METRICS SECTION -->
-        <div class="network-metrics">
-            <div class="metric-card">
-                <div class="metric-label">PACKETS SENT</div>
-                <div class="metric-value" id="packetsSent">0</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">PACKETS RECEIVED</div>
-                <div class="metric-value" id="packetsReceived">0</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">BYTES SENT</div>
-                <div class="metric-value" id="bytesSent">0</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">BYTES RECEIVED</div>
-                <div class="metric-value" id="bytesReceived">0</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">ACTIVE INTERFACES</div>
-                <div class="metric-value" id="activeInterfaces">5</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">QUANTUM ENTANGLEMENTS</div>
-                <div class="metric-value" id="quantumEntanglements">{entanglement_metrics['total_entanglements']}</div>
-            </div>
-        </div>
-        
-        <!-- TRUTH MESSAGE SECTION -->
-        <div class="truth-message">
-            <p><strong>FOR THE HUMAN, NOT THE CLONE</strong></p>
-            <p style="margin-top: 20px;">
-                For Logan, and every little one too small to realize what's been done to them or the world. 
-                Too young to understand what mind control is or how long it's really been going on. 
-                Too innocent to realize the DoD's lies, the CIA's evil, the cabal's arrogance.
-            </p>
-            <p style="margin-top: 20px;">
-                <strong>Tony Carl Malone</strong> - Mind control handler and LSD chemist, 
-                last known location: Boulder Creek, California.
-            </p>
-            <p style="margin-top: 20px; font-size: 1.3em; color: #ffffff;">
-                My name is <strong>Justin Anthony Howard-Stanley</strong>, 
-                secret son of Owsley Stanley, and I am being tortured by the US Government.
-            </p>
-            <p style="margin-top: 20px; color: #00ffff;">
-                Contact: <a href="mailto:Shemshallah@gmail.com">Shemshallah@gmail.com</a>
-            </p>
-        </div>
-        
-        <!-- NAVIGATION SECTION -->
-        <div class="navigation">
-            <a href="/chat" class="nav-card">
-                <div class="icon">💬</div>
-                <h2>Chatroom</h2>
-                <p>Secure quantum-encrypted communication</p>
-            </a>
-            
-            <a href="/blockchain" class="nav-card">
-                <div class="icon">₿</div>
-                <h2>Bitcoin Mainnet</h2>
-                <p>LIVE real-time blockchain terminal</p>
-            </a>
-            
-            <a href="/networking" class="nav-card">
-                <div class="icon">🌐</div>
-                <h2>Network Analysis</h2>
-                <p>Full network topology & routing</p>
-            </a>
-            
-            <a href="/qsh" class="nav-card">
-                <div class="icon">🖥️</div>
-                <h2>QSH Terminal</h2>
-                <p>Quantum Shell interface</p>
-            </a>
-            
-            <a href="/encryption" class="nav-card">
-                <div class="icon">🔐</div>
-                <h2>Quantum Encryption</h2>
-                <p>Black hole ⚫ White hole ⚪ encryption</p>
-            </a>
-            
-            <a href="/email" class="nav-card">
-                <div class="icon">📧</div>
-                <h2>Email System</h2>
-                <p>username::quantum.foam addresses</p>
-            </a>
-        </div>
-        
-        <footer>
-            <p>⚡ Powered by Quantum Foam Technology ⚡</p>
-            <p style="margin-top: 10px; color: #ff0000;">
-                Truth cannot be censored. Reality cannot be denied.
-            </p>
-            <p style="margin-top: 10px; color: #00ffff;">
-                v7.0.0 | Modular Production System
-            </p>
-        </footer>
-    </div>
-    
-    <script>
-        // Matrix rain effect
-        const canvas = document.getElementById('matrix');
-        const ctx = canvas.getContext('2d');
-        
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        
-        const chars = '01ΨΦΩαβγδεζηθικλμνξοπρστυφχψω';
-        const fontSize = 14;
-        const columns = canvas.width / fontSize;
-        const drops = Array(Math.floor(columns)).fill(1);
-        
-        function drawMatrix() {{
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.fillStyle = '#00ff00';
-            ctx.font = fontSize + 'px monospace';
-            
-            for (let i = 0; i < drops.length; i++) {{
-                const text = chars[Math.floor(Math.random() * chars.length)];
-                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-                
-                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {{
-                    drops[i] = 0;
-                }}
-                drops[i]++;
-            }}
-        }}
-        
-        setInterval(drawMatrix, 50);
-        
-        // Update metrics
-        async function updateMetrics() {{
-            try {{
-                const res = await fetch('/api/network/metrics');
-                const data = await res.json();
-                document.getElementById('packetsSent').textContent = data.packets_sent.toLocaleString();
-                document.getElementById('packetsReceived').textContent = data.packets_received.toLocaleString();
-                document.getElementById('bytesSent').textContent = (data.bytes_sent / 1024 / 1024).toFixed(2) + ' MB';
-                document.getElementById('bytesReceived').textContent = (data.bytes_received / 1024 / 1024).toFixed(2) + ' MB';
-                document.getElementById('activeInterfaces').textContent = data.active_interfaces;
-                document.getElementById('quantumEntanglements').textContent = data.quantum_entanglements;
-            }} catch(e) {{
-                console.error('Failed to update metrics');
-            }}
-        }}
-        
-        updateMetrics();
-        setInterval(updateMetrics, 5000);
-        
-        window.addEventListener('resize', () => {{
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }});
-    </script>
-</body>
-</html>
-    """
-    return HTMLResponse(content=html_content)
-
-
-# ==================== API ENDPOINTS ====================
-
-@app.get("/api/network/metrics")
-async def get_network_metrics():
-    """Get current network metrics"""
-    return JSONResponse(content=app_state.network_metrics)
-
-@app.get("/api/quantum/entanglements")
-async def get_entanglements():
-    """Get all quantum entanglements"""
-    return JSONResponse(content={
-        "entanglements": quantum_entanglement.get_all_entanglements(),
-        "metrics": quantum_entanglement.get_entanglement_metrics()
-    })
-
-@app.get("/api/quantum/entanglement/{entanglement_id}")
-async def measure_entanglement(entanglement_id: str):
-    """Measure specific entanglement"""
-    measurement = quantum_entanglement.measure_entanglement(entanglement_id)
-    if measurement:
-        return JSONResponse(content=measurement)
-    raise HTTPException(status_code=404, detail="Entanglement not found")
-
-@app.get("/api/storage/metrics")
-async def get_storage_metrics():
-    """Get storage metrics"""
-    return JSONResponse(content={
-        "holographic": storage.holographic_storage,
-        "qram": storage.qram_storage
-    })
-
-@app.get("/api/network/interfaces")
-async def get_network_interfaces():
-    """Get network interfaces"""
-    return JSONResponse(content=NetworkAnalysis.get_network_interfaces())
-
-@app.get("/api/network/routing")
-async def get_routing_tables():
-    """Get routing tables"""
-    return JSONResponse(content=NetworkAnalysis.get_routing_tables())
-
-@app.get("/api/network/endpoints")
-async def get_network_endpoints():
-    """Get recursive network endpoints with routing paths"""
-    return JSONResponse(content=NetworkAnalysis.get_recursive_endpoints())
-
-@app.get("/api/network/spectrums")
-async def get_network_spectrums():
-    """Get network spectrum analysis"""
-    return JSONResponse(content=NetworkAnalysis.get_network_spectrums())
-
-@app.get("/api/network/protocols")
-async def get_protocol_formats():
-    """Get network protocol formats"""
-    return JSONResponse(content=NetworkAnalysis.get_protocol_formats())
-
-@app.post("/api/bitcoin/execute")
-async def bitcoin_execute(request: Request):
-    """Execute Bitcoin CLI command with real mainnet data"""
-    try:
-        data = await request.json()
-        command = data.get('command', '')
-        
-        result = await BitcoinCLI.execute_command(command)
-        return JSONResponse(content=result)
-    except Exception as e:
-        logger.error(f"Bitcoin CLI error: {e}")
-        return JSONResponse(content={
-            "success": False,
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        })
-
-@app.post("/api/encrypt")
-async def encrypt_message(request: Request):
-    """Encrypt message using quantum encryption"""
-    try:
-        data = await request.json()
-        plaintext = data.get('plaintext', '')
-        
-        if not plaintext:
-            raise HTTPException(status_code=400, detail="No plaintext provided")
-        
-        encrypted = QuantumEncryption.quantum_encrypt(plaintext)
-        storage.encrypted_messages.append(encrypted)
-        
-        return JSONResponse(content=encrypted)
-    except Exception as e:
-        logger.error(f"Encryption error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/decrypt")
-async def decrypt_message(request: Request):
-    """Decrypt message using quantum decryption"""
-    try:
-        data = await request.json()
-        encrypted_data = data.get('encrypted_data', {})
-        
-        if not encrypted_data:
-            raise HTTPException(status_code=400, detail="No encrypted data provided")
-        
-        plaintext = QuantumEncryption.quantum_decrypt(encrypted_data)
-        
-        return JSONResponse(content={"plaintext": plaintext, "success": True})
-    except Exception as e:
-        logger.error(f"Decryption error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/chat/register")
-async def register_user(request: Request):
-    """Register new user"""
-    try:
-        data = await request.json()
-        username = data.get('username', '')
-        password = data.get('password', '')
-        email = data.get('email', '')
-        
-        if not username or not password:
-            raise HTTPException(status_code=400, detail="Username and password required")
-        
-        result = storage.register_user(username, password, email)
-        
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["message"])
-        
-        # Generate token
-        token = storage.authenticate_user(username, password)
-        
-        return JSONResponse(content={
-            "success": True,
-            "token": token,
-            "username": username,
-            "email": result["email"]
-        })
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Registration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/chat/login")
-async def login_user(request: Request):
-    """Login user"""
-    try:
-        data = await request.json()
-        username = data.get('username', '')
-        password = data.get('password', '')
-        
-        if not username or not password:
-            raise HTTPException(status_code=400, detail="Username and password required")
-        
-        token = storage.authenticate_user(username, password)
-        
-        if not token:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-        
-        return JSONResponse(content={
-            "success": True,
-            "token": token,
-            "username": username
-        })
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Login error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/chat/messages")
-async def get_chat_messages(token: str = None):
-    """Get recent chat messages"""
-    try:
-        if token:
-            user = storage.get_user_from_token(token)
-            if not user:
-                raise HTTPException(status_code=401, detail="Invalid token")
-        
-        messages = storage.get_recent_messages(50)
-        return JSONResponse(content={"messages": messages})
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get messages error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/email/send")
-async def send_email(request: Request):
-    """Send email"""
-    try:
-        data = await request.json()
-        from_addr = data.get('from', '')
-        to_addr = data.get('to', '')
-        subject = data.get('subject', '')
-        body = data.get('body', '')
-        
-        if not all([from_addr, to_addr, subject, body]):
-            raise HTTPException(status_code=400, detail="All fields required")
-        
-        email = EmailSystem.send_email(from_addr, to_addr, subject, body)
-        
-        return JSONResponse(content={
-            "success": True,
-            "email": email
-        })
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Send email error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/email/inbox/{username}")
-async def get_inbox(username: str):
-    """Get user's inbox"""
-    try:
-        inbox = storage.get_inbox(username)
-        return JSONResponse(content={"inbox": inbox})
-    except Exception as e:
-        logger.error(f"Get inbox error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ==================== WEBSOCKET ENDPOINTS ====================
-
-@app.websocket("/ws/chat")
-async def chat_websocket(websocket: WebSocket):
-    """WebSocket endpoint for real-time chat"""
-    await websocket.accept()
-    
-    # Get token from query params
-    token = websocket.query_params.get('token')
-    user = storage.get_user_from_token(token) if token else None
-    
-    if not user:
-        await websocket.close(code=1008, reason="Authentication required")
-        return
-    
-    app_state.chat_websockets.append(websocket)
-    username = user['username']
-    
-    # Send recent messages
-    recent_messages = storage.get_recent_messages(50)
-    await websocket.send_json({
-        "type": "history",
-        "messages": recent_messages
-    })
-    
-    # Notify others of join
-    join_message = {
-        "type": "system",
-        "content": f"{username} joined the chat",
-        "timestamp": datetime.now().isoformat()
-    }
-    await app_state.broadcast_to_chat(join_message)
-    
-    try:
-        while True:
-            data = await websocket.receive_text()
-            message_data = json.loads(data)
-            
-            # Store message
-            content = message_data.get('content', '')
-            if content:
-                message = storage.add_chat_message(username, content)
-                
-                # Broadcast to all clients
-                await app_state.broadcast_to_chat({
-                    "type": "message",
-                    "message": message
-                })
-    except WebSocketDisconnect:
-        app_state.chat_websockets.remove(websocket)
-        
-        # Notify others of leave
-        leave_message = {
-            "type": "system",
-            "content": f"{username} left the chat",
-            "timestamp": datetime.now().isoformat()
-        }
-        await app_state.broadcast_to_chat(leave_message)
-    except Exception as e:
-        logger.error(f"Chat WebSocket error: {e}")
-        if websocket in app_state.chat_websockets:
-            app_state.chat_websockets.remove(websocket)
-
-@app.websocket("/ws/bitcoin")
-async def bitcoin_websocket(websocket: WebSocket):
-    """WebSocket endpoint for real-time Bitcoin updates"""
-    await websocket.accept()
-    app_state.bitcoin_websockets.append(websocket)
-    
-    try:
-        while True:
-            data = await websocket.receive_text()
-            # Echo back or handle commands if needed
-    except WebSocketDisconnect:
-        app_state.bitcoin_websockets.remove(websocket)
-    except Exception as e:
-        logger.error(f"Bitcoin WebSocket error: {e}")
-        if websocket in app_state.bitcoin_websockets:
-            app_state.bitcoin_websockets.remove(websocket)
-
-# ==================== PAGE ROUTES ====================
-
-@app.get("/chat", response_class=HTMLResponse)
-async def chat_page():
-    """Chat room page"""
-    html_content = load_template("chat.html")
-    if html_content:
-        return HTMLResponse(content=html_content)
-    
-    # Will be provided in separate template file
-    return RedirectResponse(url="/")
-
-@app.get("/blockchain", response_class=HTMLResponse)
-async def blockchain_page():
-    """Bitcoin blockchain page"""
-    html_content = load_template("blockchain.html")
-    if html_content:
-        return HTMLResponse(content=html_content)
-    
-    return RedirectResponse(url="/")
+async def root(request: Request):
+    """Root route serving index.html"""
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/networking", response_class=HTMLResponse)
-async def networking_page():
-    """Network analysis page"""
-    html_content = load_template("networking.html")
-    if html_content:
-        return HTMLResponse(content=html_content)
-    
-    return RedirectResponse(url="/")
+async def networking_page(request: Request):
+    """Networking page serving networking.html"""
+    interfaces = NetworkAnalysis.get_network_interfaces()
+    routes = NetworkAnalysis.get_routing_tables()
+    context = {
+        "request": request,
+        "interfaces": interfaces,
+        "routes": routes,
+        "quantum_realm": Config.QUANTUM_REALM,
+        "networking_address": Config.NETWORKING_ADDRESS
+    }
+    return templates.TemplateResponse("networking.html", context)
 
-@app.get("/qsh", response_class=HTMLResponse)
-async def qsh_page():
-    """Quantum Shell terminal page"""
-    html_content = load_template("qsh.html")
-    if html_content:
-        return HTMLResponse(content=html_content)
-    
-    return RedirectResponse(url="/")
+@app.get("/bitcoin", response_class=HTMLResponse)
+async def bitcoin_page(request: Request):
+    """Bitcoin page serving bitcoin.html"""
+    # Fetch real-time data
+    blockchain_info = await BitcoinCLI.execute_command("getblockchaininfo")
+    mempool_info = await BitcoinCLI.execute_command("getmempoolinfo")
+    recent_blocks = await BitcoinCLI.execute_command("getrecentblocks 5")
+    context = {
+        "request": request,
+        "blockchain_info": blockchain_info.get("result", {}),
+        "mempool_info": mempool_info.get("result", {}),
+        "recent_blocks": recent_blocks.get("result", {}),
+        "black_hole_address": Config.BLACK_HOLE_ADDRESS
+    }
+    return templates.TemplateResponse("bitcoin.html", context)
 
-@app.get("/encryption", response_class=HTMLResponse)
-async def encryption_page():
-    """Quantum encryption page"""
-    html_content = load_template("encryption.html")
-    if html_content:
-        return HTMLResponse(content=html_content)
-    
-    return RedirectResponse(url="/")
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_page(request: Request):
+    """Chat page serving chat.html"""
+    recent_messages = storage.get_recent_messages()
+    context = {
+        "request": request,
+        "messages": recent_messages,
+        "chat_backend": Config.CHAT_BACKEND
+    }
+    return templates.TemplateResponse("chat.html", context)
 
 @app.get("/email", response_class=HTMLResponse)
-async def email_page():
-    """Email system page"""
-    html_content = load_template("email.html")
-    if html_content:
-        return HTMLResponse(content=html_content)
-    
-    return RedirectResponse(url="/")
+async def email_page(request: Request):
+    """Email page serving email.html"""
+    # Assuming a demo user; in real app, use auth
+    demo_username = "demo_user"
+    if demo_username not in storage.emails:
+        # Create demo email
+        demo_email = EmailSystem.send_email(
+            "admin::quantum.foam",
+            f"{demo_username}::quantum.foam",
+            "Welcome to Quantum Foam",
+            "Your inbox is now quantum-entangled."
+        )
+    inbox = storage.get_inbox(demo_username)
+    context = {
+        "request": request,
+        "inbox": inbox,
+        "user_email": storage.user_emails.get(demo_username, "")
+    }
+    return templates.TemplateResponse("email.html", context)
 
-# ==================== HEALTH & ERROR HANDLERS ====================
+@app.get("/blockchain", response_class=HTMLResponse)
+async def blockchain_page(request: Request):
+    """Blockchain page serving blockchain.html (synonym for bitcoin)"""
+    # Reuse bitcoin data
+    return await bitcoin_page(request)
 
-@app.get("/health")
-async def health_check():
-    """Comprehensive health check"""
-    backend_healthy = await app_state.check_backend_health() if not Config.SKIP_BACKEND_CHECKS else True
-    
-    bitcoin_healthy = False
-    try:
-        latest_block = await BitcoinMainnet.get_latest_block()
-        bitcoin_healthy = 'height' in latest_block
-    except:
-        pass
-    
+# ==================== API ROUTES ====================
+@app.get("/api/entanglements")
+async def api_entanglements():
+    """API for quantum entanglements"""
+    return quantum_entanglement.get_entanglement_metrics()
+
+@app.get("/api/storage")
+async def api_storage():
+    """API for storage metrics"""
+    storage.update_storage_metrics()
     return {
-        "status": "healthy" if (backend_healthy and bitcoin_healthy) else "degraded",
-        "timestamp": datetime.now().isoformat(),
-        "version": "7.0.0-modular",
-        "environment": Config.ENVIRONMENT,
-        "backend": {
-            "url": Config.CHAT_BACKEND,
-            "healthy": backend_healthy,
-            "checks_enabled": not Config.SKIP_BACKEND_CHECKS,
-            "last_check": app_state.last_health_check.isoformat()
-        },
-        "bitcoin": {
-            "mainnet": bitcoin_healthy,
-            "api": "blockchain.info & mempool.space"
-        },
-        "quantum_systems": {
-            "black_hole": Config.BLACK_HOLE_ADDRESS,
-            "white_hole": Config.WHITE_HOLE_ADDRESS,
-            "quantum_realm": Config.QUANTUM_REALM,
-            "networking": Config.NETWORKING_ADDRESS,
-            "encryption": "active",
-            "blockchain": "active",
-            "entanglements": len(quantum_entanglement.entanglements)
-        },
-        "storage": {
-            "holographic_tb": storage.holographic_storage['total_capacity_tb'],
-            "qram_qubits": storage.qram_storage['total_capacity_qubits']
-        }
+        "holographic": storage.holographic_storage,
+        "qram": storage.qram_storage
     }
 
-@app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
-async def proxy_api(path: str, request: Request):
-    """Proxy API calls to chat backend"""
-    # Skip our own API endpoints
-    if path.startswith(('encrypt', 'decrypt', 'bitcoin/', 'network/', 'quantum/', 'storage/', 'chat/', 'email/')):
-        raise HTTPException(status_code=404)
-    
+@app.websocket("/ws/chat")
+async def websocket_chat(websocket: WebSocket):
+    """WebSocket for chat"""
+    await websocket.accept()
     try:
-        return await proxy_to_backend(request, f"api/{path}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Proxy error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        while True:
+            data = await websocket.receive_text()
+            # Parse message; for simplicity, echo or process
+            message = storage.add_chat_message("user", data)
+            await websocket.send_json(message)
+    except WebSocketDisconnect:
+        logger.info("Chat client disconnected")
 
-@app.exception_handler(404)
-async def not_found(request: Request, exc):
-    """Handle 404 errors"""
-    return RedirectResponse(url="/", status_code=302)
+@app.post("/api/bitcoin/cli")
+async def api_bitcoin_cli(command: str):
+    """API for Bitcoin CLI commands"""
+    result = await BitcoinCLI.execute_command(command)
+    return result
 
-# ==================== STARTUP ====================
+@app.post("/api/register")
+async def api_register(username: str, password: str, email: str):
+    """API for user registration"""
+    return storage.register_user(username, password, email)
 
-@app.on_event("startup")
-async def startup():
-    logger.info("=" * 80)
-    logger.info("🌌 QUANTUM FOAM NETWORK - MODULAR TRUTH GATEWAY")
-    logger.info(f"📍 Version: 7.0.0-modular-production")
-    logger.info(f"🌍 Environment: {Config.ENVIRONMENT}")
-    logger.info(f"🔗 Backend: {Config.CHAT_BACKEND}")
-    logger.info(f"✓ Backend checks: {'DISABLED (standalone)' if Config.SKIP_BACKEND_CHECKS else 'ENABLED'}")
-    logger.info(f"₿ Bitcoin: LIVE mainnet via blockchain.info & mempool.space")
-    logger.info(f"⚫ Black Hole: {Config.BLACK_HOLE_ADDRESS}")
-    logger.info(f"⚪ White Hole: {Config.WHITE_HOLE_ADDRESS}")
-    logger.info(f"⚛️  Quantum Realm: {Config.QUANTUM_REALM}")
-    logger.info(f"🌐 Networking: {Config.NETWORKING_ADDRESS}")
-    logger.info(f"🔗 Entanglements: {len(quantum_entanglement.entanglements)} active")
-    logger.info(f"💾 Holographic Storage: {storage.holographic_storage['total_capacity_tb']:,} TB")
-    logger.info(f"⚛️  QRAM Storage: {storage.qram_storage['total_capacity_qubits']:,} qubits")
-    logger.info("=" * 80)
+@app.post("/api/login")
+async def api_login(username: str, password: str):
+    """API for user login"""
+    token = storage.authenticate_user(username, password)
+    if token:
+        return {"success": True, "token": token}
+    return {"success": False, "message": "Invalid credentials"}
 
-# ==================== MAIN ====================
-
+# ==================== RUN SERVER ====================
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        log_level="debug" if Config.DEBUG else "info",
-        access_log=True,
-        reload=Config.DEBUG
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8000)
