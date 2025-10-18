@@ -411,7 +411,7 @@
             color: #fff;
         }
         
-        /* Login Modal */
+        
         .login-modal {
             position: fixed;
             top: 0;
@@ -505,3 +505,643 @@
             text-align: center;
             margin-top: 15px;
             font-size: 13px
+
+        }
+        
+        .login-content .info {
+            color: #0ff;
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        
+        .login-content .toggle-mode {
+            text-align: center;
+            margin-top: 20px;
+            color: #0f0;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: #0f0; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #0a0; }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { width: 200px; }
+            .email-list { width: 100%; }
+            .email-viewer { display: none; }
+            .email-viewer.mobile-show { display: flex; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Modal -->
+    <div id="loginModal" class="login-modal">
+        <div class="login-content">
+            <h2>🔐 HOLOGRAPHIC EMAIL LOGIN</h2>
+            <div id="loginForm">
+                <div class="form-group">
+                    <label>Username:</label>
+                    <input type="text" id="loginUsername" placeholder="Enter username" />
+                </div>
+                <div class="form-group">
+                    <label>Password:</label>
+                    <input type="password" id="loginPassword" placeholder="Enter password" />
+                </div>
+                <div class="button-group">
+                    <button class="primary" onclick="login()">LOGIN</button>
+                    <button class="secondary" onclick="showRegister()">REGISTER</button>
+                </div>
+                <div id="loginError" class="error"></div>
+                <div class="info">
+                    Each user receives a 10GB holographic storage block<br>
+                    at 137.0.0.x network address<br>
+                    Connected to: HOLO (138.0.0.1) | QRAM (136.0.0.1)
+                </div>
+            </div>
+            <div id="registerForm" style="display: none;">
+                <div class="form-group">
+                    <label>Username:</label>
+                    <input type="text" id="registerUsername" placeholder="Choose username" oninput="updateEmailPreview()" />
+                </div>
+                <div class="form-group">
+                    <label>Password:</label>
+                    <input type="password" id="registerPassword" placeholder="Choose password" />
+                </div>
+                <div class="form-group">
+                    <label>Confirm Password:</label>
+                    <input type="password" id="registerPasswordConfirm" placeholder="Confirm password" />
+                </div>
+                <div class="button-group">
+                    <button class="primary" onclick="register()">CREATE ACCOUNT</button>
+                    <button class="secondary" onclick="showLogin()">BACK TO LOGIN</button>
+                </div>
+                <div id="registerError" class="error"></div>
+                <div class="info">
+                    Your holographic email address will be:<br>
+                    <strong><span id="previewEmail">username::quantum.foam</span></strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compose Modal -->
+    <div id="composeModal" class="compose-modal hidden">
+        <div class="compose-content">
+            <div class="compose-header">
+                <h2>✉️ Compose Email</h2>
+                <button class="close-btn" onclick="closeCompose()">✕</button>
+            </div>
+            <div class="compose-body">
+                <div class="form-group">
+                    <label>To:</label>
+                    <input type="text" id="composeTo" placeholder="recipient::quantum.foam" />
+                </div>
+                <div class="form-group">
+                    <label>CC:</label>
+                    <input type="text" id="composeCc" placeholder="Optional" />
+                </div>
+                <div class="form-group">
+                    <label>Subject:</label>
+                    <input type="text" id="composeSubject" placeholder="Email subject" />
+                </div>
+                <div class="form-group">
+                    <label>Body:</label>
+                    <textarea id="composeBody" placeholder="Compose your message..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Attachments:</label>
+                    <input type="file" id="composeAttachment" multiple />
+                </div>
+            </div>
+            <div class="compose-footer">
+                <button onclick="sendEmail()">📤 SEND</button>
+                <button class="cancel" onclick="closeCompose()">CANCEL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>📧 Holographic Email System</h1>
+        <div class="header-info">
+            <div class="block-info" id="blockInfo">
+                Block: Loading...
+            </div>
+            <div class="block-info" id="userInfo">
+                User: Loading...
+            </div>
+            <button onclick="logout()">LOGOUT</button>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <button class="compose-btn" onclick="openCompose()">✍️ COMPOSE</button>
+            </div>
+            <div class="sidebar-section">
+                <h3>Folders</h3>
+                <div class="sidebar-item active" onclick="selectFolder('Inbox')">
+                    📥 Inbox
+                    <span class="badge" id="inboxBadge">0</span>
+                </div>
+                <div class="sidebar-item" onclick="selectFolder('Sent')">
+                    📤 Sent
+                </div>
+                <div class="sidebar-item" onclick="selectFolder('Drafts')">
+                    📝 Drafts
+                </div>
+                <div class="sidebar-item" onclick="selectFolder('Trash')">
+                    🗑️ Trash
+                </div>
+            </div>
+            <div class="sidebar-section">
+                <h3>Storage</h3>
+                <div class="sidebar-item" onclick="viewStorageInfo()">
+                    💾 Storage Info
+                </div>
+                <div class="sidebar-item" onclick="viewBlocks()">
+                    🔲 Blocks
+                </div>
+            </div>
+        </div>
+
+        <!-- Email List -->
+        <div class="email-list">
+            <div class="email-list-header">
+                <h2 id="folderTitle">Inbox</h2>
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="🔍 Search..." onkeyup="searchEmails()" />
+                </div>
+            </div>
+            <div class="email-list-items" id="emailListItems">
+                <div style="padding: 20px; text-align: center; color: #555;">
+                    Loading emails...
+                </div>
+            </div>
+        </div>
+
+        <!-- Email Viewer -->
+        <div class="email-viewer">
+            <div class="email-viewer-empty" id="emptyState">
+                Select an email to read
+            </div>
+            <div id="emailContent" style="display: none; flex-direction: column; flex: 1;">
+                <div class="email-viewer-header">
+                    <div class="email-viewer-subject" id="emailSubject"></div>
+                    <div class="email-viewer-meta">
+                        <div class="email-viewer-from" id="emailFrom"></div>
+                        <div class="email-viewer-time" id="emailTime"></div>
+                    </div>
+                    <div class="email-viewer-actions">
+                        <button onclick="replyEmail()">↩️ Reply</button>
+                        <button onclick="forwardEmail()">➡️ Forward</button>
+                        <button onclick="deleteEmail()">🗑️ Delete</button>
+                        <button onclick="moveToFolder()">📁 Move</button>
+                    </div>
+                </div>
+                <div class="email-viewer-body" id="emailBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let sessionToken = null;
+        let currentUser = null;
+        let currentEmail = null;
+        let currentFolder = 'Inbox';
+        let allEmails = [];
+
+        // Initialize
+        window.addEventListener('load', function() {
+            checkSession();
+        });
+
+        // Session management
+        function checkSession() {
+            const token = sessionStorage.getItem('email_token');
+            if (token) {
+                sessionToken = token;
+                currentUser = JSON.parse(sessionStorage.getItem('email_user'));
+                document.getElementById('loginModal').classList.add('hidden');
+                updateUserInfo();
+                loadEmails();
+            } else {
+                document.getElementById('loginModal').classList.remove('hidden');
+            }
+        }
+
+        function updateUserInfo() {
+            if (currentUser) {
+                document.getElementById('userInfo').textContent = `User: ${currentUser.username}`;
+                document.getElementById('blockInfo').textContent = `Block: ${currentUser.block_ip}`;
+            }
+        }
+
+        // Auth functions
+        async function login() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errorDiv = document.getElementById('loginError');
+            
+            errorDiv.textContent = '';
+            
+            if (!username || !password) {
+                errorDiv.textContent = 'Please enter username and password';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/email/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    sessionToken = data.token;
+                    currentUser = {
+                        username: data.username,
+                        holo_email: data.holo_email,
+                        block_ip: data.block_ip
+                    };
+                    sessionStorage.setItem('email_token', sessionToken);
+                    sessionStorage.setItem('email_user', JSON.stringify(currentUser));
+                    document.getElementById('loginModal').classList.add('hidden');
+                    updateUserInfo();
+                    loadEmails();
+                } else {
+                    errorDiv.textContent = data.error || 'Login failed';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Connection error: ' + error.message;
+            }
+        }
+
+        async function register() {
+            const username = document.getElementById('registerUsername').value.trim();
+            const password = document.getElementById('registerPassword').value;
+            const confirmPassword = document.getElementById('registerPasswordConfirm').value;
+            const errorDiv = document.getElementById('registerError');
+            
+            errorDiv.textContent = '';
+            
+            if (!username || !password || !confirmPassword) {
+                errorDiv.textContent = 'Please fill all fields';
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                errorDiv.textContent = 'Passwords do not match';
+                return;
+            }
+            
+            if (password.length < 6) {
+                errorDiv.textContent = 'Password must be at least 6 characters';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/email/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`Account created!\nEmail: ${data.holo_email}\nBlock: ${data.block_ip}`);
+                    showLogin();
+                } else {
+                    errorDiv.textContent = data.error || 'Registration failed';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Connection error: ' + error.message;
+            }
+        }
+
+        function showLogin() {
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('registerForm').style.display = 'none';
+        }
+
+        function showRegister() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registerForm').style.display = 'block';
+        }
+
+        function updateEmailPreview() {
+            const username = document.getElementById('registerUsername').value.trim();
+            const preview = username ? `${username}::quantum.foam` : 'username::quantum.foam';
+            document.getElementById('previewEmail').textContent = preview;
+        }
+
+        function logout() {
+            if (confirm('Logout from holographic email?')) {
+                sessionStorage.removeItem('email_token');
+                sessionStorage.removeItem('email_user');
+                sessionToken = null;
+                currentUser = null;
+                location.reload();
+            }
+        }
+
+        // Email functions
+        async function loadEmails() {
+            if (!sessionToken || !currentUser) return;
+            
+            try {
+                const searchQuery = document.getElementById('searchInput').value.trim();
+                const url = `/api/email/inbox/${currentUser.username}?folder=${currentFolder}${searchQuery ? '&search=' + encodeURIComponent(searchQuery) : ''}`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                allEmails = data.inbox || [];
+                renderEmailList();
+                updateUnreadCount();
+            } catch (error) {
+                console.error('Error loading emails:', error);
+            }
+        }
+
+        function renderEmailList() {
+            const container = document.getElementById('emailListItems');
+            
+            if (allEmails.length === 0) {
+                container.innerHTML = '<div style="padding: 20px; text-align: center; color: #555;">No emails found</div>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            allEmails.forEach(email => {
+                const emailDiv = document.createElement('div');
+                emailDiv.className = 'email-item' + (email.read ? '' : ' unread');
+                emailDiv.onclick = () => viewEmail(email);
+                
+                emailDiv.innerHTML = `
+                    <div class="email-item-from">${escapeHtml(email.from_email)}</div>
+                    <div class="email-item-subject">${escapeHtml(email.subject)}</div>
+                    <div class="email-item-preview">${escapeHtml(email.body.substring(0, 50))}...</div>
+                    <div class="email-item-time">${formatDate(email.timestamp)}</div>
+                `;
+                
+                container.appendChild(emailDiv);
+            });
+        }
+
+        function viewEmail(email) {
+            currentEmail = email;
+            
+            // Mark as read
+            if (!email.read) {
+                markAsRead(email.id);
+                email.read = true;
+                renderEmailList();
+                updateUnreadCount();
+            }
+            
+            // Update viewer
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('emailContent').style.display = 'flex';
+            
+            document.getElementById('emailSubject').textContent = email.subject;
+            document.getElementById('emailFrom').textContent = `From: ${email.from_email}`;
+            document.getElementById('emailTime').textContent = formatDate(email.timestamp);
+            document.getElementById('emailBody').textContent = email.body;
+            
+            // Highlight selected
+            document.querySelectorAll('.email-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+        }
+
+        async function markAsRead(emailId) {
+            try {
+                await fetch('/api/email/mark_read', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email_id: emailId, read: true })
+                });
+            } catch (error) {
+                console.error('Error marking as read:', error);
+            }
+        }
+
+        function updateUnreadCount() {
+            const unread = allEmails.filter(e => !e.read).length;
+            document.getElementById('inboxBadge').textContent = unread;
+        }
+
+        function selectFolder(folder) {
+            currentFolder = folder;
+            document.getElementById('folderTitle').textContent = folder;
+            
+            // Update active state
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+            
+            loadEmails();
+        }
+
+        function searchEmails() {
+            loadEmails();
+        }
+
+        // Compose functions
+        function openCompose() {
+            document.getElementById('composeModal').classList.remove('hidden');
+            document.getElementById('composeTo').value = '';
+            document.getElementById('composeCc').value = '';
+            document.getElementById('composeSubject').value = '';
+            document.getElementById('composeBody').value = '';
+        }
+
+        function closeCompose() {
+            document.getElementById('composeModal').classList.add('hidden');
+        }
+
+        async function sendEmail() {
+            const to = document.getElementById('composeTo').value.trim();
+            const cc = document.getElementById('composeCc').value.trim();
+            const subject = document.getElementById('composeSubject').value.trim();
+            const body = document.getElementById('composeBody').value.trim();
+            
+            if (!to || !subject || !body) {
+                alert('Please fill in To, Subject, and Body fields');
+                return;
+            }
+            
+            if (!to.endsWith('::quantum.foam')) {
+                alert('Invalid email format. Must end with ::quantum.foam');
+                return;
+            }
+            
+            try {
+                const emailData = {
+                    from: currentUser.holo_email,
+                    to: to,
+                    cc: cc,
+                    subject: subject,
+                    body: body,
+                    attachments: []
+                };
+                
+                const response = await fetch('/api/email/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(emailData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Email sent successfully!');
+                    closeCompose();
+                    loadEmails();
+                } else {
+                    alert('Failed to send email');
+                }
+            } catch (error) {
+                alert('Error sending email: ' + error.message);
+            }
+        }
+
+        function replyEmail() {
+            if (!currentEmail) return;
+            
+            openCompose();
+            document.getElementById('composeTo').value = currentEmail.from_email;
+            document.getElementById('composeSubject').value = 'Re: ' + currentEmail.subject;
+            document.getElementById('composeBody').value = `\n\n--- Original Message ---\nFrom: ${currentEmail.from_email}\nDate: ${currentEmail.timestamp}\n\n${currentEmail.body}`;
+        }
+
+        function forwardEmail() {
+            if (!currentEmail) return;
+            
+            openCompose();
+            document.getElementById('composeSubject').value = 'Fwd: ' + currentEmail.subject;
+            document.getElementById('composeBody').value = `\n\n--- Forwarded Message ---\nFrom: ${currentEmail.from_email}\nDate: ${currentEmail.timestamp}\nSubject: ${currentEmail.subject}\n\n${currentEmail.body}`;
+        }
+
+        async function deleteEmail() {
+            if (!currentEmail) return;
+            
+            if (!confirm('Delete this email?')) return;
+            
+            try {
+                const response = await fetch('/api/email/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email_ids: [currentEmail.id] })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Email deleted');
+                    document.getElementById('emptyState').style.display = 'flex';
+                    document.getElementById('emailContent').style.display = 'none';
+                    loadEmails();
+                } else {
+                    alert('Failed to delete email');
+                }
+            } catch (error) {
+                alert('Error deleting email: ' + error.message);
+            }
+        }
+
+        function moveToFolder() {
+            if (!currentEmail) return;
+            
+            const folder = prompt('Move to folder:', 'Drafts');
+            if (!folder) return;
+            
+            fetch('/api/email/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email_id: currentEmail.id, folder: folder })
+            }).then(() => {
+                alert('Email moved');
+                loadEmails();
+            });
+        }
+
+        // Storage functions
+        async function viewStorageInfo() {
+            try {
+                const response = await fetch('/api/holographic/blocks');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const userBlock = data.blocks.find(b => b.block_ip === currentUser.block_ip);
+                    alert(`Storage Info:\n\nYour Block: ${currentUser.block_ip}\nUsed: ${userBlock.used_gb.toFixed(2)} GB\nCapacity: ${userBlock.capacity_gb} GB\n\nTotal Blocks: ${data.total_blocks}\nBase IP: ${data.base_ip}`);
+                }
+            } catch (error) {
+                alert('Error loading storage info');
+            }
+        }
+
+        async function viewBlocks() {
+            try {
+                const response = await fetch('/api/holographic/blocks');
+                const data = await response.json();
+                
+                if (data.success) {
+                    let info = `Holographic Email Blocks (${data.base_ip}.x)\n\n`;
+                    data.blocks.forEach(block => {
+                        info += `${block.block_ip}: ${block.allocated ? 'ALLOCATED' : 'FREE'} - ${block.used_gb.toFixed(2)}/${block.capacity_gb} GB\n`;
+                    });
+                    alert(info);
+                }
+            } catch (error) {
+                alert('Error loading blocks');
+            }
+        }
+
+        // Utility functions
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) return 'Just now';
+            if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+            if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+            if (diff < 604800000) return Math.floor(diff / 86400000) + 'd ago';
+            
+            return date.toLocaleDateString();
+        }
+
+        // Enter key handlers
+        document.getElementById('loginPassword').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') login();
+        });
+
+        document.getElementById('registerPasswordConfirm').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') register();
+          </script>
+</body>
+</html>
