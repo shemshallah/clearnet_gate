@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Encryption - Black Hole ⚫ White Hole ⚪</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1a0033, #330066, #1a0033);
+            color: #e0e0e0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 30px;
+            border: 2px solid #ff00ff;
+            background: rgba(255, 0, 255, 0.1);
+            margin-bottom: 30px;
+            box-shadow: 0 0 40px rgba(255, 0, 255, 0.3);
+        }
+        
+        h1 {
+            color: #ff00ff;
+            text-shadow: 0 0 20px #ff00ff;
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+        
+        .back-link {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #ff00ff;
+            color: #000;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .back-link:hover {
+            background: #cc00cc;
+            box-shadow: 0 0 20px #ff00ff;
+        }
+        
+        .encryption-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 30px;
+            margin: 30px 0;
+        }
+        
+        .encryption-panel {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ffff;
+            padding: 30px;
+            border-radius: 10px;
+        }
+        
+        .encryption-panel h2 {
+            color: #00ffff;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            text-align: center;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            color: #00ffff;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        
+        .form-group textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid #00ffff;
+            border-radius: 5px;
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+            resize: vertical;
+        }
+        
+        .form-group textarea:focus {
+            outline: none;
+            box-shadow: 0 0 15px #00ffff;
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            background: #00ffff;
+            border: none;
+            border-radius: 5px;
+            color: #000;
+            font-weight: bold;
+            font-size: 1.1em;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background: #00cccc;
+            box-shadow: 0 0 25px #00ffff;
+        }
+        
+        .result-box {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(0, 255, 0, 0.1);
+            border: 2px solid #00ff00;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .result-box.visible {
+            display: block;
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .result-box h3 {
+            color: #00ff00;
+            margin-bottom: 15px;
+        }
+        
+        .result-detail {
+            margin: 10px 0;
+            color: #00ffff;
+        }
+        
+        .result-detail strong {
+            color: #ffff00;
+        }
+        
+        .copy-btn {
+            margin-top: 10px;
+            padding: 8px 15px;
+            background: #00ff00;
+            border: none;
+            border-radius: 3px;
+            color: #000;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .copy-btn:hover {
+            background: #00cc00;
+            box-shadow: 0 0 15px #00ff00;
+        }
+        
+        .info-section {
+            background: rgba(255, 255, 0, 0.1);
+            border: 2px solid #ffff00;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 10px;
+        }
+        
+        .info-section h2 {
+            color: #ffff00;
+            margin-bottom: 15px;
+        }
+        
+        .info-section p {
+            color: #00ffff;
+            line-height: 1.6;
+            margin: 10px 0;
+        }
+        
+        .algorithm-details {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 3px solid #ffff00;
+        }
+        
+        @media (max-width: 768px) {
+            h1 { font-size: 2em; }
+            .encryption-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Main</a>
+        
+        <div class="header">
+            <h1>🔐 QUANTUM ENCRYPTION</h1>
+            <p style="font-size: 1.2em; margin-top: 10px; color: #00ffff;">
+                Black Hole ⚫ 138.0.0.1 ↔ White Hole ⚪ 139.0.0.1
+            </p>
+            <p style="color: #ffff00; margin-top: 5px;">
+                Dual-Hole Quantum XOR SHA3 Encryption Algorithm
+            </p>
+        </div>
+        
+        <div class="info-section">
+            <h2>About Quantum Encryption</h2>
+            <p>
+                This encryption system uses a unique dual-hole quantum encryption algorithm leveraging
+                the black hole (138.0.0.1) and white hole (139.0.0.1) addresses for key generation.
+            </p>
+            <div class="algorithm-details">
+                <strong style="color: #ffff00;">Algorithm: QUANTUM-DUAL-HOLE-XOR-SHA3</strong><br>
+                <strong style="color: #00ffff;">Layer 1:</strong> XOR with Black Hole key<br>
+                <strong style="color: #00ffff;">Layer 2:</strong> XOR with White Hole key (reverse)<br>
+                <strong style="color: #00ffff;">Layer 3:</strong> SHA3-512 based permutation<br>
+                <strong style="color: #00ff00;">Verification:</strong> SHA3-512 signature validation
+            </div>
+            <p>
+                All encrypted data includes a cryptographic signature to ensure message integrity
+                and authenticity. The system is designed to be quantum-resistant.
+            </p>
+        </div>
+        
+        <div class="encryption-grid">
+            <!-- Encryption Panel -->
+            <div class="encryption-panel">
+                <h2>🔒 Encrypt Message</h2>
+                
+                <div class="form-group">
+                    <label for="plaintextInput">Plaintext Message:</label>
+                    <textarea id="plaintextInput" placeholder="Enter your message to encrypt..."></textarea>
+                </div>
+                
+                <button id="encryptBtn">Encrypt with Quantum Algorithm</button>
+                
+                <div class="result-box" id="encryptResult">
+                    <h3>Encrypted Result</h3>
+                    <div class="result-detail">
+                        <strong>Ciphertext:</strong><br>
+                        <textarea id="ciphertextOutput" readonly style="min-height: 100px; margin-top: 10px;"></textarea>
+                        <button class="copy-btn" onclick="copyToClipboard('ciphertextOutput')">Copy Ciphertext</button>
+                    </div>
+                    <div class="result-detail">
+                        <strong>Signature:</strong> <span id="signatureOutput"></span>
+                    </div>
+                    <div class="result-detail">
+                        <strong>Black Hole:</strong> <span id="blackHoleOutput"></span>
+                    </div>
+                    <div class="result-detail">
+                        <strong>White Hole:</strong> <span id="whiteHoleOutput"></span>
+                    </div>
+                    <div class="result-detail">
+                        <strong>Algorithm:</strong> <span id="algorithmOutput"></span>
+                    </div>
+                    <div class="result-detail">
+                        <strong>Timestamp:</strong> <span id="timestampOutput"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Decryption Panel -->
+            <div class="encryption-panel">
+                <h2>🔓 Decrypt Message</h2>
+                
+                <div class="form-group">
+                    <label for="ciphertextInput">Encrypted Data (JSON):</label>
+                    <textarea id="ciphertextInput" placeholder='Paste encrypted JSON here...'></textarea>
+                </div>
+                
+                <button id="decryptBtn">Decrypt with Quantum Algorithm</button>
+                
+                <div class="result-box" id="decryptResult">
+                    <h3>Decrypted Result</h3>
+                    <div class="result-detail">
+                        <strong>Plaintext:</strong><br>
+                        <textarea id="plaintextOutput" readonly style="min-height: 100px; margin-top: 10px;"></textarea>
+                        <button class="copy-btn" onclick="copyToClipboard('plaintextOutput')">Copy Plaintext</button>
+                    </div>
+                    <div class="result-detail" style="color: #00ff00;">
+                        <strong>✓ Signature Verified</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const encryptBtn = document.getElementById('encryptBtn');
+        const decryptBtn = document.getElementById('decryptBtn');
+        const plaintextInput = document.getElementById('plaintextInput');
+        const ciphertextInput = document.getElementById('ciphertextInput');
+        const encryptResult = document.getElementById('encryptResult');
+        const decryptResult = document.getElementById('decryptResult');
+        
+        let lastEncryptedData = null;
+        
+        // Encrypt message
+        encryptBtn.onclick = async () => {
+            const plaintext = plaintextInput.value.trim();
+            
+            if (!plaintext) {
+                alert('Please enter a message to encrypt');
+                return;
+            }
+            
+            try {
+                encryptBtn.textContent = 'Encrypting...';
+                encryptBtn.disabled = true;
+                
+                const response = await fetch('/api/encrypt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ plaintext })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Encryption failed');
+                }
+                
+                const data = await response.json();
+                lastEncryptedData = data;
+                
+                // Display results
+                document.getElementById('ciphertextOutput').value = data.ciphertext;
+                document.getElementById('signatureOutput').textContent = data.signature.substring(0, 20) + '...';
+                document.getElementById('blackHoleOutput').textContent = data.black_hole;
+                document.getElementById('whiteHoleOutput').textContent = data.white_hole;
+                document.getElementById('algorithmOutput').textContent = data.algorithm;
+                document.getElementById('timestampOutput').textContent = new Date(data.timestamp).toLocaleString();
+                
+                // Auto-fill decrypt input
+                ciphertextInput.value = JSON.stringify(data, null, 2);
+                
+                encryptResult.classList.add('visible');
+                
+            } catch (error) {
+                console.error('Encryption error:', error);
+                alert('Encryption failed: ' + error.message);
+            } finally {
+                encryptBtn.textContent = 'Encrypt with Quantum Algorithm';
+                encryptBtn.disabled = false;
+            }
+        };
+        
+        // Decrypt message
+        decryptBtn.onclick = async () => {
+            const ciphertext = ciphertextInput.value.trim();
+            
+            if (!ciphertext) {
+                alert('Please enter encrypted data to decrypt');
+                return;
+            }
+            
+            try {
+                decryptBtn.textContent = 'Decrypting...';
+                decryptBtn.disabled = true;
+                
+                const encryptedData = JSON.parse(ciphertext);
+                
+                const response = await fetch('/api/decrypt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ encrypted_data: encryptedData })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Decryption failed');
+                }
+                
+                const data = await response.json();
+                
+                // Display results
+                document.getElementById('plaintextOutput').value = data.plaintext;
+                
+                decryptResult.classList.add('visible');
+                
+            } catch (error) {
+                console.error('Decryption error:', error);
+                alert('Decryption failed: ' + error.message + '\n\nMake sure you pasted valid encrypted JSON data.');
+            } finally {
+                decryptBtn.textContent = 'Decrypt with Quantum Algorithm';
+                decryptBtn.disabled = false;
+            }
+        };
+        
+        // Copy to clipboard function
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            element.select();
+            document.execCommand('copy');
+            
+            // Show feedback
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✓ Copied!';
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
