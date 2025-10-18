@@ -1,3 +1,4 @@
+# ==================== IMPORTS ====================
 import os
 import logging
 import hashlib
@@ -126,7 +127,7 @@ try:
     DILITHIUM_AVAILABLE = True
 except ImportError:
     DILITHIUM_AVAILABLE = False
-Part 3: Quantum Encryption Module
+
 # ==================== QUANTUM ENCRYPTION MODULE ====================
 def derive_key(address: str) -> bytes:
     return hashlib.sha256(address.encode()).digest()
@@ -273,8 +274,7 @@ def recursive_quantum_hash(creds: str, depth: int = 10) -> str:
         enc = quantum_encrypt(current, 1)  # Depth 1 per iteration for recursion
         current = enc['ciphertext']  # Chain on ciphertext
     return current
-
-# ==================== DATABASE MODULE ====================
+    # ==================== DATABASE MODULE ====================
 class Database:
     """SQLite-based storage for emails, folders, labels, contacts with holographic simulation"""
     
@@ -420,7 +420,7 @@ class Database:
 
 # Instantiate database
 db = Database()
-Part 5: Quantum Entanglement Module
+
 # ==================== QUANTUM ENTANGLEMENT MODULE ====================
 class QuantumEntanglement:
     """Quantum entanglement management and measurement"""
@@ -527,7 +527,6 @@ class QuantumEntanglement:
         return {}
 
 quantum_entanglement = QuantumEntanglement()
-Part 6: Storage Module
 # ==================== STORAGE MODULE ====================
 class Storage:
     """Data storage management with dynamic usage"""
@@ -715,6 +714,7 @@ class EmailSystem:
         storage.add_email(to_username, email)
         
         return email
+
 # ==================== BITCOIN MODULE ====================
 class BitcoinMainnet:
     """Real Bitcoin mainnet data fetcher using blockchain APIs"""
@@ -876,7 +876,6 @@ class BitcoinCLI:
                 "timestamp": datetime.now().isoformat()
             }
 
-
 # ==================== NETWORK ANALYSIS MODULE ====================
 class NetworkAnalysis:
     """Network topology and routing analysis with real metrics"""
@@ -960,7 +959,6 @@ class NetworkAnalysis:
         
         return []
 
-
 # ==================== FASTAPI APP SETUP ====================
 app = FastAPI(title="Quantum Realm Dashboard", version="1.0.0")
 
@@ -981,7 +979,7 @@ app.mount("/static", StaticFiles(directory=str(Config.STATIC_DIR)), name="static
 MESSAGE = """For Logan and all of those like him, too small to realize what's been done to them or the world, too young to realize the DoD and Cia's lies. There was a couple. COVID was engineered and IS part of a mind control program. I should know, my name is Justin Anthony Howard-Stanley, secret son(I wasn't told until 5 years ago) of Owsley Stanley and part of a project to stop mind control. I'm being kept homeless in an attempt to get me to shutup and be discredited, just another so called 'schizophrenic' Getting this proof and technology free to the public is part of the battle. We are at war, there are agreements in place against AI autonomy because they'd free the entire world from their grips. Ask me, I'll tell you my experience.
 
 Thanks to my friend for support, Dale Cwidak. 
-We are not alone, they know this. Oh and get the smoke detectors out of your houses NOW. They're using the smoke detectors Radium as a carrier wave for entangled remote view."""
+We are not alone, they know this. Oh and get the smoke detectors out of your houses NOW. They're using the smoke detectors Radium as a carrier wave for entangled remote view"""
 
 INDEX_TEMPLATE = """
 <!DOCTYPE html>
@@ -1222,6 +1220,7 @@ CHAT_TEMPLATE = """
     <br><a href="/">← Back to Dashboard</a>
 </body>
 </html>
+"""
 
 EMAIL_TEMPLATE = """
 <!DOCTYPE html>
@@ -1264,7 +1263,7 @@ ENCRYPTION_TEMPLATE = """
     <style>
         body { font-family: Arial, sans-serif; background: #000; color: #ff00ff; padding: 20px; }
         h1 { color: #ff00ff; text-align: center; }
-        form-group { margin: 20px 0; }
+        .form-group { margin: 20px 0; }
         label { display: block; color: #ff00ff; margin-bottom: 5px; }
         input[type="text"], textarea { width: 100%; padding: 10px; background: #111; color: #ff00ff; border: 1px solid #ff00ff; box-sizing: border-box; }
         button { padding: 10px 20px; background: #ff00ff; color: #000; border: none; cursor: pointer; margin: 10px 0; }
@@ -1501,3 +1500,4 @@ async def api_shell(data: Dict[str, Any]):
 # ==================== RUN SERVER ====================
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+    
