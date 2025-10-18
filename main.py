@@ -76,9 +76,9 @@ class Config:
     # Database
     DB_PATH = Path("quantum_foam.db")
     
-    # Admin Credentials - Holographic IDs
-    ADMIN_USERNAME_HOLOGRAPHIC_ID = "eaafb486-f288-4011-a11f-7d7fcc1d99d5"
-    ADMIN_PASSWORD_HOLOGRAPHIC_ID = "9f792277-5057-4642-bca0-97e778c5c7b9"
+    # Admin Credentials - Holographic IDs from 138.0.0.1 simulation
+    ADMINISTRATOR_USERNAME = os.getenv("ADMINISTRATOR_USERNAME", "eaafb486-f288-4011-a11f-7d7fcc1d99d5")
+    ADMINISTRATOR_PASSWORD = os.getenv("ADMINISTRATOR_PASSWORD", "9f792277-5057-4642-bca0-97e778c5c7b9")
 
 # Create directories
 Config.STATIC_DIR.mkdir(exist_ok=True)
@@ -1250,8 +1250,8 @@ async def api_holographic_auth(request: Request):
         data = await request.json()
         username = data.get('username', '')
         password = data.get('password', '')
-        expected_username = data.get('expected_username', Config.ADMIN_USERNAME_HOLOGRAPHIC_ID)
-        expected_password = data.get('expected_password', Config.ADMIN_PASSWORD_HOLOGRAPHIC_ID)
+        expected_username = data.get('expected_username', Config.ADMINISTRATOR_USERNAME)
+        expected_password = data.get('expected_password', Config.ADMINISTRATOR_PASSWORD)
         
         # Compare credentials
         if username == expected_username and password == expected_password:
@@ -1324,4 +1324,5 @@ async def api_holographic_logout(request: Request):
 
 # ==================== RUN SERVER ====================
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
