@@ -1,0 +1,654 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Foam Chatroom</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0f0f23, #1a1a2e);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 15px;
+            padding: 30px;
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.3);
+        }
+        
+        .back-link {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #00ffff;
+            color: #000;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .back-link:hover {
+            background: #00cccc;
+            box-shadow: 0 0 20px #00ffff;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #00ffff;
+            text-shadow: 0 0 20px #00ffff;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        .status-bar {
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid #00ff00;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-online { background: #00ff00; }
+        .status-offline { background: #ff0000; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 10px currentColor; }
+            50% { opacity: 0.5; box-shadow: 0 0 5px currentColor; }
+        }
+        
+        /* Auth Form */
+        #authForm {
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 30px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+        }
+        
+        #authForm h2 {
+            color: #00ffff;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            color: #00ffff;
+            margin-bottom: 5px;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ffff;
+            border-radius: 5px;
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            box-shadow: 0 0 10px #00ffff;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #00ffff;
+            color: #000;
+        }
+        
+        .btn-primary:hover {
+            background: #00cccc;
+            box-shadow: 0 0 20px #00ffff;
+        }
+        
+        .btn-secondary {
+            background: rgba(0, 255, 255, 0.2);
+            color: #00ffff;
+            border: 1px solid #00ffff;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(0, 255, 255, 0.3);
+        }
+        
+        .error-message {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid #ff0000;
+            color: #ff0000;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            display: none;
+        }
+        
+        /* Chat Interface */
+        #chatInterface {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 200px);
+        }
+        
+        .chat-header {
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid #00ffff;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        
+        .user-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .chat-container {
+            flex: 1;
+            border: 1px solid #00ffff;
+            overflow-y: auto;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .chat-container::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        .chat-container::-webkit-scrollbar-thumb {
+            background: #00ffff;
+            border-radius: 4px;
+        }
+        
+        .message {
+            margin: 10px 0;
+            padding: 12px;
+            border-radius: 8px;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .message.sent {
+            background: rgba(0, 255, 255, 0.2);
+            border-left: 3px solid #00ffff;
+            margin-left: 20%;
+        }
+        
+        .message.received {
+            background: rgba(255, 0, 255, 0.2);
+            border-left: 3px solid #ff00ff;
+            margin-right: 20%;
+        }
+        
+        .message.system {
+            background: rgba(255, 255, 0, 0.1);
+            border-left: 3px solid #ffff00;
+            text-align: center;
+            font-style: italic;
+            color: #ffff00;
+        }
+        
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+        
+        .message-sender {
+            color: #00ffff;
+            font-weight: bold;
+        }
+        
+        .message-time {
+            color: #888;
+        }
+        
+        .message-content {
+            color: #e0e0e0;
+            word-wrap: break-word;
+        }
+        
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        
+        #messageInput {
+            flex: 1;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ffff;
+            border-radius: 5px;
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+        }
+        
+        #messageInput:focus {
+            outline: none;
+            box-shadow: 0 0 10px #00ffff;
+        }
+        
+        .btn-send {
+            padding: 12px 30px;
+            background: #00ff00;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s;
+        }
+        
+        .btn-send:hover {
+            background: #00cc00;
+            box-shadow: 0 0 20px #00ff00;
+        }
+        
+        .btn-logout {
+            padding: 8px 20px;
+            background: #ff0000;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s;
+        }
+        
+        .btn-logout:hover {
+            background: #cc0000;
+            box-shadow: 0 0 20px #ff0000;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+            
+            .message.sent,
+            .message.received {
+                margin-left: 0;
+                margin-right: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Main</a>
+        
+        <h1>🌊 Quantum Foam Chatroom</h1>
+        
+        <div class="status-bar">
+            <span class="status-indicator status-offline" id="statusIndicator"></span>
+            <span id="statusText">Disconnected</span>
+        </div>
+        
+        <!-- Authentication Form -->
+        <div id="authForm">
+            <h2>Join the Quantum Realm</h2>
+            <div class="error-message" id="errorMessage"></div>
+            
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" placeholder="Enter username" autocomplete="username">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Enter password" autocomplete="current-password">
+            </div>
+            
+            <div class="form-group" id="emailGroup" style="display: none;">
+                <label for="email">Email (optional)</label>
+                <input type="email" id="email" placeholder="your@email.com">
+            </div>
+            
+            <div class="button-group">
+                <button class="btn-primary" id="loginBtn">Login</button>
+                <button class="btn-secondary" id="toggleBtn">Register</button>
+            </div>
+            
+            <p style="text-align: center; margin-top: 20px; color: #888; font-size: 0.9em;">
+                Your quantum foam email: username::quantum.foam
+            </p>
+        </div>
+        
+        <!-- Chat Interface -->
+        <div id="chatInterface" class="hidden">
+            <div class="chat-header">
+                <div class="user-info">
+                    <div>
+                        <span style="color: #00ffff;">Logged in as:</span>
+                        <strong id="currentUsername"></strong>
+                        <span style="color: #888; margin-left: 10px;" id="currentEmail"></span>
+                    </div>
+                    <button class="btn-logout" id="logoutBtn">Logout</button>
+                </div>
+            </div>
+            
+            <div class="chat-container" id="messages">
+                <div class="message system">
+                    <div class="message-content">Welcome to the Quantum Foam Chatroom</div>
+                </div>
+            </div>
+            
+            <div class="input-container">
+                <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off">
+                <button class="btn-send" id="sendBtn">Send</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API = '/api/chat';
+        let ws = null;
+        let token = localStorage.getItem('chat_token');
+        let currentUser = null;
+        let isRegistering = false;
+        
+        // DOM Elements
+        const authForm = document.getElementById('authForm');
+        const chatInterface = document.getElementById('chatInterface');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const emailInput = document.getElementById('email');
+        const emailGroup = document.getElementById('emailGroup');
+        const loginBtn = document.getElementById('loginBtn');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const messagesContainer = document.getElementById('messages');
+        const errorMessage = document.getElementById('errorMessage');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const currentUsername = document.getElementById('currentUsername');
+        const currentEmail = document.getElementById('currentEmail');
+        
+        // Toggle between login and register
+        toggleBtn.onclick = () => {
+            isRegistering = !isRegistering;
+            loginBtn.textContent = isRegistering ? 'Register' : 'Login';
+            toggleBtn.textContent = isRegistering ? 'Login' : 'Register';
+            emailGroup.style.display = isRegistering ? 'block' : 'none';
+            errorMessage.style.display = 'none';
+        };
+        
+        // Show error
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Login/Register
+        loginBtn.onclick = async () => {
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value.trim();
+            const email = emailInput.value.trim();
+            
+            if (!username || !password) {
+                showError('Username and password are required');
+                return;
+            }
+            
+            try {
+                const endpoint = isRegistering ? '/register' : '/login';
+                const body = isRegistering 
+                    ? { username, password, email } 
+                    : { username, password };
+                
+                const response = await fetch(API + endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    showError(data.detail || 'Authentication failed');
+                    return;
+                }
+                
+                token = data.token;
+                currentUser = {
+                    username: data.username,
+                    email: data.email || `${data.username}::quantum.foam`
+                };
+                localStorage.setItem('chat_token', token);
+                
+                showChat();
+            } catch (error) {
+                console.error('Auth error:', error);
+                showError('Connection error. Please try again.');
+            }
+        };
+        
+        // Show chat interface
+        function showChat() {
+            authForm.classList.add('hidden');
+            chatInterface.classList.remove('hidden');
+            currentUsername.textContent = currentUser.username;
+            currentEmail.textContent = currentUser.email;
+            
+            connectWebSocket();
+        }
+        
+        // Connect WebSocket
+        function connectWebSocket() {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat?token=${token}`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                statusIndicator.className = 'status-indicator status-online';
+                statusText.textContent = 'Connected';
+                console.log('WebSocket connected');
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'history') {
+                    // Clear existing messages except welcome
+                    messagesContainer.innerHTML = '<div class="message system"><div class="message-content">Welcome to the Quantum Foam Chatroom</div></div>';
+                    // Load history
+                    data.messages.forEach(msg => addMessage(msg, false));
+                } else if (data.type === 'message') {
+                    addMessage(data.message, true);
+                } else if (data.type === 'system') {
+                    addSystemMessage(data.content);
+                }
+            };
+            
+            ws.onclose = () => {
+                statusIndicator.className = 'status-indicator status-offline';
+                statusText.textContent = 'Disconnected';
+                console.log('WebSocket disconnected');
+                
+                // Try to reconnect after 3 seconds
+                setTimeout(() => {
+                    if (token) connectWebSocket();
+                }, 3000);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                statusIndicator.className = 'status-indicator status-offline';
+                statusText.textContent = 'Connection Error';
+            };
+        }
+        
+        // Add message to chat
+        function addMessage(message, animate = true) {
+            const messageDiv = document.createElement('div');
+            const isSent = message.sender === currentUser.username;
+            messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+            
+            const time = new Date(message.timestamp).toLocaleTimeString();
+            
+            messageDiv.innerHTML = `
+                <div class="message-header">
+                    <span class="message-sender">${message.sender}</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-content">${escapeHtml(message.content)}</div>
+            `;
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        // Add system message
+        function addSystemMessage(content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message system';
+            messageDiv.innerHTML = `<div class="message-content">${escapeHtml(content)}</div>`;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        // Send message
+        function sendMessage() {
+            const content = messageInput.value.trim();
+            if (!content || !ws || ws.readyState !== WebSocket.OPEN) return;
+            
+            ws.send(JSON.stringify({ content }));
+            messageInput.value = '';
+        }
+        
+        sendBtn.onclick = sendMessage;
+        messageInput.onkeypress = (e) => {
+            if (e.key === 'Enter') sendMessage();
+        };
+        
+        // Logout
+        logoutBtn.onclick = () => {
+            if (ws) ws.close();
+            localStorage.removeItem('chat_token');
+            token = null;
+            currentUser = null;
+            
+            chatInterface.classList.add('hidden');
+            authForm.classList.remove('hidden');
+            usernameInput.value = '';
+            passwordInput.value = '';
+            emailInput.value = '';
+            messagesContainer.innerHTML = '<div class="message system"><div class="message-content">Welcome to the Quantum Foam Chatroom</div></div>';
+        };
+        
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Auto-login if token exists
+        if (token) {
+            // Verify token by fetching user info
+            fetch(`${API}/messages?token=${token}`)
+                .then(res => res.json())
+                .then(data => {
+                    // Extract username from token (simplified)
+                    const username = localStorage.getItem('chat_username') || 'User';
+                    currentUser = {
+                        username: username,
+                        email: `${username}::quantum.foam`
+                    };
+                    showChat();
+                })
+                .catch(() => {
+                    localStorage.removeItem('chat_token');
+                    token = null;
+                });
+        }
+        
+        // Store username on successful login for auto-login
+        const originalLoginClick = loginBtn.onclick;
+        loginBtn.onclick = async function() {
+            await originalLoginClick.call(this);
+            if (currentUser) {
+                localStorage.setItem('chat_username', currentUser.username);
+            }
+        };
+    </script>
+</body>
+</html>
