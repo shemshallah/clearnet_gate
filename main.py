@@ -212,18 +212,20 @@ class Storage:
             "last_update": None
         }
         
-        # Storage metrics with real disk usage scaled to fictional capacities
-        self.update_storage_metrics()
-        
+        # Initialize QRAM storage first (compute dynamics without self-reference)
+        used_qubits = int(random.uniform(700000000, 800000000))
         self.qram_storage = {
             "total_capacity_qubits": Config.QRAM_CAPACITY_QUBITS,
-            "used_capacity_qubits": int(random.uniform(700000000, 800000000)),  # Retained for fictional QRAM
-            "available_capacity_qubits": Config.QRAM_CAPACITY_QUBITS - self.qram_storage["used_capacity_qubits"],
+            "used_capacity_qubits": used_qubits,
+            "available_capacity_qubits": Config.QRAM_CAPACITY_QUBITS - used_qubits,
             "coherence_time_ms": int(random.uniform(9000, 11000)),
             "error_rate": round(random.uniform(0.00005, 0.00015), 4),
             "node_address": Config.QUANTUM_REALM,
             "last_update": datetime.now().isoformat()
         }
+        
+        # Now safe to update storage metrics (includes holographic and refreshes QRAM)
+        self.update_storage_metrics()
     
     def update_storage_metrics(self):
         """Update storage metrics with real disk usage"""
@@ -245,7 +247,7 @@ class Storage:
             "last_update": datetime.now().isoformat()
         }
         
-        # Update QRAM fictional
+        # Update QRAM fictional (now safe since self.qram_storage exists)
         self.qram_storage["used_capacity_qubits"] = int(random.uniform(700000000, 800000000))
         self.qram_storage["available_capacity_qubits"] = Config.QRAM_CAPACITY_QUBITS - self.qram_storage["used_capacity_qubits"]
         self.qram_storage["coherence_time_ms"] = int(random.uniform(9000, 11000))
