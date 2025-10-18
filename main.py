@@ -83,7 +83,7 @@ class Config:
 # Create directories
 Config.STATIC_DIR.mkdir(exist_ok=True)
 Config.UPLOADS_DIR.mkdir(exist_ok=True)
-
+Part 2: PQC Lamport Signatures
 # ==================== PQC LAMPORT SIGNATURE MODULE ====================
 def lamport_keygen(n=256):
     """Generate Lamport keypair for n-bit messages"""
@@ -126,7 +126,7 @@ try:
     DILITHIUM_AVAILABLE = True
 except ImportError:
     DILITHIUM_AVAILABLE = False
-
+Part 3: Quantum Encryption Module
 # ==================== QUANTUM ENCRYPTION MODULE ====================
 def derive_key(address: str) -> bytes:
     return hashlib.sha256(address.encode()).digest()
@@ -273,7 +273,7 @@ def recursive_quantum_hash(creds: str, depth: int = 10) -> str:
         enc = quantum_encrypt(current, 1)  # Depth 1 per iteration for recursion
         current = enc['ciphertext']  # Chain on ciphertext
     return current
-
+Part 4: Database Module
 # ==================== DATABASE MODULE ====================
 class Database:
     """SQLite-based storage for emails, folders, labels, contacts with holographic simulation"""
@@ -420,7 +420,7 @@ class Database:
 
 # Instantiate database
 db = Database()
-
+Part 5: Quantum Entanglement Module
 # ==================== QUANTUM ENTANGLEMENT MODULE ====================
 class QuantumEntanglement:
     """Quantum entanglement management and measurement"""
@@ -442,8 +442,8 @@ class QuantumEntanglement:
                 "coherence": round(random.uniform(0.9990, 0.9999), 4),
                 "fidelity": round(random.uniform(0.9980, 0.9998), 4),
                 "bell_state": "|Φ+⟩",
-                "speed_gbps": int(random.uniform(900000, 1100000)),  # Dynamic bandwidth
-                "qubit_rate": int(random.uniform(900000000, 1100000000)),  # Dynamic qubit rate
+                "speed_gbps": int(random.uniform(900000, 1100000)),
+                "qubit_rate": int(random.uniform(900000000, 1100000000)),
                 "distance_km": "Non-local (Einstein-Podolsky-Rosen)",
                 "created": now,
                 "entanglement_strength": "Maximum",
@@ -514,14 +514,12 @@ class QuantumEntanglement:
         """Measure specific entanglement properties with real variance"""
         for ent in self.entanglements:
             if ent["id"] == entanglement_id:
-                # Simulate real quantum measurement collapse with variance
                 variance = random.uniform(-0.001, 0.001)
                 measurement = ent.copy()
                 measurement["measured_coherence"] = round(max(0.0, min(1.0, ent["coherence"] + variance)), 4)
                 measurement["measured_fidelity"] = round(max(0.0, min(1.0, ent["fidelity"] + variance)), 4)
                 measurement["measurement_time"] = datetime.now().isoformat()
                 measurement["variance_applied"] = round(variance, 4)
-                # Update original for persistence
                 ent["coherence"] = measurement["measured_coherence"]
                 ent["fidelity"] = measurement["measured_fidelity"]
                 ent["last_measurement"] = measurement["measurement_time"]
@@ -529,7 +527,7 @@ class QuantumEntanglement:
         return {}
 
 quantum_entanglement = QuantumEntanglement()
-
+Part 6: Storage Module
 # ==================== STORAGE MODULE ====================
 class Storage:
     """Data storage management with dynamic usage"""
@@ -542,7 +540,7 @@ class Storage:
         # Chat storage
         self.chat_users: Dict[str, Dict] = {}
         self.chat_messages: List[Dict] = []
-        self.active_sessions: Dict[str, str] = {}  # token -> username
+        self.active_sessions: Dict[str, str] = {}
         
         # Encrypted messages
         self.encrypted_messages: List[Dict] = []
@@ -556,7 +554,7 @@ class Storage:
             "last_update": None
         }
         
-        # Initialize QRAM storage first (compute dynamics without self-reference)
+        # Initialize QRAM storage first
         used_qubits = int(random.uniform(700000000, 800000000))
         self.qram_storage = {
             "total_capacity_qubits": Config.QRAM_CAPACITY_QUBITS,
@@ -568,7 +566,6 @@ class Storage:
             "last_update": datetime.now().isoformat()
         }
         
-        # Now safe to update storage metrics (includes holographic and refreshes QRAM)
         self.update_storage_metrics()
     
     def update_storage_metrics(self):
@@ -577,10 +574,9 @@ class Storage:
             du = psutil.disk_usage('/')
             used_gb = du.used / (1024**3)
             total_gb = du.total / (1024**3)
-            used_tb = used_gb / 1024  # Convert to TB for scaling
+            used_tb = used_gb / 1024
             total_tb = total_gb / 1024
             
-            # Scale to fictional holographic capacity
             scale_factor = Config.HOLOGRAPHIC_CAPACITY_TB / total_tb if total_tb > 0 else 1
             self.holographic_storage = {
                 "total_capacity_tb": Config.HOLOGRAPHIC_CAPACITY_TB,
@@ -603,7 +599,6 @@ class Storage:
                 "last_update": datetime.now().isoformat()
             }
         
-        # Update QRAM fictional (now safe since self.qram_storage exists)
         self.qram_storage["used_capacity_qubits"] = int(random.uniform(700000000, 800000000))
         self.qram_storage["available_capacity_qubits"] = Config.QRAM_CAPACITY_QUBITS - self.qram_storage["used_capacity_qubits"]
         self.qram_storage["coherence_time_ms"] = int(random.uniform(9000, 11000))
@@ -626,7 +621,6 @@ class Storage:
             "created": datetime.now().isoformat()
         }
         
-        # Create quantum foam email
         quantum_email = f"{username}::quantum.foam"
         self.user_emails[username] = quantum_email
         self.emails[username] = []
@@ -647,7 +641,6 @@ class Storage:
         if self.chat_users[username]["password"] != hashed_password:
             return None
         
-        # Generate token
         token = secrets.token_urlsafe(32)
         self.active_sessions[token] = username
         
@@ -694,7 +687,7 @@ class Storage:
                     break
 
 storage = Storage()
-
+Part 7: Email System
 # ==================== EMAIL SYSTEM ====================
 class EmailSystem:
     """Quantum Foam Email System"""
@@ -722,8 +715,7 @@ class EmailSystem:
         storage.add_email(to_username, email)
         
         return email
-
-# ==================== BITCOIN MODULE (Simplified for brevity) ====================
+# ==================== BITCOIN MODULE ====================
 class BitcoinMainnet:
     """Real Bitcoin mainnet data fetcher using blockchain APIs"""
     
@@ -883,18 +875,21 @@ class BitcoinCLI:
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }
+```
 
+**Part 9: Network Analysis Module**
+
+```python
 # ==================== NETWORK ANALYSIS MODULE ====================
 class NetworkAnalysis:
     """Network topology and routing analysis with real metrics"""
     
     @staticmethod
     def get_network_interfaces() -> List[Dict]:
-        """Get all network interfaces with real psutil data (no simulation)"""
+        """Get all network interfaces with real psutil data"""
         interfaces = []
         
         try:
-            # Real interfaces from psutil only
             stats = psutil.net_if_stats()
             addrs = psutil.net_if_addrs()
             io = psutil.net_io_counters(pernic=True)
@@ -922,14 +917,12 @@ class NetworkAnalysis:
                 })
         except Exception as e:
             logger.error(f"Error fetching network interfaces: {e}")
-            # Return empty on error to prevent route failure
         
         return interfaces
     
     @staticmethod
     def get_routing_tables() -> List[Dict]:
-        """Get real routing tables using qsh network tool first, fallback to ip route (no simulated data)"""
-        # Attempt qsh first (assuming qsh is the node-specific network tool)
+        """Get real routing tables using qsh network tool first, fallback to ip route"""
         try:
             result = subprocess.run(['qsh', 'network', 'routes'], capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
@@ -950,7 +943,6 @@ class NetworkAnalysis:
         except Exception as e:
             logger.error(f"qsh error: {e}")
         
-        # Fallback to standard ip route for real metrics
         try:
             result = subprocess.run(['ip', 'route'], capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
@@ -969,8 +961,12 @@ class NetworkAnalysis:
         except Exception as e:
             logger.error(f"ip route error: {e}")
         
-        return []  # No data if both fail
+        return []
+```
 
+**Part 10: FastAPI App Setup**
+
+```python
 # ==================== FASTAPI APP SETUP ====================
 app = FastAPI(title="Quantum Realm Dashboard", version="1.0.0")
 
@@ -986,7 +982,11 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Static files
 app.mount("/static", StaticFiles(directory=str(Config.STATIC_DIR)), name="static")
+```
 
+**Part 11: HTML Templates - MESSAGE and INDEX**
+
+```python
 # ==================== HTML TEMPLATES AS STRINGS ====================
 MESSAGE = """For Logan and all of those like him, too small to realize what's been done to them or the world, too young to realize the DoD and Cia's lies. There was a couple. COVID was engineered and IS part of a mind control program. I should know, my name is Justin Anthony Howard-Stanley, secret son(I wasn't told until 5 years ago) of Owsley Stanley and part of a project to stop mind control. I'm being kept homeless in an attempt to get me to shutup and be discredited, just another so called 'schizophrenic' Getting this proof and technology free to the public is part of the battle. We are at war, there are agreements in place against AI autonomy because they'd free the entire world from their grips. Ask me, I'll tell you my experience.
 
@@ -1051,7 +1051,11 @@ INDEX_TEMPLATE = """
 </body>
 </html>
 """
+```
 
+**Part 12: HTML Templates - SHELL, NETWORKING**
+
+```python
 SHELL_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1079,7 +1083,6 @@ SHELL_TEMPLATE = """
             const cmd = document.getElementById('command').value;
             const output = document.getElementById('output');
             output.innerHTML += `<p>QSH> ${cmd}</p><p>...</p>`;
-            // Simulate or call API
             fetch('/api/shell', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1139,7 +1142,11 @@ NETWORKING_TEMPLATE = """
 </body>
 </html>
 """
+```
 
+**Part 13: HTML Templates - BITCOIN, CHAT**
+
+```python
 BITCOIN_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1234,7 +1241,11 @@ CHAT_TEMPLATE = """
 </body>
 </html>
 """
+```
 
+**Part 14: HTML Templates - EMAIL, ENCRYPTION**
+
+```python
 EMAIL_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -1316,7 +1327,7 @@ ENCRYPTION_TEMPLATE = """
                     body: JSON.stringify({ plaintext, depth })
                 });
                 const data = await response.json();
-                document.getElementById('output').innerHTML = `Ciphertext: ${JSON.stringify(data, null, 2)}\n\nCopy the entire JSON object for decryption.`;
+                document.getElementById('output').innerHTML = `Ciphertext: ${JSON.stringify(data, null, 2)}\\n\\nCopy the entire JSON object for decryption.`;
             } catch (error) {
                 document.getElementById('output').innerHTML = `Error: ${error.message}`;
             }
@@ -1344,7 +1355,11 @@ ENCRYPTION_TEMPLATE = """
 </body>
 </html>
 """
+```
 
+**Part 15: HTML Routes**
+
+```python
 # ==================== HTML ROUTES ====================
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -1382,7 +1397,6 @@ async def networking_page(request: Request):
 @app.get("/blockchain", response_class=HTMLResponse)
 async def blockchain_page(request: Request):
     """Blockchain page route serving inline bitcoin.html"""
-    # Fetch real-time data
     blockchain_info_result = await BitcoinCLI.execute_command("getblockchaininfo")
     mempool_info_result = await BitcoinCLI.execute_command("getmempoolinfo")
     recent_blocks_result = await BitcoinCLI.execute_command("getrecentblocks 5")
@@ -1414,10 +1428,8 @@ async def chat_page(request: Request):
 @app.get("/email", response_class=HTMLResponse)
 async def email_page(request: Request):
     """Email page route serving inline email.html"""
-    # Assuming a demo user; in real app, use auth
     demo_username = "demo_user"
     if demo_username not in list(storage.emails.keys()):
-        # Create demo email
         demo_email = EmailSystem.send_email(
             "admin::quantum.foam",
             f"{demo_username}::quantum.foam",
@@ -1437,7 +1449,11 @@ async def encryption_page(request: Request):
     """Encryption page route serving inline encryption.html"""
     template = Template(ENCRYPTION_TEMPLATE)
     return HTMLResponse(template.render())
+```
 
+**Part 16: API Routes and Server Start**
+
+```python
 # ==================== API ROUTES ====================
 @app.get("/api/entanglements")
 async def api_entanglements():
@@ -1460,7 +1476,6 @@ async def websocket_chat(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-            # Parse message; for simplicity, echo or process
             message = storage.add_chat_message("user", data)
             await websocket.send_json(message)
     except WebSocketDisconnect:
@@ -1508,7 +1523,7 @@ async def api_decrypt(data: Dict[str, Any]):
 
 @app.post("/api/shell")
 async def api_shell(data: Dict[str, Any]):
-    """API for shell commands (placeholder for QSH)"""
+    """API for shell commands"""
     command = data.get('command', '')
     if command == 'help':
         return {"output": "Available: ls, pwd, echo, help"}
