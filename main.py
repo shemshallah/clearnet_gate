@@ -242,6 +242,10 @@ def quantum_decrypt(encrypted_data: Dict[str, Any]) -> str:
     plain_bytes = unpad(padded)
     return plain_bytes.decode('utf-8')
 
+def quantum_hash(credentials: str) -> str:
+    """Generate quantum hash for credentials verification"""
+    return hashlib.sha3_512(credentials.encode()).hexdigest()
+
 # ==================== DATABASE MODULE ====================
 class Database:
     def __init__(self):
@@ -342,6 +346,17 @@ class Database:
                 title TEXT DEFAULT 'Untitled',
                 content_json TEXT NOT NULL,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS holographic_files (
+                id TEXT PRIMARY KEY,
+                user_email TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                size_bytes INTEGER DEFAULT 0,
+                upload_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                quantum_hash TEXT NOT NULL
             )
         """)
         default_folders = [
@@ -489,6 +504,41 @@ class Database:
         rows = cursor.fetchall()
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, row)) for row in rows]
+    
+    def get_holo_files(self, user_email: str, search_query: str = '') -> List[Dict[str, Any]]:
+        cursor = self.conn.cursor()
+        if search_query:
+            cursor.execute("""
+                SELECT * FROM holographic_files 
+                WHERE user_email = ? AND (filename LIKE ? OR file_path LIKE ?)
+                ORDER BY upload_timestamp DESC
+            """, (user_email, f"%{search_query}%", f"%{search_query}%"))
+        else:
+            cursor.execute("""
+                SELECT * FROM holographic_files 
+                WHERE user_email = ? 
+                ORDER BY upload_timestamp DESC
+            """, (user_email,))
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in rows]
+    
+    def save_holo_file(self, user_email: str, filename: str, file_path: str, size_bytes: int, quantum_hash: str):
+        cursor = self.conn.cursor()
+        file_id = str(uuid.uuid4())
+        cursor.execute("""
+            INSERT INTO holographic_files (id, user_email, filename, file_path, size_bytes, quantum_hash)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (file_id, user_email, filename, file_path, size_bytes, quantum_hash))
+        self.conn.commit()
+        return file_id
+    
+    def verify_holo_login(self, ip: str, username: str, password: str) -> bool:
+        credentials = f"{ip}:{username}:{password}"
+        user_hash = quantum_hash(credentials)
+        # Simulate quantum hash check - in real impl, compare with stored hash
+        stored_hash = quantum_hash(f"{ip}:{username}:{Config.ADMINISTRATOR_PASSWORD}")  # Example
+        return user_hash == stored_hash
 
 db = None
 
@@ -1071,6 +1121,21 @@ async def get_current_username(credentials: HTTPAuthorizationCredentials = Depen
     return user["username"]
 
 # ==================== USER ROUTES ====================
+@app.post("/holo/login")
+async def holo_login(request: Request):
+    data = await request.json()
+    ip = request.client.host
+    username = data.get("username")
+    password = data.get("password")
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Username and password are needed")
+    if not db.verify_holo_login(ip, username, password):
+        raise HTTPException(status_code=401, detail="Quantum hash verification failed")
+    token = storage.authenticate_user(username, password)
+    if not token:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return JSONResponse(content={"token": token, "message": "Login successful, quantum hash verified"})
+
 @app.post("/register")
 async def register(request: Request):
     data = await request.json()
@@ -1112,7 +1177,7 @@ async def root():
     <head><title>Quantum Realm Dashboard</title></head>
     <body>
     <h1>Welcome to the Quantum Realm Dashboard</h1>
-    <p><a href="/emails">Emails</a> | <a href="/chat">Chat</a> | <a href="/bitcoin">Bitcoin</a> | <a href="/storage">Storage</a> | <a href="/network">Network</a> | <a href="/entanglement">Entanglement</a> | <a href="/holo">Holographic</a> | <a href="/notebooks">Notebooks</a> | <a href="/admin">Admin</a> | <a href="/message">Message</a></p>
+    <p><a href="/emails">Emails</a> | <a href="/chat">Chat</a> | <a href="/bitcoin">Bitcoin</a> | <a href="/storage">Storage</a> | <a href="/network">Network</a> | <a href="/entanglement">Entanglement</a> | <a href="/holo">Holographic</a> | <a href="/holo_search">Holo Search</a> | <a href="/jupyter">Jupyter</a> | <a href="/notebooks">Notebooks</a> | <a href="/admin">Admin</a> | <a href="/message">Message</a></p>
     </body>
     </html>
     """
@@ -1120,11 +1185,11 @@ async def root():
 
 # ==================== EMAIL ROUTES ====================
 @app.get("/api/emails")
-async def get_emails(username: str = Depends(get_current_username), folder: str = Query("Inbox")):
+async def get_emails_api(username: str = Depends(get_current_username), folder: str = Query("Inbox")):
     return db.get_emails(username, folder)
 
 @app.post("/api/emails/send")
-async def send_email(request: Request, username: str = Depends(get_current_username)):
+async def send_email_api(request: Request, username: str = Depends(get_current_username)):
     data = await request.json()
     from_email = storage.user_emails.get(username, f"{username}::quantum.foam")
     data["from"] = from_email
@@ -1321,7 +1386,229 @@ async def holo_page():
     """
     return HTMLResponse(content=html_content)
 
-# ==================== NOTEBOOKS ROUTES ====================
+# ==================== HOLO SEARCH ROUTES ====================
+@app.get("/api/holo/files")
+async def get_holo_files(username: str = Depends(get_current_username), search: str = Query("")):
+    user_email = f"{username}::quantum.foam"
+    return db.get_holo_files(user_email, search)
+
+@app.post("/api/holo/upload")
+async def upload_holo_file(file: UploadFile = File(...), username: str = Depends(get_current_username)):
+    user_email = f"{username}::quantum.foam"
+    file_path = f"{Config.UPLOADS_DIR}/{file.filename}"
+    with open(file_path, "wb") as buffer:
+        content = await file.read()
+        buffer.write(content)
+    size_bytes = len(content)
+    qhash = quantum_hash(f"{user_email}:{file.filename}:{size_bytes}")
+    db.save_holo_file(user_email, file.filename, file_path, size_bytes, qhash)
+    return JSONResponse(content={"message": "File uploaded successfully", "quantum_hash": qhash})
+
+@app.get("/api/holo/download/{file_id}")
+async def download_holo_file(file_id: str, username: str = Depends(get_current_username)):
+    user_email = f"{username}::quantum.foam"
+    cursor = db.conn.cursor()
+    cursor.execute("""
+        SELECT file_path, quantum_hash FROM holographic_files 
+        WHERE id = ? AND user_email = ?
+    """, (file_id, user_email))
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="File not found")
+    file_path, stored_hash = row
+    credentials = f"{user_email}:{Path(file_path).name}:"
+    computed_hash = quantum_hash(credentials)
+    if computed_hash != stored_hash:
+        raise HTTPException(status_code=403, detail="Quantum hash mismatch")
+    return FileResponse(file_path, filename=Path(file_path).name)
+
+@app.get("/holo_search", response_class=HTMLResponse)
+async def holo_search_page():
+    html_content = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Holo File Explorer</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #login-modal { display: block; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4); }
+        #login-form { background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 300px; }
+        #explorer { display: none; }
+        #file-list { max-height: 400px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; }
+        .file-item { display: flex; align-items: center; margin-bottom: 10px; }
+        .file-item input[type="checkbox"] { margin-right: 10px; }
+        #search-input { width: 200px; margin-bottom: 10px; }
+        button { margin: 5px; }
+        #preview-modal { display: none; position: fixed; z-index: 2; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4); }
+        #preview-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #ccc; width: 90%; max-width: 800px; height: 80%; overflow: auto; }
+        #preview-content img { max-width: 100%; height: auto; }
+        #preview-content embed { width: 100%; height: 100%; }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: black; }
+    </style>
+</head>
+<body>
+    <div id="login-modal">
+        <div id="login-form">
+            <h2>Holo Explorer Login</h2>
+            <form id="login-form-post">
+                <label>Username: <input type="text" id="username" required></label><br><br>
+                <label>Password: <input type="password" id="password" required></label><br><br>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+    </div>
+    <div id="explorer">
+        <h1>Holographic File Explorer</h1>
+        <input type="text" id="search-input" placeholder="Search files..." oninput="searchFiles()">
+        <button onclick="selectAll()">Select All</button>
+        <button onclick="downloadSelected()">Download Selected</button>
+        <input type="file" id="upload-input" onchange="uploadFile()">
+        <button onclick="document.getElementById('upload-input').click()">Upload</button>
+        <div id="file-list"></div>
+    </div>
+    <div id="preview-modal">
+        <div id="preview-content">
+            <span class="close" onclick="closePreview()">&times;</span>
+            <div id="preview-body"></div>
+        </div>
+    </div>
+    <script>
+        let files = [];
+        let token = null;
+        document.getElementById('login-form-post').onsubmit = async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            if (!username || !password) {
+                alert('Username and password are needed.');
+                return;
+            }
+            const response = await fetch('/holo/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username, password})
+            });
+            if (response.ok) {
+                const data = await response.json();
+                token = data.token;
+                document.getElementById('login-modal').style.display = 'none';
+                document.getElementById('explorer').style.display = 'block';
+                loadFiles();
+            } else {
+                alert('Login failed: ' + await response.text());
+            }
+        };
+        async function loadFiles(search = '') {
+            const url = new URL('/api/holo/files', window.location.origin);
+            if (search) url.searchParams.append('search', search);
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                files = await response.json();
+                renderFiles();
+            } else {
+                alert('Failed to load files');
+            }
+        }
+        function renderFiles(filteredFiles = files) {
+            const list = document.getElementById('file-list');
+            list.innerHTML = filteredFiles.map(f => `
+                <div class="file-item">
+                    <input type="checkbox" value="${f.id}" class="file-checkbox">
+                    <span>${f.filename} (${f.size_bytes} bytes) - ${f.upload_timestamp}</span>
+                    <button onclick="previewFile('${f.id}')">Preview</button>
+                    <button onclick="downloadFile('${f.id}')">Download</button>
+                </div>
+            `).join('');
+        }
+        function searchFiles() {
+            const query = document.getElementById('search-input').value;
+            loadFiles(query);
+        }
+        function selectAll() {
+            const checkboxes = document.querySelectorAll('.file-checkbox');
+            checkboxes.forEach(cb => cb.checked = true);
+        }
+        async function downloadSelected() {
+            const selected = Array.from(document.querySelectorAll('.file-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) return alert('No files selected');
+            selected.forEach(id => downloadFile(id));
+        }
+        function downloadFile(id) {
+            window.open(`/api/holo/download/${id}`, '_blank');
+        }
+        async function uploadFile() {
+            const input = document.getElementById('upload-input');
+            if (!input.files[0]) return;
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+            const response = await fetch('/api/holo/upload', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+            if (response.ok) {
+                alert('Upload successful');
+                loadFiles();
+            } else {
+                alert('Upload failed');
+            }
+            input.value = ''; // Reset input
+        }
+        async function previewFile(id) {
+            const file = files.find(f => f.id === id);
+            if (!file) return;
+            const modal = document.getElementById('preview-modal');
+            const body = document.getElementById('preview-body');
+            body.innerHTML = `<h3>Preview: ${file.filename}</h3>`;
+            const ext = file.filename.split('.').pop().toLowerCase();
+            if (ext === 'txt') {
+                const resp = await fetch(`/api/holo/download/${id}`, {headers: {'Authorization': `Bearer ${token}`}});
+                const text = await resp.text();
+                body.innerHTML += `<pre>${text}</pre>`;
+            } else if (ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'gif') {
+                const resp = await fetch(`/api/holo/download/${id}`, {headers: {'Authorization': `Bearer ${token}`}});
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                body.innerHTML += `<img src="${url}" alt="Preview Image">`;
+                // Cleanup
+                setTimeout(() => URL.revokeObjectURL(url), 10000);
+            } else if (ext === 'pdf') {
+                const resp = await fetch(`/api/holo/download/${id}`, {headers: {'Authorization': `Bearer ${token}`}});
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                body.innerHTML += `<embed src="${url}" type="application/pdf" width="100%" height="500px">`;
+                // Cleanup
+                setTimeout(() => URL.revokeObjectURL(url), 10000);
+            } else {
+                body.innerHTML += '<p>Preview not available for this file type.</p>';
+            }
+            modal.style.display = 'block';
+        }
+        function closePreview() {
+            document.getElementById('preview-modal').style.display = 'none';
+            document.getElementById('preview-body').innerHTML = '';
+        }
+        // Close modal if clicked outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('preview-modal');
+            if (event.target === modal) {
+                closePreview();
+            }
+        }
+    </script>
+</body>
+</html>
+    """
+    return HTMLResponse(content=html_content)
+
+# ==================== JUPYTER NOTEBOOKS INTEGRATION ====================
+@app.get("/api/notebooks")
+async def load_notebooks(username: str = Depends(get_current_username), folder: str = Query("root")):
+    return db.load_notebook(f"{username}::quantum.foam", folder)
+
 @app.post("/api/notebooks")
 async def save_notebook(request: Request, username: str = Depends(get_current_username)):
     data = await request.json()
@@ -1329,9 +1616,117 @@ async def save_notebook(request: Request, username: str = Depends(get_current_us
     notebook_id = db.save_notebook(f"{username}::quantum.foam", data.get("folder", "root"), data.get("title", "Untitled"), content_json)
     return JSONResponse(content={"id": notebook_id})
 
-@app.get("/api/notebooks")
-async def load_notebooks(username: str = Depends(get_current_username), folder: str = Query("root")):
-    return db.load_notebook(f"{username}::quantum.foam", folder)
+@app.get("/jupyter", response_class=HTMLResponse)
+async def jupyter_page(username: str = Depends(get_current_username)):
+    html_content = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quantum Jupyter Notebook</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #notebook-container { border: 1px solid #ccc; padding: 10px; }
+        .cell { margin-bottom: 10px; border: 1px solid #ddd; padding: 10px; }
+        .cell input[type="text"] { width: 100%; margin-bottom: 5px; }
+        .cell textarea { width: 100%; height: 100px; }
+        .cell button { margin-right: 5px; }
+        #output { margin-top: 10px; padding: 10px; background: #f5f5f5; }
+        #notebooks-list { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Quantum Jupyter Notebook</h1>
+    <div id="notebooks-list">
+        <h2>Your Notebooks</h2>
+        <ul id="notebooks-ul"></ul>
+        <button onclick="createNewNotebook()">New Notebook</button>
+    </div>
+    <div id="notebook-container" style="display: none;">
+        <h2 id="notebook-title">Untitled</h2>
+        <div id="cells"></div>
+        <button onclick="addCell()">Add Cell</button>
+        <button onclick="runAll()">Run All</button>
+        <button onclick="saveNotebook()">Save</button>
+    </div>
+    <div id="output"></div>
+    <script>
+        let currentNotebook = null;
+        let cells = [];
+        const outputDiv = document.getElementById('output');
+        async function loadNotebooks() {
+            const response = await fetch('/api/notebooks');
+            if (response.ok) {
+                const notebooks = await response.json();
+                const ul = document.getElementById('notebooks-ul');
+                ul.innerHTML = notebooks.map(n => `<li><button onclick="loadNotebook('${n.id}')">${n.title}</button> - ${n.timestamp}</li>`).join('');
+            }
+        }
+        async function loadNotebook(id) {
+            const response = await fetch(`/api/notebooks?id=${id}`);
+            if (response.ok) {
+                const notebook = await response.json();
+                currentNotebook = notebook[0];
+                document.getElementById('notebook-title').textContent = currentNotebook.title;
+                cells = JSON.parse(currentNotebook.content_json).cells || [];
+                renderCells();
+                document.getElementById('notebook-container').style.display = 'block';
+            }
+        }
+        function renderCells() {
+            const container = document.getElementById('cells');
+            container.innerHTML = cells.map((cell, index) => `
+                <div class="cell">
+                    <input type="text" value="${cell.title || ''}" onchange="cells[${index}].title = this.value">
+                    <textarea placeholder="Code or Markdown" onchange="cells[${index}].content = this.value">${cell.content || ''}</textarea>
+                    <button onclick="runCell(${index})">Run</button>
+                    <button onclick="deleteCell(${index})">Delete</button>
+                </div>
+            `).join('');
+        }
+        function addCell() {
+            cells.push({title: '', content: ''});
+            renderCells();
+        }
+        function deleteCell(index) {
+            cells.splice(index, 1);
+            renderCells();
+        }
+        function runCell(index) {
+            const code = cells[index].content;
+            // Mock execution - in real, send to backend for execution
+            outputDiv.innerHTML += `<p>Cell ${index}: Executing "${code.substring(0, 50)}..."</p><p>Output: Mock result</p>`;
+            outputDiv.scrollTop = outputDiv.scrollHeight;
+        }
+        function runAll() {
+            cells.forEach((_, index) => runCell(index));
+        }
+        async function createNewNotebook() {
+            const title = prompt('Notebook Title:') || 'Untitled';
+            currentNotebook = {title: title, content_json: JSON.stringify({cells: []})};
+            cells = [];
+            document.getElementById('notebook-title').textContent = title;
+            renderCells();
+            document.getElementById('notebook-container').style.display = 'block';
+        }
+        async function saveNotebook() {
+            if (!currentNotebook) return;
+            currentNotebook.content_json = JSON.stringify({cells: cells});
+            const response = await fetch('/api/notebooks', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title: currentNotebook.title, content: {cells: cells}})
+            });
+            if (response.ok) {
+                alert('Saved');
+                loadNotebooks();
+            }
+        }
+        loadNotebooks();
+    </script>
+</body>
+</html>
+    """
+    return HTMLResponse(content=html_content)
 
 @app.get("/notebooks", response_class=HTMLResponse)
 async def notebooks_page(username: str = Depends(get_current_username)):
@@ -1342,7 +1737,8 @@ async def notebooks_page(username: str = Depends(get_current_username)):
     <head><title>Notebooks</title></head>
     <body>
     <h1>Notebooks</h1>
-    <ul>{''.join([f'<li>{n["title"]} - {n["timestamp"]}</li>' for n in notebooks])}</ul>
+    <ul>{''.join([f'<li><a href="/jupyter">{n["title"]} - {n["timestamp"]}</a></li>' for n in notebooks])}</ul>
+    <a href="/jupyter">Open Jupyter</a>
     </body>
     </html>
     """
