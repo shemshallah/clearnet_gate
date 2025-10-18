@@ -1,40 +1,395 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Analysis - Quantum Foam</title>
+    <title>Networking - Quantum Realm</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
-            font-family: 'Courier New', monospace;
-            background: linear-gradient(135deg, #000033, #001a4d, #000033);
-            color: #00ffff;
-            padding: 20px;
-            min-height: 100vh;
+        body { font-family: Arial, sans-serif; background: #000; color: #0f0; padding: 20px; }
+        h1 { color: #0f0; }
+        table { border-collapse: collapse; width: 100%; color: #0f0; }
+        th, td { border: 1px solid #0f0; padding: 8px; text-align: left; }
+        th { background: #111; }
+        pre { background: #111; padding: 10px; overflow-x: auto; color: #0f0; }
+        a { color: #0f0; }
+        .tab-button { background: #111; color: #0f0; border: 1px solid #0f0; padding: 10px; margin: 5px; cursor: pointer; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .metric-selector { margin: 10px; }
+        .unit-select { background: #000; color: #0f0; border: 1px solid #0f0; padding: 5px; }
+        .chart-container { width: 100%; height: 300px; background: #111; margin: 10px 0; }
+        #qsh-shell { background: #000; color: #0f0; border: 1px solid #0f0; height: 400px; overflow-y: auto; padding: 10px; font-family: monospace; }
+        #qsh-input { width: 90%; background: #000; color: #0f0; border: 1px solid #0f0; padding: 5px; }
+        .experiment-form { margin: 20px 0; }
+        .experiment-code { width: 100%; height: 200px; background: #111; color: #0f0; border: 1px solid #0f0; }
+        .recording-controls { margin: 10px 0; }
+        .export-btn { background: #0f0; color: #000; padding: 5px 10px; cursor: pointer; }
+    </style>
+    <!-- xterm.js for advanced shell, but fallback to simple div -->
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+</head>
+<body>
+    <h1>🌐 Networking Portal - SOTA Scientific Suite</h1>
+    <p>Quantum Realm: quantum.realm.domain.dominion.foam.computer.alice | Networking Node: quantum.realm.domain.dominion.foam.computer.networking</p>
+    <p><em>Universal QSH Access: curl -X POST http://127.0.0.1:7979/api/qsh/exec -d '{"cmd": "your_python_script.py"}' --header "Host: alice.local" (DNS routed via Alice)</em></p>
+
+    <!-- Tab Buttons -->
+    <div style="text-align: center;">
+        <button class="tab-button active" onclick="switchTab('interfaces')">Interfaces</button>
+        <button class="tab-button" onclick="switchTab('routing')">Routing</button>
+        <button class="tab-button" onclick="switchTab('endpoints')">Endpoints</button>
+        <button class="tab-button" onclick="switchTab('paths')">Paths</button>
+        <button class="tab-button" onclick="switchTab('spectrums')">Spectrums</button>
+        <button class="tab-button" onclick="switchTab('protocols')">Protocols</button>
+        <button class="tab-button" onclick="switchTab('experiments')">Experiments</button>
+        <button class="tab-button" onclick="switchTab('qsh')">QSH Shell</button>
+        <button class="tab-button" onclick="switchTab('metrics')">Real-Time Metrics</button>
+    </div>
+
+    <!-- Tab Contents -->
+    <div id="interfaces" class="tab-content active">
+        <h2>Network Interfaces</h2>
+        <div id="interfacesGrid"></div>
+    </div>
+
+    <div id="routing" class="tab-content">
+        <h2>Routing Tables</h2>
+        <div id="routingTables"></div>
+    </div>
+
+    <div id="endpoints" class="tab-content">
+        <h2>Network Endpoints</h2>
+        <div id="endpointsList"></div>
+    </div>
+
+    <div id="paths" class="tab-content">
+        <h2>Network Paths</h2>
+        <div id="pathsGraph"></div>
+    </div>
+
+    <div id="spectrums" class="tab-content">
+        <h2>Frequency Spectrums</h2>
+        <div id="spectrumsGrid"></div>
+    </div>
+
+    <div id="protocols" class="tab-content">
+        <h2>Protocol Formats</h2>
+        <div id="protocolsGrid"></div>
+    </div>
+
+    <div id="experiments" class="tab-content">
+        <h2>SOTA Network Experiments (NS-3/Mininet/QuantumSavory Integration)</h2>
+        <div class="experiment-form">
+            <label>Load Script from Alice (127.0.0.1):</label><br>
+            <input type="text" id="scriptPath" placeholder="e.g., /experiments/qkd_sim.py" style="width: 70%; margin: 5px;">
+            <button onclick="loadScriptFromAlice()">Load & Run</button><br>
+            <label>Custom Python Code:</label><br>
+            <textarea class="experiment-code" id="customCode" placeholder="# Enter Python code here\nimport networkx as nx..."></textarea><br>
+            <button onclick="runCustomExperiment()">Run Experiment</button>
+            <div id="experimentOutput" style="background: #111; color: #0f0; height: 200px; overflow-y: auto; padding: 10px; margin-top: 10px;"></div>
+        </div>
+    </div>
+
+    <div id="qsh" class="tab-content">
+        <h2>QSH Shell (Quantum Secure Shell - Scrollable Terminal)</h2>
+        <p>Connects to 127.0.0.1:7979 via WebSocket. Run full Python scripts routed through Alice DNS.</p>
+        <div id="qsh-terminal"></div>
+        <input type="text" id="qsh-input" placeholder="Enter QSH command (e.g., exec python_script.py)..." onkeypress="handleQSHInput(event)">
+        <button onclick="sendQSHCommand()">Execute</button>
+    </div>
+
+    <div id="metrics" class="tab-content">
+        <h2>Real-Time Metrics Monitoring</h2>
+        <div class="recording-controls">
+            <button onclick="startRecording()">Start Recording JSON</button>
+            <button onclick="stopRecording()">Stop</button>
+            <button class="export-btn" onclick="exportMetrics()">Export to Clipboard</button>
+            <select class="unit-select" id="unitSelector" onchange="updateMetricsUnits()">
+                <option value="bytes">Bytes</option>
+                <option value="kb">KB</option>
+                <option value="mb">MB</option>
+                <option value="gb">GB</option>
+                <option value="tb">TB</option>
+            </select>
+        </div>
+        <div class="chart-container" id="metricsChart"></div> <!-- Placeholder for Chart.js or similar -->
+        <div id="metricsData"></div>
+    </div>
+
+    <br><a href="/">← Back to Dashboard</a>
+
+    <script>
+        // Tab switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            document.querySelector(`[onclick="switchTab('${tabId}')"]`).classList.add('active');
+            loadTabContent(tabId);
         }
-        
-        .container {
-            max-width: 1800px;
-            margin: 0 auto;
+
+        // Existing load functions...
+        async function loadInterfaces() {
+            try {
+                const response = await fetch('/api/network/interfaces');
+                const interfaces = await response.json();
+                const grid = document.getElementById('interfacesGrid');
+                grid.innerHTML = interfaces.map(iface => `
+                    <div class="interface-card">
+                        <h3>${iface.name}</h3>
+                        <div>ID: ${iface.id}</div>
+                        <div>Address: ${iface.address}</div>
+                        <div>Speed: ${iface.speed_gbps} Gbps</div>
+                        <div>Status: ${iface.status}</div>
+                        <div>MTU: ${iface.mtu}</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load interfaces:', error);
+            }
         }
-        
-        .header {
-            text-align: center;
-            padding: 30px;
-            border: 2px solid #00ffff;
-            background: rgba(0, 255, 255, 0.1);
-            margin-bottom: 30px;
-            box-shadow: 0 0 40px rgba(0, 255, 255, 0.3);
+
+        async function loadRouting() {
+            try {
+                const response = await fetch('/api/network/routing');
+                const routes = await response.json();
+                const tables = document.getElementById('routingTables');
+                tables.innerHTML = routes.map(route => `
+                    <pre>${route.table_id}: ${route.routes.join('\n')}</pre>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load routing:', error);
+            }
         }
-        
-        h1 {
-            color: #00ffff;
-            text-shadow: 0 0 20px #00ffff;
-            font-size: 3em;
-            margin-bottom: 10px;
+
+        async function loadEndpoints() {
+            try {
+                const response = await fetch('/api/network/endpoints');
+                const endpoints = await response.json();
+                const list = document.getElementById('endpointsList');
+                list.innerHTML = endpoints.map(endpoint => `
+                    <div>Endpoint: ${endpoint.ip} - Latency: ${endpoint.latency}ms - Loss: ${endpoint.packet_loss}%</div>
+                `).join('<br>');
+            } catch (error) {
+                console.error('Failed to load endpoints:', error);
+            }
+        }
+
+        async function loadPaths() {
+            try {
+                const response = await fetch('/api/network/paths');
+                const paths = await response.json();
+                const graph = document.getElementById('pathsGraph');
+                graph.innerHTML = `<pre>${JSON.stringify(paths, null, 2)}</pre>`; // Placeholder for graph viz (e.g., vis.js)
+            } catch (error) {
+                console.error('Failed to load paths:', error);
+            }
+        }
+
+        async function loadSpectrums() {
+            try {
+                const response = await fetch('/api/network/spectrums');
+                const spectrums = await response.json();
+                const grid = document.getElementById('spectrumsGrid');
+                grid.innerHTML = spectrums.map(spectrum => `
+                    <div class="spectrum-card">
+                        <h3>${spectrum.frequency} Hz</h3>
+                        <div class="metric-bar">
+                            <div class="metric-fill" style="width: ${spectrum.power * 100}%"></div>
+                        </div>
+                        <div class="metric-label">${(spectrum.noise_level * 100).toFixed(2)}%</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load spectrums:', error);
+            }
+        }
+
+        async function loadProtocols() {
+            try {
+                const response = await fetch('/api/network/protocols');
+                const protocols = await response.json();
+                const grid = document.getElementById('protocolsGrid');
+                grid.innerHTML = protocols.map(protocol => `
+                    <div class="protocol-card">
+                        <div>
+                            <h3>${protocol.protocol}</h3>
+                            <div style="color: #00ffff; margin: 8px 0;">
+                                <strong>Layer:</strong> ${protocol.layer}
+                            </div>
+                        </div>
+                        <div>
+                            <div style="color: #00ffff; margin: 8px 0;">
+                                <strong>Header Size:</strong> ${protocol.header_size_qubits || protocol.header_size_bytes} ${protocol.header_size_qubits ? 'qubits' : 'bytes'}
+                            </div>
+                            <div style="color: #00ffff; margin: 8px 0;">
+                                <strong>Payload Size:</strong> ${protocol.payload_size_qubits || protocol.payload_size_bytes} ${protocol.payload_size_qubits ? 'qubits' : 'bytes'}
+                            </div>
+                            <div style="color: #00ffff; margin: 8px 0;">
+                                <strong>Error Correction:</strong> ${protocol.error_correction}
+                            </div>
+                            <div style="color: #00ff00; margin-top: 10px;">
+                                <strong>Features:</strong><br>
+                                ${protocol.features.map(f => `• ${f}`).join('<br>')}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load protocols:', error);
+            }
+        }
+
+        // New: Experiments
+        async function loadScriptFromAlice() {
+            const path = document.getElementById('scriptPath').value;
+            try {
+                const response = await fetch(`/api/experiments/load?path=${encodeURIComponent(path)}&from=alice:127.0.0.1`);
+                const script = await response.text();
+                document.getElementById('customCode').value = script;
+                runCustomExperiment(); // Auto-run
+            } catch (error) {
+                console.error('Failed to load script from Alice:', error);
+            }
+        }
+
+        async function runCustomExperiment() {
+            const code = document.getElementById('customCode').value;
+            try {
+                const response = await fetch('/api/experiments/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: code, type: 'ns3' }) // e.g., NS-3 sim
+                });
+                const output = await response.json();
+                document.getElementById('experimentOutput').innerHTML = `<pre>${JSON.stringify(output, null, 2)}</pre>`;
+            } catch (error) {
+                console.error('Failed to run experiment:', error);
+            }
+        }
+
+        // New: QSH Shell
+        let qshWs;
+        function initQSH() {
+            qshWs = new WebSocket('ws://127.0.0.1:7979/ws/qsh');
+            const term = new Terminal();
+            term.open(document.getElementById('qsh-terminal'));
+            qshWs.onmessage = (event) => term.write(event.data);
+            qshWs.onopen = () => term.write('\r\nConnected to QSH Shell via Alice DNS\r\n$ ');
+        }
+
+        function handleQSHInput(event) {
+            if (event.key === 'Enter') {
+                const input = document.getElementById('qsh-input');
+                qshWs.send(input.value);
+                input.value = '';
+            }
+        }
+
+        function sendQSHCommand() {
+            const input = document.getElementById('qsh-input');
+            qshWs.send(input.value);
+            input.value = '';
+        }
+
+        // New: Real-Time Metrics
+        let metricsInterval;
+        let recordedMetrics = [];
+        let isRecording = false;
+        let currentUnit = 'bytes';
+
+        async function loadMetrics() {
+            try {
+                const response = await fetch('/api/metrics/realtime');
+                const metrics = await response.json();
+                updateMetricsDisplay(metrics);
+                metricsInterval = setInterval(async () => {
+                    const fresh = await fetch('/api/metrics/realtime').then(r => r.json());
+                    updateMetricsDisplay(fresh);
+                    if (isRecording) recordedMetrics.push(fresh);
+                }, 1000); // 1s real-time
+            } catch (error) {
+                console.error('Failed to load metrics:', error);
+            }
+        }
+
+        function updateMetricsDisplay(metrics) {
+            const container = document.getElementById('metricsData');
+            const formatted = formatBytes(metrics.total_traffic, currentUnit);
+            container.innerHTML = `
+                <div>Total Traffic: ${formatted}</div>
+                <div>CPU: ${metrics.cpu}%</div>
+                <div>Memory: ${formatBytes(metrics.memory, currentUnit)}</div>
+                <!-- Add Chart.js here if integrated -->
+            `;
+        }
+
+        function updateMetricsUnits() {
+            currentUnit = document.getElementById('unitSelector').value;
+            // Re-fetch or re-format current display
+        }
+
+        function formatBytes(bytes, unit) {
+            const units = { bytes: 1, kb: 1024, mb: 1024**2, gb: 1024**3, tb: 1024**4 };
+            return (bytes / units[unit]).toFixed(2) + ' ' + unit.toUpperCase();
+        }
+
+        function startRecording() {
+            isRecording = true;
+            recordedMetrics = [];
+        }
+
+        function stopRecording() {
+            isRecording = false;
+            clearInterval(metricsInterval);
+        }
+
+        function exportMetrics() {
+            const json = JSON.stringify(recordedMetrics, null, 2);
+            navigator.clipboard.writeText(json).then(() => alert('Metrics exported to clipboard!'));
+        }
+
+        // Load tab content
+        const loadedTabs = new Set(['interfaces']);
+
+        function loadTabContent(tabId) {
+            if (loadedTabs.has(tabId)) return;
+            loadedTabs.add(tabId);
+
+            switch(tabId) {
+                case 'routing':
+                    loadRouting();
+                    break;
+                case 'endpoints':
+                    loadEndpoints();
+                    break;
+                case 'paths':
+                    loadPaths();
+                    break;
+                case 'spectrums':
+                    loadSpectrums();
+                    break;
+                case 'protocols':
+                    loadProtocols();
+                    break;
+                case 'experiments':
+                    // Preload common SOTA tools info
+                    break;
+                case 'qsh':
+                    initQSH();
+                    break;
+                case 'metrics':
+                    loadMetrics();
+                    break;
+            }
+        }
+
+        // Initial load
+        loadInterfaces();
+    </script>
+</body>
+</html>            margin-bottom: 10px;
         }
         
         .back-link {
