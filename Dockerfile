@@ -1,3 +1,4 @@
+```dockerfile
 FROM python:3.11-slim
 
 # Set working directory
@@ -17,11 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY quantum_app.py .
 
-# Copy templates directory
-COPY templates/ templates/
-
-# Create necessary directories (static will be created by app if needed)
-RUN mkdir -p data static
+# Create necessary directories
+RUN mkdir -p data
 
 # Create non-root user
 RUN useradd -m -u 1000 quantum && \
@@ -39,3 +37,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Run application
 CMD ["python", "quantum_app.py"]
+```
