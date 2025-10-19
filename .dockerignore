@@ -1,39 +1,32 @@
-# Python
+# .dockerignore
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
 venv/
 env/
 ENV/
+.venv
 
-# Data and logs
-data/
-*.db
-*.log
-app.log
-
-# Development files
-.git/
-.gitignore
-.env
-.env.*
-!.env.example
-
-# Documentation (not needed in container)
-README.md
-QUICKSTART.md
-FIX_SUMMARY.md
-PROJECT_OVERVIEW.md
-FILE_INDEX.md
-START_HERE.md
-
-# Tests
-test_*.py
-tests/
-
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
@@ -44,7 +37,31 @@ tests/
 .DS_Store
 Thumbs.db
 
-# Build artifacts
-build/
-dist/
-*.egg-info/
+# Project specific
+data/
+*.db
+*.log
+logs/
+.env
+.env.local
+.env.production
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+nginx.conf
+
+# Documentation
+README.md
+docs/
+*.md
+
+# Test files
+test/
+tests/
+__tests__/
