@@ -2301,7 +2301,7 @@ async def health():
         "env": Config.ENVIRONMENT, 
         "host": Config.HOST, 
         "storage_reachable": reachable, 
-        "domain_resolved": domain_ip, 
+        "domain_resolved": domain_768ip, 
         "qram_operational": qram_op, 
         "cpu_black_latency_ms": black_latency, 
         "cpu_white_latency_ms": white_latency, 
