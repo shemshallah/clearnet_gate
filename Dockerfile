@@ -13,12 +13,16 @@ ENV PYTHONUNBUFFERED=1 \
     TELEPORTATION_ITERATIONS=1000 \
     SECRET_KEY=your-super-secret-key-change-in-production
 
-# Install system dependencies for ping, whois, and build tools
+# Install system dependencies for ping, whois, build tools, and scientific packages
 RUN apt-get update && apt-get install -y \
     iputils-ping \
     whois \
     build-essential \
     python3-dev \
+    gfortran \
+    libopenblas-dev \
+    liblapack-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -27,7 +31,7 @@ WORKDIR /app
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Upgrade pip and install Python dependencies with break-system-packages to handle PEP 668
+# Upgrade pip and install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --break-system-packages -r requirements.txt
 
