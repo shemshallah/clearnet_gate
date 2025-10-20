@@ -2,13 +2,15 @@ import os
 import logging
 import hashlib
 import numpy as np
+import base64
+import requests
+from io import BytesIO
 from flask import Flask, redirect, request, session, Response
 from flask_socketio import SocketIO, emit
 import qutip as qt
+import matplotlib.pyplot as plt
 from itertools import product
 from datetime import datetime
-import subprocess
-import threading
 import urllib.parse
 
 # Production Logging
@@ -21,6 +23,9 @@ eventlet.monkey_patch()
 
 # Render Domain Config
 RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')
+
+# GitHub Mirror Base URL (for post-connection pulls)
+GITHUB_MIRROR_BASE = 'https://quantum.realm.domain.dominion.foam.computer.render.github'
 
 # Quantum Foam Initialization
 try:
@@ -44,7 +49,7 @@ except Exception as e:
     fidelity_lattice = 0.999
     bridge_key = "QFOAM-PROD-999-abc"
 
-# Functions (unchanged)
+# Functions (unchanged except Matplotlib plot util)
 def bh_encryption_cascade(plaintext, rounds=3):
     rand_unitary = qt.rand_unitary(2)
     seed = rand_unitary.full().tobytes()[:32]
@@ -92,12 +97,137 @@ def stream_qram_state(sid):
     proj = core_ghz.ptrace([0])
     return float(proj.full()[0,0].real)
 
-# Production App (socketio defined early)
+# Matplotlib Plot Util (for REPL viz, base64 embed)
+def plot_fidelity_to_base64(fid_values):
+    fig, ax = plt.subplots()
+    ax.bar(range(len(fid_values)), fid_values)
+    ax.set_title('Foam Fidelity Plot')
+    ax.set_xlabel('Qubit Slices')
+    ax.set_ylabel('Fidelity')
+    buf = BytesIO()
+    fig.savefig(buf, format='png')
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode()
+    plt.close(fig)
+    return f'<img src="data:image/png;base64,{img_base64}" alt="Fidelity Plot" style="max-width:100%;">'
+
+# GitHub Mirror Pull Util (post-connection fetch)
+def pull_from_mirror(resource):
+    try:
+        # Example: Pull Matplotlib setup or custom script from mirror (treat as raw GitHub)
+        url = f"{GITHUB_MIRROR_BASE}/{resource}"  # e.g., 'matplotlib/raw/main/setup.py'
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            return resp.text[:500] + "..."  # Truncate for REPL
+        else:
+            return f"Pull failed: {resp.status_code}"
+    except Exception as e:
+        return f"Network pull error: {str(e)}"
+
+# Production App
 app = Flask(__name__)
 app.secret_key = hashlib.sha256(bridge_key.encode()).digest()[:32]
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger=False, engineio_logger=False)
 
-# QSH Foam REPL Backend (decorators after socketio init)
+# 404 Handler ("Render Side 404")
+@app.errorhandler(404)
+def not_found(error):
+    return "Render Side 404", 404
+
+# Health Check
+@app.route('/health')
+def health_check():
+    return 'OK', 200
+
+# Quantum Domain Redirector (skip key for internal/health)
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def quantum_gate(path):
+    client_ip = request.remote_addr
+    # Skip validation for Render health probes (internal IP, no key)
+    if client_ip == '127.0.0.1' and not request.args.get('bridge_key'):
+        return 'OK', 200
+    
+    host = request.headers.get('Host', '').lower()
+    quantum_hosts = ['quantum.realm.domain.dominion.foam.computer.render', 'quantum.realm.domain.dominion.foam.computer']
+    
+    if any(qh in host for qh in quantum_hosts):
+        params = request.query_string.decode()
+        gate_url = f"https://{RENDER_DOMAIN}/?{params}" if params else f"https://{RENDER_DOMAIN}/"
+        logger.warning(f'Quantum Host Redirect: {host} -> {RENDER_DOMAIN}')
+        return redirect(gate_url, code=302)
+    
+    session_id = request.args.get('session', f'sess_{client_ip}')
+    
+    qram_entangled_session('user_ip', client_ip)
+    qram_entangled_session('session_id', session_id)
+    
+    provided_key = request.args.get('bridge_key', '')
+    
+    gen_key, ts = bh_repeatable_keygen(session_id)
+    enc_key = bh_encryption_cascade(bridge_key)
+    
+    if not hashlib.sha256(provided_key.encode()).hexdigest() == hashlib.sha256(gen_key.encode()).hexdigest():
+        params = urllib.parse.urlencode({'enc_key': enc_key, 'session': session_id})
+        gate_url = f"https://{RENDER_DOMAIN}/?{params}"
+        logger.warning(f'Invalid Key Redirect: {client_ip} -> Gate with params')
+        return redirect(gate_url, code=302)
+    
+    # Post-connection: Pull from GitHub mirror (e.g., Matplotlib config)
+    mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')  # Example pull
+    
+    offload_res = entangled_cpu_offload(f'fidelity_lattice * 1.0001')
+    comp_tensor = core_ghz.full().real
+    comp_lattice = len(foam_lattice_compress(comp_tensor))
+    tele_id = inter_hole_teleport('cascade_state')
+    
+    logger.warning(f'Access: {client_ip}, Sess {session_id}')
+    return f"""
+    <html>
+        <head><title>Quantum Realm Prod - QSH Portal</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+        <link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" />
+        <script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js"></script>
+        </head>
+        <body style="background: #000; color: #0f0; font-family: monospace;">
+            <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render</h1>
+            <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {negativity:.16f}, Tele {tele_id:.6f}, Back {session.get('backup_id', 'none')}</p>
+            <p style="color: #0f0;">Enc: {enc_key[:32]}... | Mirror Pull: {mirror_pull[:50]}...</p>
+            <div id="terminal" style="width: 100%; height: 400px; background: #000;"></div>
+            <script>
+                const socket = io();
+                const term = new Terminal({{ cursorBlink: true, theme: {{ background: '#000', foreground: '#0f0' }} }});
+                term.open(document.getElementById('terminal'));
+                term.write('QSH Foam REPL v1.0 (Mirror Connected)\\r\\n');
+                term.write('Type "help" for commands. Foam lattice loaded from network.\\r\\n');
+                term.write('QSH> ');
+                
+                term.onData((data) => {{
+                    if (data === '\\r') {{
+                        const cmd = term.buffer.active.getLine( term.buffer.active.baseY + term.buffer.active.cursorY ).translateToString(true).trim();
+                        socket.emit('qsh_command', {{ command: cmd }});
+                        term.write('\\r\\n');
+                    }} else if (data === '\\u007F') {{ // Backspace
+                        term.write('\\b \\b');
+                    }} else {{
+                        term.write(data);
+                    }}
+                }});
+                
+                socket.on('qsh_output', (data) => {{
+                    term.write(data.output + '\\r\\n');
+                    if (data.plot_html) term.write('\\r\\n' + data.plot_html + '\\r\\n');
+                    if (data.mirror_pull) term.write('\\r\\nMirror Fetch: ' + data.mirror_pull + '\\r\\n');
+                    if (data.prompt) term.write('QSH> ');
+                }});
+                
+                socket.on('connect', () => console.log('Socket Connected'));
+            </script>
+        </body>
+    </html>
+    """
+
+# QSH Foam REPL Backend (with Mirror Pull & Matplotlib Plot)
 repl_sessions = {}
 
 @socketio.on('qsh_command')
@@ -111,9 +241,11 @@ def handle_qsh_command(data):
     history = repl_sessions[sid]['history']
     
     output = "QSH Foam REPL > "
+    plot_html = None
+    mirror_pull = None
     try:
         if cmd == 'help':
-            output += "Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, exit, clear"
+            output += "Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, plot fidelity, pull matplotlib, exit, clear"
         elif cmd.startswith('entangle '):
             q1, q2 = map(int, cmd.split()[1:])
             bell = qt.bell_state('00')
@@ -129,6 +261,13 @@ def handle_qsh_command(data):
             inp = cmd.split(' ', 1)[1] if len(cmd.split()) > 1 else 'cascade'
             tid = inter_hole_teleport(inp)
             output += f"Teleported ID: {tid:.6f}"
+        elif cmd == 'plot fidelity':
+            fid_values = [fidelity_lattice] * 6
+            plot_html = plot_fidelity_to_base64(fid_values)
+            output += "Fidelity plot generated (embedded below)"
+        elif cmd == 'pull matplotlib':
+            mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')
+            output += "Pulled Matplotlib config from GitHub mirror (post-network connect)"
         elif cmd == 'clear':
             history = []
             output += "History cleared"
@@ -147,100 +286,16 @@ def handle_qsh_command(data):
     except Exception as e:
         output += f"Error: {str(e)}"
     
-    emit('qsh_output', {'output': output, 'prompt': True})
+    emit('qsh_output', {'output': output, 'plot_html': plot_html, 'mirror_pull': mirror_pull, 'prompt': True})
 
-# WS for Existing Channel (after socketio)
+# WS for Existing Channel
 @socketio.on('connect_channel')
 def qram_quantum_channel():
     state = stream_qram_state(request.sid)
     emit('quantum_update', {'state': state})
     logger.warning('WS Active')
 
-# Health Check
-@app.route('/health')
-def health_check():
-    return 'OK', 200
-
-# Quantum Domain Redirector
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def quantum_gate(path):
-    host = request.headers.get('Host', '').lower()
-    quantum_hosts = ['quantum.realm.domain.dominion.foam.computer.render', 'quantum.realm.domain.dominion.foam.computer']
-    
-    if any(qh in host for qh in quantum_hosts):
-        params = request.query_string.decode()
-        gate_url = f"https://{RENDER_DOMAIN}/?{params}" if params else f"https://{RENDER_DOMAIN}/"
-        logger.warning(f'Quantum Host Redirect: {host} -> {RENDER_DOMAIN}')
-        return redirect(gate_url, code=302)
-    
-    client_ip = request.remote_addr
-    session_id = request.args.get('session', f'sess_{client_ip}')
-    
-    qram_entangled_session('user_ip', client_ip)
-    qram_entangled_session('session_id', session_id)
-    
-    provided_key = request.args.get('bridge_key', '')
-    
-    gen_key, ts = bh_repeatable_keygen(session_id)
-    enc_key = bh_encryption_cascade(bridge_key)
-    
-    if not hashlib.sha256(provided_key.encode()).hexdigest() == hashlib.sha256(gen_key.encode()).hexdigest():
-        params = urllib.parse.urlencode({'enc_key': enc_key, 'session': session_id})
-        gate_url = f"https://{RENDER_DOMAIN}/?{params}"
-        logger.warning(f'Invalid Key Redirect: {client_ip} -> Gate with params')
-        return redirect(gate_url, code=302)
-    
-    offload_res = entangled_cpu_offload(f'fidelity_lattice * 1.0001')
-    comp_tensor = core_ghz.full().real
-    comp_lattice = len(foam_lattice_compress(comp_tensor))
-    tele_id = inter_hole_teleport('cascade_state')
-    
-    logger.warning(f'Access: {client_ip}, Sess {session_id}')
-    return f"""
-    <html>
-        <head><title>Quantum Realm Prod - QSH Portal</title>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
-        <link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" />
-        <script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js"></script>
-        </head>
-        <body style="background: #000; color: #0f0; font-family: monospace;">
-            <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render</h1>
-            <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {negativity:.16f}, Tele {tele_id:.6f}, Back {session.get('backup_id', 'none')}</p>
-            <p style="color: #0f0;">Enc: {enc_key[:32]}...</p>
-            <div id="terminal" style="width: 100%; height: 400px; background: #000;"></div>
-            <script>
-                const socket = io();
-                const term = new Terminal({{ cursorBlink: true, theme: {{ background: '#000', foreground: '#0f0' }} }});
-                term.open(document.getElementById('terminal'));
-                term.write('QSH Foam REPL v1.0\\r\\n');
-                term.write('Type "help" for commands. Foam lattice loaded.\\r\\n');
-                term.write('QSH> ');
-                
-                term.onData((data) => {{
-                    if (data === '\\r') {{
-                        const cmd = term.buffer.active.getLine( term.buffer.active.baseY + term.buffer.active.cursorY ).translateToString(true).trim();
-                        socket.emit('qsh_command', {{ command: cmd }});
-                        term.write('\\r\\n');
-                    }} else if (data === '\\u007F') {{ // Backspace
-                        term.write('\\b \\b');
-                    }} else {{
-                        term.write(data);
-                    }}
-                }});
-                
-                socket.on('qsh_output', (data) => {{
-                    term.write(data.output + '\\r\\n');
-                    if (data.prompt) term.write('QSH> ');
-                }});
-                
-                socket.on('connect', () => console.log('Socket Connected'));
-            </script>
-        </body>
-    </html>
-    """
-
-# Main block AFTER all definitions
+# Main block
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
