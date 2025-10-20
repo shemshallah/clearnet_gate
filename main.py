@@ -1228,13 +1228,6 @@ app.add_middleware(
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# FIXED: Mount static files at /static/ instead of / to avoid shadowing the root route.
-# If you have a 'static' subdir for assets, use that. Otherwise, use '.' for current dir.
-app.mount("/static", StaticFiles(directory=".", html=True), name="static")  # Changed from "/" to "/static"
-
-# Optional: If you want to serve .html files directly from root (e.g., /email.html), add this AFTER the root route:
-# app.mount("/", StaticFiles(directory=".", html=True), name="html_files")  # But exclude index.html if needed
-
 @app.on_event("startup")
 async def startup_event():
     logger.info(f"QSH Foam Production System starting on {Config.HOST}:{Config.PORT}")
@@ -1910,6 +1903,12 @@ async def health():
         "lattice_active": True,
         "torino_configured": bool(Config.IBM_QUANTUM_TOKEN)
     }
+
+# ==================== STATIC FILES MOUNT (MOVED TO END TO AVOID SHADOWING ROUTES) ====================
+# Mount at root to serve HTML files like /email.html directly from the current directory.
+# All API routes are defined before this mount, so they take precedence.
+# Assumes HTML files (e.g., email.html, blockchain.html) exist in the current working directory.
+app.mount("/", StaticFiles(directory=".", html=True), name="html_files")
 
 if __name__ == "__main__":
     uvicorn.run(app, host=Config.HOST, port=Config.PORT)
