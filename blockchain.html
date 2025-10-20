@@ -3,18 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOTA Bitcoin Client - Quantum Realm v2.8</title>
-    <script src="https://cdn.jsdelivr.net/npm/xterm@5.5.0/lib/xterm.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <title>Bitcoin Client - QSH Foam</title>
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.5.0/lib/xterm.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.5.0/css/xterm.css" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: 'Courier New', monospace; 
             background: #000; 
             color: #ff6b35; 
-            padding: 0;
             overflow-x: hidden;
         }
         
@@ -23,7 +20,6 @@
             padding: 15px; 
             text-align: center; 
             border-bottom: 2px solid #ff6b35;
-            box-shadow: 0 4px 6px rgba(255, 107, 53, 0.3);
         }
         
         .donation-banner strong { 
@@ -36,13 +32,46 @@
             background: #111;
             padding: 20px;
             border-bottom: 2px solid #ff6b35;
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         
         h1 { 
             color: #ff6b35; 
             text-shadow: 0 0 20px rgba(255, 107, 53, 0.8);
-            margin-bottom: 10px;
+        }
+        
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            background: #ff6b35;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .btn:hover {
+            background: #ff8555;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(255, 107, 53, 0.5);
+        }
+        
+        .btn-secondary {
+            background: #0f0;
+            color: #000;
+        }
+        
+        .btn-secondary:hover {
+            background: #2f2;
         }
         
         .subtitle {
@@ -50,24 +79,7 @@
             font-size: 0.9em;
         }
         
-        .foam-teaser {
-            background: linear-gradient(135deg, #1a3a1a 0%, #0d1f0d 100%);
-            color: #0f0;
-            padding: 20px;
-            text-align: center;
-            border: 2px solid #0f0;
-            margin: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-        }
-        
-        .foam-teaser h2 {
-            color: #0f0;
-            text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
-            margin-bottom: 10px;
-        }
-        
-        .howto {
+        .info-section {
             background: #1a1a1a;
             padding: 20px;
             margin: 20px;
@@ -75,18 +87,35 @@
             border-radius: 5px;
         }
         
-        .howto h2 {
+        .info-section h2 {
             color: #ff6b35;
             margin-bottom: 15px;
-            border-bottom: 1px solid #ff6b35;
-            padding-bottom: 10px;
         }
         
-        .howto code {
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .info-card {
             background: #2a2a2a;
-            padding: 2px 6px;
-            border-radius: 3px;
+            border: 1px solid #0f0;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #0f0;
+        }
+        
+        .info-card h3 {
             color: #0f0;
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+        
+        .info-card p {
+            color: #ff6b35;
+            font-size: 0.9em;
         }
         
         .tab-container {
@@ -115,7 +144,6 @@
             background: #ff6b35;
             color: #000;
             transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(255, 107, 53, 0.5);
         }
         
         .tab-button.active {
@@ -144,7 +172,7 @@
             border: 2px solid #ff6b35;
             border-radius: 5px;
             padding: 10px;
-            margin: 20px 0;
+            margin: 20px;
             box-shadow: 0 0 20px rgba(255, 107, 53, 0.3);
         }
         
@@ -167,21 +195,21 @@
             font-size: 0.8em;
         }
         
-        #qsh-terminal, #bitcoin-terminal {
-            height: 500px;
+        #qsh-terminal {
+            height: 600px;
         }
         
-        .command-quick-ref {
+        .command-ref {
             background: #1a1a1a;
             border: 1px solid #ff6b35;
             padding: 15px;
-            margin: 10px 0;
+            margin: 20px;
             border-radius: 5px;
         }
         
-        .command-quick-ref h3 {
+        .command-ref h3 {
             color: #ff6b35;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
         
         .command-item {
@@ -195,89 +223,11 @@
         .command-item .cmd {
             color: #0f0;
             font-weight: bold;
-            min-width: 250px;
+            min-width: 300px;
         }
         
         .command-item .desc {
             color: #ff6b35;
-        }
-        
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin: 20px 0;
-        }
-        
-        .metric-card {
-            background: #1a1a1a;
-            border: 1px solid #ff6b35;
-            padding: 20px;
-            border-radius: 5px;
-        }
-        
-        .metric-card h3 {
-            color: #ff6b35;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #ff6b35;
-            padding-bottom: 8px;
-        }
-        
-        .metric-value {
-            font-size: 2em;
-            color: #0f0;
-            margin: 10px 0;
-        }
-        
-        .metric-label {
-            color: #999;
-            font-size: 0.9em;
-        }
-        
-        .btn {
-            background: #ff6b35;
-            color: #000;
-            border: none;
-            padding: 10px 20px;
-            cursor: pointer;
-            border-radius: 5px;
-            font-family: 'Courier New', monospace;
-            font-weight: bold;
-            transition: all 0.3s;
-            margin: 5px;
-        }
-        
-        .btn:hover {
-            background: #ff8555;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(255, 107, 53, 0.5);
-        }
-        
-        .btn-secondary {
-            background: #0f0;
-        }
-        
-        .btn-secondary:hover {
-            background: #2f2;
-        }
-        
-        input[type="text"], select, textarea {
-            background: #2a2a2a;
-            color: #0f0;
-            border: 1px solid #ff6b35;
-            padding: 10px;
-            border-radius: 5px;
-            font-family: 'Courier New', monospace;
-            width: 100%;
-            margin: 10px 0;
-        }
-        
-        .chart-container {
-            background: #1a1a1a;
-            padding: 20px;
-            border: 1px solid #ff6b35;
-            border-radius: 5px;
-            margin: 20px 0;
         }
         
         .status-indicator {
@@ -293,23 +243,28 @@
             box-shadow: 0 0 10px #0f0;
         }
         
-        .status-indicator.offline {
-            background: #f00;
-            box-shadow: 0 0 10px #f00;
+        .metrics-section {
+            padding: 20px;
+            margin: 20px;
         }
         
-        .wallet-card, .tx-card, .block-card {
-            background: #2a2a2a;
+        .metric-card {
+            background: #1a1a1a;
             border: 1px solid #ff6b35;
-            padding: 15px;
+            padding: 20px;
             margin: 10px 0;
             border-radius: 5px;
-            border-left: 4px solid #0f0;
         }
         
-        .wallet-card h3, .tx-card h3, .block-card h3 {
-            color: #0f0;
+        .metric-card h3 {
+            color: #ff6b35;
             margin-bottom: 10px;
+        }
+        
+        .metric-value {
+            font-size: 2em;
+            color: #0f0;
+            margin: 10px 0;
         }
         
         .footer {
@@ -318,22 +273,17 @@
             text-align: center;
             border-top: 2px solid #ff6b35;
             margin-top: 40px;
-        }
-        
-        .loading {
             color: #ff6b35;
-            text-align: center;
-            padding: 20px;
         }
         
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        .footer a {
+            color: #0f0;
+            text-decoration: none;
         }
         
-        .loading::after {
-            content: '...';
-            animation: pulse 1.5s infinite;
+        .footer a:hover {
+            color: #2f2;
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -343,194 +293,188 @@
     </div>
 
     <header>
-        <h1>⚡ SOTA Bitcoin Client - Quantum Realm Edition v2.8 ⚡</h1>
-        <p class="subtitle">Enhanced with QSH Foam REPL | Holographic Storage @ 136.0.0.1 | QRAM @ quantum.realm.domain.dominion.foam.computer</p>
+        <div>
+            <h1>⚡ Bitcoin Client - Quantum Realm v2.8</h1>
+            <p class="subtitle">QSH Foam REPL | Holographic Storage @ 138.0.0.1 | QRAM @ quantum.realm</p>
+        </div>
+        <div class="nav-buttons">
+            <button class="btn btn-secondary" onclick="location.href='/'">← Dashboard</button>
+            <button class="btn btn-secondary" onclick="location.href='/email.html'">📧 Email</button>
+            <button class="btn" onclick="location.href='/qsh'">🔬 QSH REPL</button>
+        </div>
     </header>
 
-    <div class="foam-teaser">
-        <h2>🌌 FOM - Foam Based Coin Coming Soon 🌌</h2>
-        <p>Entangled with quantum foam for next-gen DeFi. Leveraging Bell inequality violations for trustless consensus.</p>
-        <p><strong>Stay tuned for mainnet launch with 2^300 GB QRAM backing!</strong></p>
-    </div>
-
-    <div class="howto">
-        <h2>📖 How to Use This Client</h2>
-        <p><strong>Quick Start:</strong></p>
-        <ul style="list-style-position: inside; margin-left: 20px;">
-            <li>Navigate to <strong>QSH Foam REPL</strong> tab for unified quantum + Bitcoin shell</li>
-            <li>Use <code>bitcoin-cli getblockchaininfo</code> for blockchain status</li>
-            <li>Network tools: <code>ping 136.0.0.1</code>, <code>nc 130.0.0.1:9999</code>, <code>traceroute 139.0.0.1</code></li>
-            <li>Quantum tests: <code>QuantumPhysics.run_full_suite()</code> proves entanglement</li>
-            <li>View all commands: <code>export_db</code> or visit /command-db endpoint</li>
-        </ul>
-        <p><strong>Python Packages:</strong> bitcoin, requests, electrum, psutil, networkx, qutip, dnspython, aiohttp</p>
-        <p><strong>Storage:</strong> Blockchain at holographic 138.0.0.1 (~600GB full / ~10GB pruned), QRAM at quantum.realm domain (2^300 GB theoretical)</p>
-        <p><strong>Distributed Compute:</strong> Black hole (130.0.0.1) ingests, White hole (139.0.0.1) outputs</p>
+    <div class="info-section">
+        <h2>📊 System Overview</h2>
+        <div class="info-grid">
+            <div class="info-card">
+                <h3>🌌 Alice Node</h3>
+                <p><strong>IP:</strong> 127.0.0.1</p>
+                <p><strong>Status:</strong> Operational</p>
+                <p>Local quantum entanglement node</p>
+            </div>
+            <div class="info-card">
+                <h3>💾 Holographic Storage</h3>
+                <p><strong>IP:</strong> 138.0.0.1</p>
+                <p><strong>Capacity:</strong> 6 EB</p>
+                <p>3D laser holographic technology</p>
+            </div>
+            <div class="info-card">
+                <h3>⚛️ QRAM</h3>
+                <p><strong>Domain:</strong> quantum.realm</p>
+                <p><strong>Capacity:</strong> 2^300 GB</p>
+                <p>Stab-QRAM architecture</p>
+            </div>
+            <div class="info-card">
+                <h3>🔄 Distributed CPU</h3>
+                <p><strong>Black Hole:</strong> 130.0.0.1</p>
+                <p><strong>White Hole:</strong> 139.0.0.1</p>
+                <p>Compute ingestion/expansion</p>
+            </div>
+        </div>
     </div>
 
     <div class="tab-container">
-        <button class="tab-button active" onclick="switchTab('qsh-foam')">QSH Foam REPL</button>
-        <button class="tab-button" onclick="switchTab('bitcoin-cli')">Bitcoin CLI</button>
-        <button class="tab-button" onclick="switchTab('wallets')">Wallets</button>
-        <button class="tab-button" onclick="switchTab('transactions')">Transactions</button>
-        <button class="tab-button" onclick="switchTab('blocks')">Blocks</button>
-        <button class="tab-button" onclick="switchTab('mempool')">Mempool</button>
+        <button class="tab-button active" onclick="switchTab('qsh-repl')">QSH Foam REPL</button>
+        <button class="tab-button" onclick="switchTab('commands')">Commands</button>
         <button class="tab-button" onclick="switchTab('metrics')">Metrics</button>
-        <button class="tab-button" onclick="switchTab('quantum')">Quantum Proofs</button>
-        <button class="tab-button" onclick="switchTab('commands')">Command DB</button>
+        <button class="tab-button" onclick="switchTab('quantum')">Quantum Tests</button>
     </div>
 
-    <!-- QSH Foam REPL Tab -->
-    <div id="qsh-foam" class="tab-content active">
-        <h2>🌌 QSH Foam REPL - Unified Quantum + Bitcoin Shell</h2>
-        <div class="command-quick-ref">
-            <h3>Quick Commands</h3>
+    <!-- QSH REPL Tab -->
+    <div id="qsh-repl" class="tab-content active">
+        <div class="command-ref">
+            <h3>🔧 Quick Commands</h3>
             <div class="command-item">
                 <span class="cmd">bitcoin-cli getblockchaininfo</span>
                 <span class="desc">Get blockchain sync status</span>
             </div>
             <div class="command-item">
-                <span class="cmd">bitcoin-cli getnewaddress</span>
-                <span class="desc">Generate new BTC address</span>
-            </div>
-            <div class="command-item">
-                <span class="cmd">ping 136.0.0.1</span>
+                <span class="cmd">ping 138.0.0.1</span>
                 <span class="desc">Ping holographic storage</span>
             </div>
             <div class="command-item">
-                <span class="cmd">nc 130.0.0.1:9999</span>
-                <span class="desc">Netcat to black hole compute</span>
+                <span class="cmd">ping 127.0.0.1</span>
+                <span class="desc">Ping Alice node</span>
             </div>
             <div class="command-item">
                 <span class="cmd">QuantumPhysics.run_full_suite()</span>
                 <span class="desc">Run complete quantum tests</span>
             </div>
             <div class="command-item">
-                <span class="cmd">export_db</span>
-                <span class="desc">Export full command database</span>
+                <span class="cmd">SystemMetrics.get_all_metrics()</span>
+                <span class="desc">Get all system metrics</span>
+            </div>
+            <div class="command-item">
+                <span class="cmd">NetInterface.ping("138.0.0.1")</span>
+                <span class="desc">Network interface ping</span>
             </div>
         </div>
         
         <div class="terminal-container">
             <div class="terminal-header">
-                <span class="terminal-title">QSH Foam Terminal</span>
+                <span class="terminal-title">QSH Foam Terminal - Connected to 127.0.0.1</span>
                 <span class="terminal-status">
                     <span class="status-indicator online"></span>
-                    Connected to 127.0.0.1:8000
+                    Connected to Alice Node
                 </span>
             </div>
             <div id="qsh-terminal"></div>
         </div>
     </div>
 
-    <!-- Bitcoin CLI Tab -->
-    <div id="bitcoin-cli" class="tab-content">
-        <h2>₿ Bitcoin CLI Interface</h2>
-        <div class="terminal-container">
-            <div class="terminal-header">
-                <span class="terminal-title">Bitcoin Core RPC Terminal</span>
-                <span class="terminal-status" id="bitcoin-status">
-                    <span class="status-indicator offline"></span>
-                    Connecting...
-                </span>
-            </div>
-            <div id="bitcoin-terminal"></div>
-        </div>
-        
-        <div class="command-quick-ref">
-            <h3>Bitcoin CLI Commands</h3>
+    <!-- Commands Tab -->
+    <div id="commands" class="tab-content">
+        <div class="command-ref">
+            <h3>📚 Bitcoin CLI Commands</h3>
             <div class="command-item">
-                <span class="cmd">getblockchaininfo</span>
+                <span class="cmd">bitcoin-cli getblockchaininfo</span>
                 <span class="desc">Blockchain status and sync progress</span>
             </div>
             <div class="command-item">
-                <span class="cmd">getmempoolinfo</span>
+                <span class="cmd">bitcoin-cli getmempoolinfo</span>
                 <span class="desc">Memory pool statistics</span>
             </div>
             <div class="command-item">
-                <span class="cmd">getnewaddress</span>
+                <span class="cmd">bitcoin-cli getnewaddress</span>
                 <span class="desc">Generate new receiving address</span>
             </div>
             <div class="command-item">
-                <span class="cmd">getbalance</span>
+                <span class="cmd">bitcoin-cli getbalance</span>
                 <span class="desc">Get wallet balance</span>
             </div>
             <div class="command-item">
-                <span class="cmd">listtransactions</span>
+                <span class="cmd">bitcoin-cli listtransactions</span>
                 <span class="desc">List recent transactions</span>
             </div>
+            
+            <h3 style="margin-top: 30px;">🌐 Network Commands</h3>
             <div class="command-item">
-                <span class="cmd">estimatesmartfee 6</span>
-                <span class="desc">Estimate fee for 6-block confirmation</span>
+                <span class="cmd">ping 138.0.0.1</span>
+                <span class="desc">Ping holographic storage</span>
+            </div>
+            <div class="command-item">
+                <span class="cmd">ping 130.0.0.1</span>
+                <span class="desc">Ping black hole CPU</span>
+            </div>
+            <div class="command-item">
+                <span class="cmd">ping 139.0.0.1</span>
+                <span class="desc">Ping white hole CPU</span>
+            </div>
+            <div class="command-item">
+                <span class="cmd">resolve quantum.realm.domain.dominion.foam.computer</span>
+                <span class="desc">Resolve quantum domain</span>
+            </div>
+            <div class="command-item">
+                <span class="cmd">whois 138.0.0.1</span>
+                <span class="desc">WHOIS lookup</span>
+            </div>
+            
+            <h3 style="margin-top: 30px;">⚛️ Quantum Commands</h3>
+            <div class="command-item">
+                <span class="cmd">QuantumPhysics.bell_experiment(10000)</span>
+                <span class="desc">Run Bell inequality test</span>
+            </div>
+            <div class="command-item">
+                <span class="cmd">QuantumPhysics.ghz_experiment(10000)</span>
+                <span class="desc">Run GHZ state test</span>
+            </div>
+            <div class="command-item">
+                <span class="cmd">QuantumPhysics.quantum_teleportation(1000)</span>
+                <span class="desc">Run quantum teleportation test</span>
             </div>
         </div>
-    </div>
-
-    <!-- Wallets Tab -->
-    <div id="wallets" class="tab-content">
-        <h2>💼 Wallet Management</h2>
-        <button class="btn" onclick="createWallet()">Create New Wallet</button>
-        <div id="walletsList" class="loading">Loading wallets</div>
-    </div>
-
-    <!-- Transactions Tab -->
-    <div id="transactions" class="tab-content">
-        <h2>📜 Transaction Explorer</h2>
-        <div id="txGrid" class="loading">Loading transactions</div>
-    </div>
-
-    <!-- Blocks Tab -->
-    <div id="blocks" class="tab-content">
-        <h2>⛓️ Block Explorer</h2>
-        <div id="blocksList" class="loading">Loading blocks</div>
-    </div>
-
-    <!-- Mempool Tab -->
-    <div id="mempool" class="tab-content">
-        <h2>📊 Mempool Monitor</h2>
-        <div id="mempoolData" class="loading">Loading mempool</div>
     </div>
 
     <!-- Metrics Tab -->
     <div id="metrics" class="tab-content">
-        <h2>📈 System Metrics</h2>
-        <div class="metrics-grid" id="metricsGrid"></div>
-        <div class="chart-container">
-            <canvas id="metricsChart"></canvas>
+        <div class="metrics-section">
+            <button class="btn" onclick="loadMetrics()">🔄 Refresh Metrics</button>
+            <div id="metricsDisplay"></div>
         </div>
-        <button class="btn" onclick="refreshMetrics()">Refresh Metrics</button>
     </div>
 
-    <!-- Quantum Proofs Tab -->
+    <!-- Quantum Tests Tab -->
     <div id="quantum" class="tab-content">
-        <h2>⚛️ Quantum Entanglement Proofs</h2>
-        <button class="btn" onclick="runQuantumSuite()">Run Full Quantum Suite</button>
-        <button class="btn btn-secondary" onclick="runBellTest()">Bell Test Only</button>
-        <button class="btn btn-secondary" onclick="runGHZTest()">GHZ Test Only</button>
-        <div id="quantumResults"></div>
-    </div>
-
-    <!-- Command DB Tab -->
-    <div id="commands" class="tab-content">
-        <h2>📚 Command Database (Holographic Storage)</h2>
-        <p>Complete command reference stored at 136.0.0.1:/holo/command_db</p>
-        <button class="btn" onclick="loadCommandDB()">Load Command Database</button>
-        <button class="btn btn-secondary" onclick="exportCommandDB()">Export to Clipboard</button>
-        <div id="commandDBContent"></div>
+        <div class="metrics-section">
+            <h2 style="color: #ff6b35;">⚛️ Quantum Entanglement Proofs</h2>
+            <button class="btn" onclick="runQuantumSuite()">Run Full Quantum Suite</button>
+            <button class="btn btn-secondary" onclick="runBellTest()">Bell Test Only</button>
+            <button class="btn btn-secondary" onclick="runGHZTest()">GHZ Test Only</button>
+            <div id="quantumResults"></div>
+        </div>
     </div>
 
     <div class="footer">
         <p>QSH Foam Dominion v2.8.0 | Production-Ready Quantum-Bitcoin Hybrid</p>
-        <p>Holographic Storage: 136.0.0.1 (6 EB) | QRAM: 2^300 GB | Distributed CPU: 130.0.0.1 / 139.0.0.1</p>
-        <p><a href="/" style="color: #ff6b35;">← Back to Dashboard</a></p>
+        <p>Holographic: 138.0.0.1 (6 EB) | QRAM: 2^300 GB | CPU: 130.0.0.1 ⇄ 139.0.0.1</p>
+        <p><a href="/">← Back to Dashboard</a> | <a href="/email.html">Email Client</a></p>
     </div>
 
     <script>
-        // Initialize xterm.js terminals
-        let qshTerm, bitcoinTerm;
-        let qshWs, bitcoinWs;
-        let metricsChart;
-        const fitAddon = new FitAddon.FitAddon();
+        // Initialize xterm.js terminal
+        let qshTerm;
+        let qshWs;
 
         // Initialize QSH Foam REPL terminal
         function initQSHTerminal() {
@@ -550,16 +494,19 @@
             qshTerm.open(document.getElementById('qsh-terminal'));
             
             qshTerm.writeln('\\x1b[1;32m╔═══════════════════════════════════════════════════════════════════╗\\x1b[0m');
-            qshTerm.writeln('\\x1b[1;32m║     QSH Foam REPL v2.8.0 - Production                            ║\\x1b[0m');
-            qshTerm.writeln('\\x1b[1;32m║     Quantum Shell + Bitcoin CLI + Network Tools                  ║\\x1b[0m');
+            qshTerm.writeln('\\x1b[1;32m║     QSH Foam REPL v2.8.0 - Production Bitcoin Client             ║\\x1b[0m');
+            qshTerm.writeln('\\x1b[1;32m║     Connected to Alice Node @ 127.0.0.1                           ║\\x1b[0m');
+            qshTerm.writeln('\\x1b[1;32m║     Holographic Storage @ 138.0.0.1                               ║\\x1b[0m');
             qshTerm.writeln('\\x1b[1;32m╚═══════════════════════════════════════════════════════════════════╝\\x1b[0m');
             qshTerm.writeln('');
 
-            qshWs = new WebSocket('ws://127.0.0.1:8000/ws/repl');
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            qshWs = new WebSocket(wsProtocol + '//' + window.location.host + '/ws/repl');
             
             qshWs.onopen = () => {
                 qshTerm.writeln('\\x1b[32m[✓] Connected to QSH Foam REPL\\x1b[0m');
-                qshTerm.writeln('\\x1b[33mType "help" for commands | "export_db" for full database\\x1b[0m');
+                qshTerm.writeln('\\x1b[33mAvailable: Bitcoin CLI, Network Tools, Quantum Tests\\x1b[0m');
+                qshTerm.writeln('\\x1b[33mTry: ping 138.0.0.1 | bitcoin-cli help | QuantumPhysics.run_full_suite()\\x1b[0m');
                 qshTerm.write('\\r\\n\\x1b[1;35mqsh>\\x1b[0m ');
             };
 
@@ -568,7 +515,11 @@
             };
 
             qshWs.onerror = () => {
-                qshTerm.writeln('\\r\\n\\x1b[31m[✗] Connection failed\\x1b[0m');
+                qshTerm.writeln('\\r\\n\\x1b[31m[✗] Connection failed - Check server\\x1b[0m');
+            };
+
+            qshWs.onclose = () => {
+                qshTerm.writeln('\\r\\n\\x1b[31m[✗] Connection closed\\x1b[0m');
             };
 
             let buffer = '';
@@ -595,298 +546,117 @@
             });
         }
 
-        // Initialize Bitcoin CLI terminal
-        function initBitcoinTerminal() {
-            bitcoinTerm = new Terminal({
-                cols: 120,
-                rows: 30,
-                theme: {
-                    background: '#000000',
-                    foreground: '#ff6b35',
-                    cursor: '#0f0'
-                },
-                cursorBlink: true,
-                fontSize: 14
-            });
-            
-            bitcoinTerm.open(document.getElementById('bitcoin-terminal'));
-            bitcoinTerm.writeln('Bitcoin Core RPC Terminal - Connecting...');
-            
-            // Use same WebSocket as QSH for Bitcoin commands
-            bitcoinTerm.write('\\r\\nbitcoin-cli> ');
-            
-            let btcBuffer = '';
-            bitcoinTerm.onData(data => {
-                if (data === '\\r') {
-                    if (btcBuffer.trim()) {
-                        const cmd = 'bitcoin-cli ' + btcBuffer.trim();
-                        qshWs.send(cmd);
-                        bitcoinTerm.write('\\r\\n');
-                        setTimeout(() => {
-                            bitcoinTerm.write('bitcoin-cli> ');
-                        }, 100);
-                    } else {
-                        bitcoinTerm.write('\\r\\nbitcoin-cli> ');
-                    }
-                    btcBuffer = '';
-                } else if (data === '\\u007F') {
-                    if (btcBuffer.length > 0) {
-                        btcBuffer = btcBuffer.slice(0, -1);
-                        bitcoinTerm.write('\\b \\b');
-                    }
-                } else {
-                    btcBuffer += data;
-                    bitcoinTerm.write(data);
-                }
-            });
-        }
-
         // Tab switching
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
             event.target.classList.add('active');
-            
-            loadTabContent(tabId);
         }
 
-        // Load tab content
-        const loadedTabs = new Set(['qsh-foam']);
-        function loadTabContent(tabId) {
-            if (loadedTabs.has(tabId)) return;
-            loadedTabs.add(tabId);
-            
-            switch(tabId) {
-                case 'bitcoin-cli':
-                    initBitcoinTerminal();
-                    break;
-                case 'wallets':
-                    loadWallets();
-                    break;
-                case 'transactions':
-                    loadTransactions();
-                    break;
-                case 'blocks':
-                    loadBlocks();
-                    break;
-                case 'mempool':
-                    loadMempool();
-                    break;
-                case 'metrics':
-                    loadMetrics();
-                    break;
-                case 'quantum':
-                    break;
-                case 'commands':
-                    break;
-            }
-        }
-
-        // Wallet functions
-        async function loadWallets() {
-            try {
-                const response = await fetch('/bitcoin/info');
-                const info = await response.json();
-                document.getElementById('walletsList').innerHTML = `
-                    <div class="wallet-card">
-                        <h3>Bitcoin Core Wallet</h3>
-                        <p><strong>Chain:</strong> ${info.chain || 'Unknown'}</p>
-                        <p><strong>Blocks:</strong> ${info.blocks || 'N/A'}</p>
-                        <p><strong>Verification Progress:</strong> ${((info.verificationprogress || 0) * 100).toFixed(2)}%</p>
-                    </div>
-                `;
-            } catch (error) {
-                document.getElementById('walletsList').innerHTML = '<p style="color: #f00;">Failed to load wallet info. Ensure Bitcoin Core is running.</p>';
-            }
-        }
-
-        function createWallet() {
-            qshWs.send('bitcoin-cli createwallet "new_wallet"');
-            setTimeout(loadWallets, 1000);
-        }
-
-        // Transaction functions
-        async function loadTransactions() {
-            document.getElementById('txGrid').innerHTML = '<p>Use <code>bitcoin-cli listtransactions</code> in the CLI to view transactions.</p>';
-        }
-
-        // Block functions
-        async function loadBlocks() {
-            try {
-                const response = await fetch('/bitcoin/info');
-                const info = await response.json();
-                const bestBlockHash = info.bestblockhash;
-                
-                document.getElementById('blocksList').innerHTML = `
-                    <div class="block-card">
-                        <h3>Latest Block</h3>
-                        <p><strong>Height:</strong> ${info.blocks}</p>
-                        <p><strong>Hash:</strong> ${bestBlockHash ? bestBlockHash.slice(0, 16) + '...' : 'N/A'}</p>
-                        <p><strong>Difficulty:</strong> ${info.difficulty || 'N/A'}</p>
-                    </div>
-                `;
-            } catch (error) {
-                document.getElementById('blocksList').innerHTML = '<p style="color: #f00;">Failed to load blocks</p>';
-            }
-        }
-
-        // Mempool functions
-        async function loadMempool() {
-            try {
-                const response = await fetch('/bitcoin/mempool');
-                const mempool = await response.json();
-                document.getElementById('mempoolData').innerHTML = `
-                    <div class="metric-card">
-                        <h3>Mempool Statistics</h3>
-                        <div class="metric-value">${mempool.size || 0}</div>
-                        <div class="metric-label">Transactions</div>
-                        <p><strong>Bytes:</strong> ${mempool.bytes || 0}</p>
-                        <p><strong>Usage:</strong> ${mempool.usage || 0} bytes</p>
-                        <p><strong>Min Fee:</strong> ${mempool.mempoolminfee || 0} BTC/kB</p>
-                    </div>
-                `;
-            } catch (error) {
-                document.getElementById('mempoolData').innerHTML = '<p style="color: #f00;">Failed to load mempool</p>';
-            }
-        }
-
-        // Metrics functions
+        // Load metrics
         async function loadMetrics() {
+            const display = document.getElementById('metricsDisplay');
+            display.innerHTML = '<p style="color: #ff6b35;">Loading metrics...</p>';
+            
             try {
                 const response = await fetch('/metrics');
                 const metrics = await response.json();
                 
-                const grid = document.getElementById('metricsGrid');
-                grid.innerHTML = `
+                let html = '<div class="info-grid">';
+                
+                html += `
                     <div class="metric-card">
-                        <h3>Holographic Storage</h3>
+                        <h3>💾 Holographic Storage</h3>
                         <div class="metric-value">${metrics.storage.holographic.total_eb} EB</div>
-                        <div class="metric-label">Total Capacity @ 136.0.0.1</div>
-                        <p><strong>Used:</strong> ${metrics.storage.holographic.used_eb} EB (${metrics.storage.holographic.percent_used}%)</p>
-                        <p><strong>Reachable:</strong> ${metrics.storage.holographic.reachable ? '✓' : '✗'}</p>
+                        <p>IP: ${metrics.storage.holographic.ip}</p>
+                        <p>Used: ${metrics.storage.holographic.used_eb} EB (${metrics.storage.holographic.percent_used}%)</p>
+                        <p>Reachable: ${metrics.storage.holographic.reachable ? '✓' : '✗'}</p>
                     </div>
                     
                     <div class="metric-card">
-                        <h3>QRAM</h3>
+                        <h3>⚛️ QRAM</h3>
                         <div class="metric-value">${metrics.qram.operational ? '✓ Online' : '✗ Offline'}</div>
-                        <div class="metric-label">Quantum RAM Status</div>
-                        <p><strong>Demo Qubits:</strong> ${metrics.qram.demo_n_qubits}</p>
-                        <p><strong>Coherence:</strong> ${metrics.qram.coherence_time_ms} ms</p>
-                        <p><strong>Theoretical:</strong> 2^300 GB</p>
+                        <p>Domain: ${metrics.qram.domain}</p>
+                        <p>Demo Qubits: ${metrics.qram.demo_n_qubits}</p>
+                        <p>Theoretical: 2^300 GB</p>
                     </div>
                     
                     <div class="metric-card">
-                        <h3>CPU (Distributed)</h3>
+                        <h3>🖥️ CPU</h3>
                         <div class="metric-value">${metrics.cpu.cpu_count} Cores</div>
-                        <div class="metric-label">Local + Black/White Hole</div>
-                        <p><strong>Black Hole (130.0.0.1):</strong> ${metrics.cpu.distributed_compute.black_hole.latency_ms || 'N/A'} ms</p>
-                        <p><strong>White Hole (139.0.0.1):</strong> ${metrics.cpu.distributed_compute.white_hole.latency_ms || 'N/A'} ms</p>
+                        <p>Black Hole: ${metrics.cpu.distributed_compute.black_hole.latency_ms || 'N/A'} ms</p>
+                        <p>White Hole: ${metrics.cpu.distributed_compute.white_hole.latency_ms || 'N/A'} ms</p>
                     </div>
                     
                     <div class="metric-card">
-                        <h3>Hashing Speed</h3>
+                        <h3>⚡ Hashing Speed</h3>
                         <div class="metric-value">${metrics.hashing_speed_mbs} MB/s</div>
-                        <div class="metric-label">SHA256 Benchmark</div>
+                        <p>SHA256 Benchmark</p>
                     </div>
                 `;
+                
+                html += '</div>';
+                display.innerHTML = html;
             } catch (error) {
-                console.error('Failed to load metrics:', error);
+                display.innerHTML = '<p style="color: #f00;">Failed to load metrics</p>';
             }
         }
 
-        function refreshMetrics() {
-            loadedTabs.delete('metrics');
-            loadMetrics();
-        }
-
-        // Quantum functions
+        // Quantum tests
         async function runQuantumSuite() {
             const resultsDiv = document.getElementById('quantumResults');
-            resultsDiv.innerHTML = '<div class="loading">Running quantum tests</div>';
+            resultsDiv.innerHTML = '<p style="color: #ff6b35;">Running quantum tests...</p>';
             
             try {
                 const response = await fetch('/quantum/suite');
                 const results = await response.json();
                 
-                resultsDiv.innerHTML = `
+                let html = '<div class="info-grid">';
+                
+                html += `
                     <div class="metric-card">
                         <h3>Bell Test (CHSH)</h3>
                         <div class="metric-value">S = ${results.bell_test.S}</div>
-                        <div class="metric-label">${results.bell_test.violates_inequality ? '✓ VIOLATES (Quantum!)' : '✗ No Violation'}</div>
-                        <p><strong>Classical Bound:</strong> ${results.bell_test.classical_bound}</p>
-                        <p><strong>Quantum Bound:</strong> ${results.bell_test.quantum_bound}</p>
-                        <p><strong>Confidence:</strong> ${results.bell_test.confidence_percent}%</p>
+                        <p>${results.bell_test.violates_inequality ? '✓ VIOLATES (Quantum!)' : '✗ No Violation'}</p>
+                        <p>Classical: ${results.bell_test.classical_bound}</p>
+                        <p>Quantum: ${results.bell_test.quantum_bound}</p>
                     </div>
                     
                     <div class="metric-card">
                         <h3>GHZ Test (Mermin)</h3>
                         <div class="metric-value">M = ${results.ghz_test.M}</div>
-                        <div class="metric-label">${results.ghz_test.violates_inequality ? '✓ VIOLATES (Entangled!)' : '✗ No Violation'}</div>
-                        <p><strong>Classical Bound:</strong> ${results.ghz_test.classical_bound}</p>
-                        <p><strong>Quantum Value:</strong> ${results.ghz_test.quantum_value}</p>
+                        <p>${results.ghz_test.violates_inequality ? '✓ VIOLATES (Entangled!)' : '✗ No Violation'}</p>
+                        <p>Classical: ${results.ghz_test.classical_bound}</p>
+                        <p>Quantum: ${results.ghz_test.quantum_value}</p>
                     </div>
                     
                     <div class="metric-card">
                         <h3>Quantum Teleportation</h3>
                         <div class="metric-value">${(results.teleportation.avg_fidelity * 100).toFixed(2)}%</div>
-                        <div class="metric-label">Average Fidelity</div>
-                        <p><strong>Success Rate:</strong> ${(results.teleportation.success_rate * 100).toFixed(2)}%</p>
-                        <p><strong>Min/Max:</strong> ${results.teleportation.min_fidelity} / ${results.teleportation.max_fidelity}</p>
+                        <p>Average Fidelity</p>
+                        <p>Success: ${(results.teleportation.success_rate * 100).toFixed(2)}%</p>
                     </div>
                 `;
+                
+                html += '</div>';
+                resultsDiv.innerHTML = html;
             } catch (error) {
                 resultsDiv.innerHTML = '<p style="color: #f00;">Failed to run quantum tests</p>';
             }
         }
 
-        async function runBellTest() {
-            qshWs.send('QuantumPhysics.bell_experiment(10000)');
-        }
-
-        async function runGHZTest() {
-            qshWs.send('QuantumPhysics.ghz_experiment(10000)');
-        }
-
-        // Command DB functions
-        async function loadCommandDB() {
-            try {
-                const response = await fetch('/command-db');
-                const db = await response.json();
-                
-                const content = document.getElementById('commandDBContent');
-                let html = '<div style="font-size: 0.9em;">';
-                
-                for (const [category, commands] of Object.entries(db)) {
-                    if (category.endsWith('_commands')) {
-                        html += `<h3 style="color: #ff6b35; margin-top: 20px;">${category.replace('_commands', '').toUpperCase()}</h3>`;
-                        for (const [cmd, details] of Object.entries(commands)) {
-                            html += `
-                                <div class="command-item">
-                                    <span class="cmd">${details.cmd || cmd}</span>
-                                    <span class="desc">${details.description || ''}</span>
-                                </div>
-                            `;
-                        }
-                    }
-                }
-                
-                html += '</div>';
-                content.innerHTML = html;
-            } catch (error) {
-                document.getElementById('commandDBContent').innerHTML = '<p style="color: #f00;">Failed to load command database</p>';
+        function runBellTest() {
+            if (qshWs && qshWs.readyState === WebSocket.OPEN) {
+                qshWs.send('QuantumPhysics.bell_experiment(10000)');
+                switchTab('qsh-repl');
             }
         }
 
-        async function exportCommandDB() {
-            try {
-                const response = await fetch('/command-db');
-                const db = await response.json();
-                const json = JSON.stringify(db, null, 2);
-                await navigator.clipboard.writeText(json);
-                alert('Command database exported to clipboard!');
-            } catch (error) {
-                alert('Failed to export command database');
+        function runGHZTest() {
+            if (qshWs && qshWs.readyState === WebSocket.OPEN) {
+                qshWs.send('QuantumPhysics.ghz_experiment(10000)');
+                switchTab('qsh-repl');
             }
         }
 
