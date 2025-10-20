@@ -1,6 +1,6 @@
-flask
-qutip
-numpy
-gunicorn
-flask-socketio
-eventlet  # For WS on Render
+flask==3.0.3
+qutip==5.0.4
+numpy==1.26.4
+gunicorn==22.0.0
+flask-socketio==5.3.6
+eventlet==0.36.1
