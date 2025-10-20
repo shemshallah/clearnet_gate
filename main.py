@@ -990,19 +990,6 @@ async def repl_exec(code: str, session_id: str):
     
     code = code.strip()
     
-    # Handle network commands
-   if code.startswith(('ping ', 'resolve ', 'whois ')):
-        cmd, arg = code.split(' ', 1)
-        if cmd == 'ping':
-            result = NetInterface.ping(arg)
-            return f"Ping to {arg}: {result} ms" if result is not None else f"Ping to {arg}: Unreachable"
-        elif cmd == 'resolve':
-            result = NetInterface.resolve(arg)
-            return f"{arg} resolves to: {result}"
-        elif cmd == 'whois':
-            result = NetInterface.whois(arg)
-            return f"WHOIS for {arg}: {result}"
-    
     # Handle special commands
     if code == 'alice status':
         return json.dumps(AliceNode.status(), indent=2)
@@ -1019,6 +1006,19 @@ async def repl_exec(code: str, session_id: str):
             "storage": Config.STORAGE_IP,
             "quantum_domain": Config.QUANTUM_DOMAIN
         }, indent=2)
+    
+    # Handle network commands
+    if code.startswith(('ping ', 'resolve ', 'whois ')):
+        cmd, arg = code.split(' ', 1)
+        if cmd == 'ping':
+            result = NetInterface.ping(arg)
+            return f"Ping to {arg}: {result} ms" if result is not None else f"Ping to {arg}: Unreachable"
+        elif cmd == 'resolve':
+            result = NetInterface.resolve(arg)
+            return f"{arg} resolves to: {result}"
+        elif cmd == 'whois':
+            result = NetInterface.whois(arg)
+            return f"WHOIS for {arg}: {result}"
     
     # Execute Python code
     old_stdout = sys.stdout
