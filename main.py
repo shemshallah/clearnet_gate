@@ -1259,7 +1259,7 @@ async def root():
         </div>
         <div class="status-item">
             <div class="label">T1 Coherence</div>
-            <div class="value">{torino_status.get('t1_avg_us, 0):.2f} μs</div>
+            <div class="value">{torino_status.get('t1_avg_us', 0):.2f} μs</div>
         </div>
         <div class="status-item">
             <div class="label">Gate Error</div>
@@ -1287,7 +1287,7 @@ async def root():
             color: #0f0;
             min-height: 100vh;
             display: flex;
-            flex-direction, column;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             padding: 20px;
