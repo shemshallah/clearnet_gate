@@ -1,4 +1,3 @@
-
 import os
 import logging
 import json
@@ -9,7 +8,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, Request, HTTPException, Depends, Security, Query, WebSocket, WebSocketDisconnect, Cookie, Form, status
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -606,11 +605,118 @@ class Database:
         body = QuantumEncryption.decrypt_via_whitehole_lattice(result[3])
         return {"id": email_id, "from": result[0], "to": result[1], "subject": result[2], "body": body, "lattice_route": result[4], "sent_at": result[5], "read": bool(result[6]), "starred": bool(result[7])}
 
-app = FastAPI(title="Quantum Foam Production System", description="Production quantum computing system with IBM Torino backend integration", version="1.0.0")
+# Initialize FastAPI app
+app = FastAPI(
+    title="Quantum Foam Production System",
+    description="Production quantum computing system with IBM Torino backend integration",
+    version="1.0.0",
+    default_response_class=JSONResponse
+)
 
-app.add_middleware(CORSMiddleware, allow_origins=Config.ALLOWED_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+# ===== MIDDLEWARE SECTION =====
+
+# 1. Global HEAD Request Handler Middleware (MUST BE FIRST)
+@app.middleware("http")
+async def auto_head_handler(request: Request, call_next):
+    """Automatically handle HEAD requests by converting them to GET and stripping the body"""
+    original_method = request.method
+    
+    if request.method == "HEAD":
+        # Convert HEAD to GET for processing
+        request.scope["method"] = "GET"
+        logger.debug(f"HEAD request converted to GET for path: {request.url.path}")
+    
+    response = await call_next(request)
+    
+    if original_method == "HEAD":
+        # HEAD responses must not contain a body per HTTP spec
+        return Response(
+            status_code=response.status_code,
+            headers=dict(response.headers),
+            media_type=response.media_type
+        )
+    
+    return response
+
+# 2. Request Logging Middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all incoming requests with timing"""
+    start_time = time.time()
+    
+    logger.info(f"Request: {request.method} {request.url.path} from {request.client.host if request.client else 'unknown'}")
+    
+    response = await call_next(request)
+    
+    process_time = time.time() - start_time
+    logger.info(f"Response: {request.method} {request.url.path} - Status: {response.status_code} - Time: {process_time:.3f}s")
+    
+    response.headers["X-Process-Time"] = str(process_time)
+    return response
+
+# 3. Rate Limiting Middleware
+rate_limit_storage = defaultdict(list)
+
+@app.middleware("http")
+async def rate_limiter(request: Request, call_next):
+    """Simple rate limiting based on IP address"""
+    client_ip = request.client.host if request.client else "unknown"
+    current_time = time.time()
+    
+    # Clean old requests (older than 1 minute)
+    rate_limit_storage[client_ip] = [
+        timestamp for timestamp in rate_limit_storage[client_ip]
+        if current_time - timestamp < 60
+    ]
+    
+    # Check rate limit
+    if len(rate_limit_storage[client_ip]) >= Config.RATE_LIMIT_PER_MINUTE:
+        logger.warning(f"Rate limit exceeded for {client_ip}")
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": "Rate limit exceeded",
+                "limit": Config.RATE_LIMIT_PER_MINUTE,
+                "window": "60 seconds"
+            }
+        )
+    
+    # Add current request
+    rate_limit_storage[client_ip].append(current_time)
+    
+    response = await call_next(request)
+    return response
+
+# 4. CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=Config.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+# 5. GZip Compression Middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+# 6. Error Handling Middleware
+@app.middleware("http")
+async def error_handler(request: Request, call_next):
+    """Global error handling"""
+    try:
+        return await call_next(request)
+    except Exception as e:
+        logger.error(f"Unhandled exception: {str(e)}\n{traceback.format_exc()}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Internal server error",
+                "detail": str(e) if Config.DEBUG else "An error occurred",
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+
+# Security
 security = HTTPBearer()
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> str:
@@ -620,8 +726,12 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         raise HTTPException(status_code=401, detail="Invalid or expired session")
     return email
 
-@app.get("/")
+# ===== API ROUTES =====
+
+# Root and Health Routes
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
+    """Root endpoint - system information"""
     return {
         "system": "Quantum Foam Production System",
         "version": "1.0.0",
@@ -638,89 +748,181 @@ async def root():
         "timestamp": datetime.now().isoformat()
     }
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
-    return {"status": "operational", "alice_node": Config.ALICE_NODE_IP, "timestamp": datetime.now().isoformat()}
+    """Health check endpoint"""
+    return {
+        "status": "operational",
+        "alice_node": Config.ALICE_NODE_IP,
+        "timestamp": datetime.now().isoformat()
+    }
 
-@app.post("/auth/register")
+# Authentication Routes
+@app.post("/api/auth/register", tags=["Authentication"])
 async def register(user: UserRegister):
+    """Register a new user"""
     return Database.create_user(user.username, user.password)
 
-@app.post("/auth/login")
+@app.post("/api/auth/login", tags=["Authentication"])
 async def login(user: UserLogin):
+    """Login and receive session token"""
     verified = Database.verify_user(user.username, user.password)
     if not verified:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = Database.create_session(verified['email'])
-    return {"token": token, "email": verified['email'], "username": verified['username']}
+    return {
+        "token": token,
+        "email": verified['email'],
+        "username": verified['username']
+    }
 
-@app.get("/auth/me")
+@app.get("/api/auth/me", tags=["Authentication"])
 async def get_me(user_email: str = Depends(get_current_user)):
+    """Get current user information"""
     return {"email": user_email}
 
-@app.post("/email/send")
+# Email Routes
+@app.post("/api/email/send", tags=["Email"])
 async def send_email(email: EmailCreate, user_email: str = Depends(get_current_user)):
+    """Send quantum-encrypted email"""
     lattice_route = f"{Config.SAGITTARIUS_A_LATTICE} -> {Config.WHITE_HOLE_LATTICE}"
     Database.store_email(user_email, email.to, email.subject, email.body, lattice_route)
-    return {"status": "sent", "from": user_email, "to": email.to, "lattice_route": lattice_route}
+    return {
+        "status": "sent",
+        "from": user_email,
+        "to": email.to,
+        "lattice_route": lattice_route
+    }
 
-@app.get("/email/inbox")
+@app.get("/api/email/inbox", tags=["Email"])
 async def get_inbox(user_email: str = Depends(get_current_user)):
+    """Get user's inbox"""
     return Database.get_inbox(user_email)
 
-@app.get("/email/{email_id}")
+@app.get("/api/email/{email_id}", tags=["Email"])
 async def get_email(email_id: int, user_email: str = Depends(get_current_user)):
+    """Get specific email by ID"""
     email = Database.get_email_by_id(email_id, user_email)
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
     return email
 
-@app.get("/quantum/bell")
+# Quantum Physics Routes
+@app.get("/api/quantum/bell", tags=["Quantum Physics"])
 async def bell_test():
+    """Run Bell inequality test"""
     return QuantumPhysics.bell_experiment_qutip(Config.BELL_TEST_SHOTS)
 
-@app.get("/quantum/ghz")
+@app.get("/api/quantum/ghz", tags=["Quantum Physics"])
 async def ghz_test():
+    """Run GHZ state test"""
     return QuantumPhysics.ghz_experiment_qutip(Config.GHZ_TEST_SHOTS)
 
-@app.get("/quantum/teleportation")
+@app.get("/api/quantum/teleportation", tags=["Quantum Physics"])
 async def teleportation_test():
+    """Run quantum teleportation protocol"""
     return QuantumPhysics.quantum_teleportation_qutip(Config.TELEPORTATION_SHOTS)
 
-@app.get("/quantum/suite")
+@app.get("/api/quantum/suite", tags=["Quantum Physics"])
 async def quantum_suite():
+    """Run full quantum test suite"""
     return await QuantumPhysics.run_full_suite()
 
-@app.get("/quantum/torino")
+@app.get("/api/quantum/torino", tags=["Quantum Backend"])
 async def torino_status():
+    """Get IBM Torino backend status"""
     return await TorinoQuantumBackend.get_backend_status()
 
-@app.get("/metrics")
+# System Metrics Routes
+@app.get("/api/metrics", tags=["System"])
 async def system_metrics():
+    """Get all system metrics"""
     return await SystemMetrics.get_all_metrics()
 
-@app.get("/alice")
+@app.get("/api/metrics/storage", tags=["System"])
+async def storage_metrics():
+    """Get storage metrics"""
+    return SystemMetrics.get_storage_metrics()
+
+@app.get("/api/metrics/memory", tags=["System"])
+async def memory_metrics():
+    """Get memory metrics"""
+    return SystemMetrics.get_memory_metrics()
+
+@app.get("/api/metrics/cpu", tags=["System"])
+async def cpu_metrics():
+    """Get CPU metrics"""
+    return SystemMetrics.get_cpu_metrics()
+
+# Alice Node Routes
+@app.get("/api/alice", tags=["Network"])
 async def alice_status():
+    """Get Alice node status"""
     return AliceNode.status()
 
-@app.get("/net/ping/{ip}")
+# Network Utility Routes
+@app.get("/api/net/ping/{ip}", tags=["Network"])
 async def ping_ip(ip: str):
+    """Ping an IP address"""
     latency = NetInterface.ping(ip)
-    return {"ip": ip, "latency_ms": latency, "reachable": latency is not None}
+    return {
+        "ip": ip,
+        "latency_ms": latency,
+        "reachable": latency is not None
+    }
 
-@app.get("/net/resolve/{domain}")
+@app.get("/api/net/resolve/{domain}", tags=["Network"])
 async def resolve_domain(domain: str):
+    """Resolve a domain name"""
     ip = NetInterface.resolve(domain)
-    return {"domain": domain, "ip": ip}
+    return {
+        "domain": domain,
+        "ip": ip
+    }
 
-@app.get("/net/whois/{ip}")
+@app.get("/api/net/whois/{ip}", tags=["Network"])
 async def whois_ip(ip: str):
+    """WHOIS lookup for an IP"""
     org = NetInterface.whois(ip)
-    return {"ip": ip, "organization": org}
+    return {
+        "ip": ip,
+        "organization": org
+    }
 
+# API Documentation redirect
+@app.get("/docs-redirect")
+async def docs_redirect():
+    """Redirect to API documentation"""
+    return RedirectResponse(url="/docs")
+
+# Startup and Shutdown Events
+@app.on_event("startup")
+async def startup_event():
+    logger.info("=" * 80)
+    logger.info("Quantum Foam Production System Starting...")
+    logger.info(f"Environment: {Config.ENVIRONMENT}")
+    logger.info(f"Debug Mode: {Config.DEBUG}")
+    logger.info(f"IBM Backend: {Config.IBM_BACKEND}")
+    logger.info(f"Quantum Domain: {Config.QUANTUM_DOMAIN}")
+    logger.info(f"Alice Node: {Config.ALICE_NODE_IP}")
+    logger.info(f"API Documentation: http://{Config.HOST}:{Config.PORT}/docs")
+    logger.info("=" * 80)
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Quantum Foam Production System Shutting Down...")
+
+# Main Entry Point
 if __name__ == "__main__":
     logger.info(f"Starting Quantum Foam Production System on {Config.HOST}:{Config.PORT}")
     logger.info(f"Environment: {Config.ENVIRONMENT}")
     logger.info(f"IBM Torino Backend: {Config.IBM_BACKEND}")
     logger.info(f"Quantum Domain: {Config.QUANTUM_DOMAIN}")
-    uvicorn.run(app, host=Config.HOST, port=Config.PORT, log_level="info" if not Config.DEBUG else "debug")
+    
+    uvicorn.run(
+        app,
+        host=Config.HOST,
+        port=Config.PORT,
+        log_level="info" if not Config.DEBUG else "debug",
+        access_log=True
+    )
