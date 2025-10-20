@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: qsh-foam
+    env: python
+    region: oregon
+    plan: free
+    
+    # Entry point
+    startCommand: "python main.py"
+    
+    # Build command
+    buildCommand: "pip install -r requirements.txt"
+    
+    # Environment variables
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: PORT
+        value: "8000"
+      - key: ENVIRONMENT
+        value: "production"
+      - key: DEBUG
+        value: "false"
+      - key: SECRET_KEY
+        fromService:
+          type: pserv
+          name: qsh-foam-secrets
+          envVarKey: SECRET_KEY
+      - key: ENCRYPTION_KEY
+        fromService:
+          type: pserv
+          name: qsh-foam-secrets
+          envVarKey: ENCRYPTION_KEY
+      # Optional: Add your IBM Quantum token if available
+      # - key: IBM_QUANTUM_TOKEN
+      #   value: "your-token-here"
+    
+    # Health check
+    healthCheckPath: /health
+    healthCheckStartupFailureThresholdCount: 10
+    
+    # Auto-deploy on git push
+    autoDeploy: true
