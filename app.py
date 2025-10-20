@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 import eventlet
 eventlet.monkey_patch()
 
-# Render Domain Config (for redirects)
-RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')  # Set in Render Env
+# Render Domain Config
+RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')
 
 # Quantum Foam Initialization
 try:
@@ -147,6 +147,8 @@ def handle_qsh_command(data):
 # Production App
 app = Flask(__name__)
 app.secret_key = hashlib.sha256(bridge_key.encode()).digest()[:32]
+
+# SocketIO must be defined before using it in decorators
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger=False, engineio_logger=False)
 
 # Health Check
@@ -154,16 +156,15 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger
 def health_check():
     return 'OK', 200
 
-# Quantum Domain Redirector (Handles "not found" on quantum.realm... -> Gate)
+# Quantum Domain Redirector
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def quantum_gate(path):
     host = request.headers.get('Host', '').lower()
     quantum_hosts = ['quantum.realm.domain.dominion.foam.computer.render', 'quantum.realm.domain.dominion.foam.computer']
     
-    # Auto-redirect from quantum domain to Render gate (with params preserved)
     if any(qh in host for qh in quantum_hosts):
-        params = request.query_string.decode()  # Preserve query
+        params = request.query_string.decode()
         gate_url = f"https://{RENDER_DOMAIN}/?{params}" if params else f"https://{RENDER_DOMAIN}/"
         logger.warning(f'Quantum Host Redirect: {host} -> {RENDER_DOMAIN}')
         return redirect(gate_url, code=302)
@@ -179,14 +180,12 @@ def quantum_gate(path):
     gen_key, ts = bh_repeatable_keygen(session_id)
     enc_key = bh_encryption_cascade(bridge_key)
     
-    # For invalid keys on gate: Redirect to gate with enc_key appended
     if not hashlib.sha256(provided_key.encode()).hexdigest() == hashlib.sha256(gen_key.encode()).hexdigest():
         params = urllib.parse.urlencode({'enc_key': enc_key, 'session': session_id})
         gate_url = f"https://{RENDER_DOMAIN}/?{params}"
         logger.warning(f'Invalid Key Redirect: {client_ip} -> Gate with params')
         return redirect(gate_url, code=302)
     
-    # Valid access: Display portal
     offload_res = entangled_cpu_offload(f'fidelity_lattice * 1.0001')
     comp_tensor = core_ghz.full().real
     comp_lattice = len(foam_lattice_compress(comp_tensor))
@@ -243,6 +242,7 @@ def qram_quantum_channel():
     emit('quantum_update', {'state': state})
     logger.warning('WS Active')
 
+# Main block AFTER socketio definition
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
