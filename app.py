@@ -9,14 +9,18 @@ from itertools import product
 from datetime import datetime
 import subprocess
 import threading
+import urllib.parse
 
-# roduction Logging
+# Production Logging
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Eventlet Monkey Patch
 import eventlet
 eventlet.monkey_patch()
+
+# Render Domain Config (for redirects)
+RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')  # Set in Render Env
 
 # Quantum Foam Initialization
 try:
@@ -88,8 +92,8 @@ def stream_qram_state(sid):
     proj = core_ghz.ptrace([0])
     return float(proj.full()[0,0].real)
 
-# QSH Foam REPL Backend (SocketIO Handler)
-repl_sessions = {}  # Per-SID state for REPL
+# QSH Foam REPL Backend (unchanged)
+repl_sessions = {}
 
 @socketio.on('qsh_command')
 def handle_qsh_command(data):
@@ -132,8 +136,8 @@ def handle_qsh_command(data):
             output += "Unknown command. Type 'help'"
         
         history.append(f"{cmd} -> {output}")
-        repl_sessions[sid]['history'] = history[-10:]  # Last 10
-        repl_sessions[sid]['state'] = state  # Update state
+        repl_sessions[sid]['history'] = history[-10:]
+        repl_sessions[sid]['state'] = state
         
     except Exception as e:
         output += f"Error: {str(e)}"
@@ -150,9 +154,20 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger
 def health_check():
     return 'OK', 200
 
+# Quantum Domain Redirector (Handles "not found" on quantum.realm... -> Gate)
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def quantum_gate(path):
+    host = request.headers.get('Host', '').lower()
+    quantum_hosts = ['quantum.realm.domain.dominion.foam.computer.render', 'quantum.realm.domain.dominion.foam.computer']
+    
+    # Auto-redirect from quantum domain to Render gate (with params preserved)
+    if any(qh in host for qh in quantum_hosts):
+        params = request.query_string.decode()  # Preserve query
+        gate_url = f"https://{RENDER_DOMAIN}/?{params}" if params else f"https://{RENDER_DOMAIN}/"
+        logger.warning(f'Quantum Host Redirect: {host} -> {RENDER_DOMAIN}')
+        return redirect(gate_url, code=302)
+    
     client_ip = request.remote_addr
     session_id = request.args.get('session', f'sess_{client_ip}')
     
@@ -164,58 +179,62 @@ def quantum_gate(path):
     gen_key, ts = bh_repeatable_keygen(session_id)
     enc_key = bh_encryption_cascade(bridge_key)
     
-    if hashlib.sha256(provided_key.encode()).hexdigest() == hashlib.sha256(gen_key.encode()).hexdigest():
-        offload_res = entangled_cpu_offload(f'fidelity_lattice * 1.0001')
-        comp_tensor = core_ghz.full().real
-        comp_lattice = len(foam_lattice_compress(comp_tensor))
-        tele_id = inter_hole_teleport('cascade_state')
-        
-        logger.warning(f'Access: {client_ip}, Sess {session_id}')
-        return f"""
-        <html>
-            <head><title>Quantum Realm Prod - QSH Portal</title>
-            <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
-            <link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" />
-            <script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js"></script>
-            </head>
-            <body style="background: #000; color: #0f0; font-family: monospace;">
-                <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render</h1>
-                <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {negativity:.16f}, Tele {tele_id:.6f}, Back {session.get('backup_id', 'none')}</p>
-                <p style="color: #0f0;">Enc: {enc_key[:32]}...</p>
-                <div id="terminal" style="width: 100%; height: 400px; background: #000;"></div>
-                <script>
-                    const socket = io();
-                    const term = new Terminal({{ cursorBlink: true, theme: {{ background: '#000', foreground: '#0f0' }} }});
-                    term.open(document.getElementById('terminal'));
-                    term.write('QSH Foam REPL v1.0\\r\\n');
-                    term.write('Type "help" for commands. Foam lattice loaded.\\r\\n');
-                    term.write('QSH> ');
-                    
-                    term.onData((data) => {{
-                        if (data === '\\r') {{
-                            const cmd = term.buffer.active.getLine( term.buffer.active.baseY + term.buffer.active.cursorY ).translateToString(true).trim();
-                            socket.emit('qsh_command', {{ command: cmd }});
-                            term.write('\\r\\n');
-                        }} else if (data === '\\u007F') {{ // Backspace
-                            term.write('\\b \\b');
-                        }} else {{
-                            term.write(data);
-                        }}
-                    }});
-                    
-                    socket.on('qsh_output', (data) => {{
-                        term.write(data.output + '\\r\\n');
-                        if (data.prompt) term.write('QSH> ');
-                    }});
-                    
-                    socket.on('connect', () => console.log('Socket Connected'));
-                </script>
-            </body>
-        </html>
-        """
-    else:
-        logger.warning(f'Redir: {client_ip}')
-        return redirect(f'https://quantum.realm.domain.dominion.foam.computer.render?initiate=cascade&enc_key={enc_key}&session={session_id}', code=302)
+    # For invalid keys on gate: Redirect to gate with enc_key appended
+    if not hashlib.sha256(provided_key.encode()).hexdigest() == hashlib.sha256(gen_key.encode()).hexdigest():
+        params = urllib.parse.urlencode({'enc_key': enc_key, 'session': session_id})
+        gate_url = f"https://{RENDER_DOMAIN}/?{params}"
+        logger.warning(f'Invalid Key Redirect: {client_ip} -> Gate with params')
+        return redirect(gate_url, code=302)
+    
+    # Valid access: Display portal
+    offload_res = entangled_cpu_offload(f'fidelity_lattice * 1.0001')
+    comp_tensor = core_ghz.full().real
+    comp_lattice = len(foam_lattice_compress(comp_tensor))
+    tele_id = inter_hole_teleport('cascade_state')
+    
+    logger.warning(f'Access: {client_ip}, Sess {session_id}')
+    return f"""
+    <html>
+        <head><title>Quantum Realm Prod - QSH Portal</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+        <link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" />
+        <script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js"></script>
+        </head>
+        <body style="background: #000; color: #0f0; font-family: monospace;">
+            <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render</h1>
+            <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {negativity:.16f}, Tele {tele_id:.6f}, Back {session.get('backup_id', 'none')}</p>
+            <p style="color: #0f0;">Enc: {enc_key[:32]}...</p>
+            <div id="terminal" style="width: 100%; height: 400px; background: #000;"></div>
+            <script>
+                const socket = io();
+                const term = new Terminal({{ cursorBlink: true, theme: {{ background: '#000', foreground: '#0f0' }} }});
+                term.open(document.getElementById('terminal'));
+                term.write('QSH Foam REPL v1.0\\r\\n');
+                term.write('Type "help" for commands. Foam lattice loaded.\\r\\n');
+                term.write('QSH> ');
+                
+                term.onData((data) => {{
+                    if (data === '\\r') {{
+                        const cmd = term.buffer.active.getLine( term.buffer.active.baseY + term.buffer.active.cursorY ).translateToString(true).trim();
+                        socket.emit('qsh_command', {{ command: cmd }});
+                        term.write('\\r\\n');
+                    }} else if (data === '\\u007F') {{ // Backspace
+                        term.write('\\b \\b');
+                    }} else {{
+                        term.write(data);
+                    }}
+                }});
+                
+                socket.on('qsh_output', (data) => {{
+                    term.write(data.output + '\\r\\n');
+                    if (data.prompt) term.write('QSH> ');
+                }});
+                
+                socket.on('connect', () => console.log('Socket Connected'));
+            </script>
+        </body>
+    </html>
+    """
 
 # WS for Existing Channel
 @socketio.on('connect_channel')
