@@ -1235,6 +1235,23 @@ async def startup_event():
     logger.info(f"White hole lattice: {Config.WHITE_HOLE_LATTICE}")
     logger.info(f"IBM Torino backend: {Config.IBM_BACKEND}")
 
+import os
+from pathlib import Path
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+if STATIC_DIR.exists():
+    logger.info(f"Serving static files from: {STATIC_DIR}")
+    app.mount(
+        "/",
+        StaticFiles(
+            directory=str(STATIC_DIR),
+            html=True
+        ),
+        name="static"
+    )
+else:
+    logger.warning(f"Static directory not found at {STATIC_DIR}")
 
 # ==================== 404 HANDLER ====================
 @app.exception_handler(status.HTTP_404_NOT_FOUND)
