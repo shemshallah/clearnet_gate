@@ -735,11 +735,10 @@ class Database:
         conn.commit()
         conn.close()
     
-    @staticmethod
+  @staticmethod
     def create_user(username: str, password: str) -> Dict[str, Any]:
         salt = os.urandom(32)
-        pwdhash = hashlib.pbkdf2_hmac('sha256', passwor```python
-d.encode('utf-8'), salt, 100000)
+        pwdhash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
         password_hash = salt.hex() + pwdhash.hex()
         email = f"{username}@{Config.QUANTUM_EMAIL_DOMAIN}"
         quantum_key = secrets.token_urlsafe(32)
