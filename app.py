@@ -5,13 +5,14 @@ import numpy as np
 import base64
 import requests
 from io import BytesIO
-from flask import Flask, redirect, request, session, Response
+from flask import Flask, redirect, request, session, Response, jsonify
 from flask_socketio import SocketIO, emit
 import qutip as qt
 import matplotlib.pyplot as plt
 from itertools import product
 from datetime import datetime
 import urllib.parse
+import re
 
 # Production Logging
 logging.basicConfig(level=logging.WARNING)
@@ -21,11 +22,21 @@ logger = logging.getLogger(__name__)
 import eventlet
 eventlet.monkey_patch()
 
-# Render Domain Config
+# Domain Configs
 RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')
+DUCKDNS_DOMAIN = os.environ.get('DUCKDNS_DOMAIN', 'alicequantum.duckdns.org')
+ALICE_IP = os.environ.get('ALICE_IP', '73.189.2.5')
+QUANTUM_DOMAIN = os.environ.get('QUANTUM_DOMAIN', 'quantum.realm.domain.dominion.foam.computer.render')
 
-# GitHub Mirror Base URL (for post-connection pulls)
+# GitHub Mirror Base URL
 GITHUB_MIRROR_BASE = 'https://quantum.realm.domain.dominion.foam.computer.render.github'
+
+# User Auth
+ADMIN_USER = 'shemshallah'
+ADMIN_PASS_HASH = hashlib.sha3_256(b'$h10j1r1H0w4rd').hexdigest()
+
+# Registry (Pre-Registered Subs 256-999 to Admin)
+PRE_REG_SUBS = {str(i): {'owner': ADMIN_USER, 'status': 'available', 'price': 1.00} for i in range(256, 1000)}
 
 # Quantum Foam Initialization
 try:
@@ -49,7 +60,7 @@ except Exception as e:
     fidelity_lattice = 0.999
     bridge_key = "QFOAM-PROD-999-abc"
 
-# Functions (unchanged except Matplotlib plot util)
+# Functions
 def bh_encryption_cascade(plaintext, rounds=3):
     rand_unitary = qt.rand_unitary(2)
     seed = rand_unitary.full().tobytes()[:32]
@@ -97,7 +108,7 @@ def stream_qram_state(sid):
     proj = core_ghz.ptrace([0])
     return float(proj.full()[0,0].real)
 
-# Matplotlib Plot Util (for REPL viz, base64 embed)
+# Matplotlib Plot Util
 def plot_fidelity_to_base64(fid_values):
     fig, ax = plt.subplots()
     ax.bar(range(len(fid_values)), fid_values)
@@ -111,14 +122,13 @@ def plot_fidelity_to_base64(fid_values):
     plt.close(fig)
     return f'<img src="data:image/png;base64,{img_base64}" alt="Fidelity Plot" style="max-width:100%;">'
 
-# GitHub Mirror Pull Util (post-connection fetch)
+# GitHub Mirror Pull Util
 def pull_from_mirror(resource):
     try:
-        # Example: Pull Matplotlib setup or custom script from mirror (treat as raw GitHub)
-        url = f"{GITHUB_MIRROR_BASE}/{resource}"  # e.g., 'matplotlib/raw/main/setup.py'
+        url = f"{GITHUB_MIRROR_BASE}/{resource}"
         resp = requests.get(url, timeout=10)
         if resp.status_code == 200:
-            return resp.text[:500] + "..."  # Truncate for REPL
+            return resp.text[:500] + "..."
         else:
             return f"Pull failed: {resp.status_code}"
     except Exception as e:
@@ -129,7 +139,7 @@ app = Flask(__name__)
 app.secret_key = hashlib.sha256(bridge_key.encode()).digest()[:32]
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger=False, engineio_logger=False)
 
-# 404 Handler ("Render Side 404")
+# 404 Handler
 @app.errorhandler(404)
 def not_found(error):
     return "Render Side 404", 404
@@ -139,23 +149,81 @@ def not_found(error):
 def health_check():
     return 'OK', 200
 
-# Quantum Domain Redirector (skip key for internal/health)
+# Login Route
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        user = request.form.get('username')
+        passw = request.form.get('password')
+        if user == ADMIN_USER and hashlib.sha3_256(passw.encode()).hexdigest() == ADMIN_PASS_HASH:
+            session['logged_in'] = True
+            session['user'] = user
+            return redirect('/?bridge_key=' + bridge_key)
+        else:
+            return "Invalid credentials", 401
+    return '''
+    <form method="post">
+        Username: <input type="text" name="username" value="shemshallah"><br>
+        Password: <input type="password" name="password"><br>
+        <input type="submit">
+    </form>
+    '''
+
+# Registry Routes (Pre-Registered Subs 256-999)
+@app.route('/registry')
+def registry():
+    if not session.get('logged_in') or session['user'] != ADMIN_USER:
+        return "Unauthorized", 403
+    return jsonify(PRE_REG_SUBS)
+
+@app.route('/sell/<sub_id>', methods=['GET', 'POST'])
+def sell_sub(sub_id):
+    if sub_id not in PRE_REG_SUBS or PRE_REG_SUBS[sub_id]['status'] != 'available':
+        return "Subdomain not available", 400
+    if request.method == 'POST':
+        # Sim payment (Stripe test - replace with real)
+        buyer = request.form.get('buyer_email')
+        if buyer:
+            PRE_REG_SUBS[sub_id]['owner'] = buyer
+            PRE_REG_SUBS[sub_id]['status'] = 'sold'
+            logger.warning(f'Sold {sub_id}.duckdns.org to {buyer}')
+            return f"Subdomain {sub_id}.duckdns.org sold! Key: {bridge_key}"
+    return '''
+    <form method="post">
+        Email: <input type="email" name="buyer_email"><br>
+        <input type="submit" value="Buy for ${PRE_REG_SUBS[sub_id]['price']}">
+    </form>
+    '''
+
+@app.route('/update/<sub_id>', methods=['POST'])
+def update_sub(sub_id):
+    if not session.get('logged_in') or session['user'] != ADMIN_USER:
+        return "Unauthorized", 403
+    if sub_id in PRE_REG_SUBS:
+        new_status = request.form.get('status', 'available')
+        PRE_REG_SUBS[sub_id]['status'] = new_status
+        return f"Updated {sub_id}: {new_status}"
+    return "Subdomain not found", 404
+
+# Quantum Domain Redirector
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def quantum_gate(path):
+    if not session.get('logged_in'):
+        return redirect('/login')
+    
     client_ip = request.remote_addr
-    # Skip validation for Render health probes (internal IP, no key)
     if client_ip == '127.0.0.1' and not request.args.get('bridge_key'):
         return 'OK', 200
     
     host = request.headers.get('Host', '').lower()
-    quantum_hosts = ['quantum.realm.domain.dominion.foam.computer.render', 'quantum.realm.domain.dominion.foam.computer']
+    quantum_hosts = [QUANTUM_DOMAIN]
     
     if any(qh in host for qh in quantum_hosts):
         params = request.query_string.decode()
-        gate_url = f"https://{RENDER_DOMAIN}/?{params}" if params else f"https://{RENDER_DOMAIN}/"
-        logger.warning(f'Quantum Host Redirect: {host} -> {RENDER_DOMAIN}')
-        return redirect(gate_url, code=302)
+        duckdns_url = f"https://{DUCKDNS_DOMAIN}/?{params}" if params else f"https://{DUCKDNS_DOMAIN}/"
+        logger.warning(f'Alice Bridge: {host} → DuckDNS {ALICE_IP}')
+        return redirect(duckdns_url, code=302)
     
     session_id = request.args.get('session', f'sess_{client_ip}')
     
@@ -173,8 +241,7 @@ def quantum_gate(path):
         logger.warning(f'Invalid Key Redirect: {client_ip} -> Gate with params')
         return redirect(gate_url, code=302)
     
-    # Post-connection: Pull from GitHub mirror (e.g., Matplotlib config)
-    mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')  # Example pull
+    mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')
     
     offload_res = entangled_cpu_offload(f'fidelity_lattice * 1.0001')
     comp_tensor = core_ghz.full().real
@@ -192,14 +259,14 @@ def quantum_gate(path):
         <body style="background: #000; color: #0f0; font-family: monospace;">
             <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render</h1>
             <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {negativity:.16f}, Tele {tele_id:.6f}, Back {session.get('backup_id', 'none')}</p>
-            <p style="color: #0f0;">Enc: {enc_key[:32]}... | Mirror Pull: {mirror_pull[:50]}...</p>
+            <p style="color: #0f0;">Enc: {enc_key[:32]}... | Mirror Pull: {mirror_pull[:50]}... | Registry: /registry | Sell: /sell/<sub></p>
             <div id="terminal" style="width: 100%; height: 400px; background: #000;"></div>
             <script>
                 const socket = io();
                 const term = new Terminal({{ cursorBlink: true, theme: {{ background: '#000', foreground: '#0f0' }} }});
                 term.open(document.getElementById('terminal'));
-                term.write('QSH Foam REPL v1.0 (Mirror Connected)\\r\\n');
-                term.write('Type "help" for commands. Foam lattice loaded from network.\\r\\n');
+                term.write('QSH Foam REPL v1.0 (Registry Marketplace)\\r\\n');
+                term.write('Type "help" for commands. Subs 256-999 pre-registered to shemshallah.\\r\\n');
                 term.write('QSH> ');
                 
                 term.onData((data) => {{
@@ -207,7 +274,7 @@ def quantum_gate(path):
                         const cmd = term.buffer.active.getLine( term.buffer.active.baseY + term.buffer.active.cursorY ).translateToString(true).trim();
                         socket.emit('qsh_command', {{ command: cmd }});
                         term.write('\\r\\n');
-                    }} else if (data === '\\u007F') {{ // Backspace
+                    }} else if (data === '\\u007F') {{
                         term.write('\\b \\b');
                     }} else {{
                         term.write(data);
@@ -217,17 +284,16 @@ def quantum_gate(path):
                 socket.on('qsh_output', (data) => {{
                     term.write(data.output + '\\r\\n');
                     if (data.plot_html) term.write('\\r\\n' + data.plot_html + '\\r\\n');
-                    if (data.mirror_pull) term.write('\\r\\nMirror Fetch: ' + data.mirror_pull + '\\r\\n');
                     if (data.prompt) term.write('QSH> ');
                 }});
                 
-                socket.on('connect', () => console.log('Socket Connected'));
+                socket.on('connect', () => console.log('Socket Connected - Registry Active'));
             </script>
         </body>
     </html>
     """
 
-# QSH Foam REPL Backend (with Mirror Pull & Matplotlib Plot)
+# QSH Foam REPL Backend
 repl_sessions = {}
 
 @socketio.on('qsh_command')
@@ -242,10 +308,9 @@ def handle_qsh_command(data):
     
     output = "QSH Foam REPL > "
     plot_html = None
-    mirror_pull = None
     try:
         if cmd == 'help':
-            output += "Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, plot fidelity, pull matplotlib, exit, clear"
+            output += "Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, plot fidelity, pull matplotlib, registry list, sell <sub>, exit, clear"
         elif cmd.startswith('entangle '):
             q1, q2 = map(int, cmd.split()[1:])
             bell = qt.bell_state('00')
@@ -268,6 +333,15 @@ def handle_qsh_command(data):
         elif cmd == 'pull matplotlib':
             mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')
             output += "Pulled Matplotlib config from GitHub mirror (post-network connect)"
+        elif cmd == 'registry list':
+            subs_list = ', '.join([k for k, v in PRE_REG_SUBS.items() if v['status'] == 'available'][:10])
+            output += f"Available Subs (256-999): {subs_list}... (Full: /registry)"
+        elif cmd.startswith('sell '):
+            sub = cmd.split(' ', 1)[1]
+            if sub in PRE_REG_SUBS:
+                output += f"Selling {sub}.duckdns.org - Visit /sell/{sub}"
+            else:
+                output += f"Sub {sub} not in registry"
         elif cmd == 'clear':
             history = []
             output += "History cleared"
@@ -286,7 +360,7 @@ def handle_qsh_command(data):
     except Exception as e:
         output += f"Error: {str(e)}"
     
-    emit('qsh_output', {'output': output, 'plot_html': plot_html, 'mirror_pull': mirror_pull, 'prompt': True})
+    emit('qsh_output', {'output': output, 'plot_html': plot_html, 'prompt': True})
 
 # WS for Existing Channel
 @socketio.on('connect_channel')
