@@ -1939,12 +1939,25 @@ async def health():
         "lattice_active": True,
         "torino_configured": bool(Config.IBM_QUANTUM_TOKEN)
     }
+# ==================== STATIC FILES MOUNT ====================
+from pathlib import Path
 
-# ==================== STATIC FILES MOUNT (AFTER ALL ROUTES) ====================
-# Mount at root to serve HTML files like /email.html directly from the current directory.
-# All API routes are defined before this mount, so they take precedence.
-# Ensure that files like email.html, blockchain.html, shell.html, etc., exist in the current working directory.
-app.mount("/", StaticFiles(directory=".", html=True), name="html_files")
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
+if STATIC_DIR.exists():
+    logger.info(f"Serving static files from: {STATIC_DIR}")
+    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+else:
+    logger.warning(f"Static directory NOT found at {STATIC_DIR}")
+
+
+# ==================== START SERVER ====================
 if __name__ == "__main__":
-    uvicorn.run(app, host=Config.HOST, port=Config.PORT)
+    import sys
+    port = int(os.getenv("PORT", 8000))
+    logger.info(f"Starting server on 0.0.0.0:{port}")
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=port)
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}", exc_info=True)
+        sys.exit(1)
