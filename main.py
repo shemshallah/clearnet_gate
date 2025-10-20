@@ -70,7 +70,7 @@ class Config:
     # IBM Quantum - Torino Backend
     IBM_QUANTUM_TOKEN = os.getenv("IBM_QUANTUM_TOKEN")
     IBM_BACKEND = "ibm_torino"
-    QISKIT_RUNTIME_URL = "https://api.quantum-computing.ibm.com/runtime "
+    QISKIT_RUNTIME_URL = "https://api.quantum-computing.ibm.com/runtime"
     
     # Domain routing
     QUANTUM_DOMAIN = "quantum.realm.domain.dominion.foam.computer"
@@ -301,7 +301,7 @@ class TorinoQuantumBackend:
             
             async with aiohttp.ClientSession() as session:
                 # Get backend properties
-                url = f"https://api.quantum-computing.ibm.com/runtime/backends/ {Config.IBM_BACKEND}"
+                url = f"https://api.quantum-computing.ibm.com/runtime/backends/{Config.IBM_BACKEND}"
                 async with session.get(url, headers=headers) as resp:
                     if resp.status == 200:
                         data = await resp.json()
@@ -720,10 +720,6 @@ class Database:
                 metrics.get('quantum_volume'),
                 metrics.get('t1_avg_us'),
                 metrics.get('t2_avg_us'),
-                metricsget('readout_error_avg')
-Here's the rest of the code from where it cuts off:
-
-```python
                 metrics.get('readout_error_avg'),
                 metrics.get('cx_error_avg')
             ))
@@ -1322,7 +1318,7 @@ async def root():
             <div class="value">Configure Token</div>
         </div>"""
     
-    return HTMLResponse(content=f"""
+    html_content = f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1632,7 +1628,8 @@ async def root():
     </div>
 </body>
 </html>
-    """)
+    """
+    return HTMLResponse(content=html_content)
 
 # ==================== API ROUTES ====================
 
