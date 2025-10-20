@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
 import secrets
@@ -444,7 +445,7 @@ class QuantumPhysics:
         return result
     
     @staticmethod
-    def ghz_experiment_qutip(shots: int = 8192) -> Dict[str, Any]:
+    def ghz_experiment_qutip(shots: int= 8192) -> Dict[str, Any]:
         """Real GHZ test using QuTiP"""
         logger.info(f"Running GHZ test with {shots} measurements via QuTiP")
         
@@ -593,7 +594,7 @@ class NetInterface:
                 return org
             return "WHOIS unavailable"
         except Exception as e:
-            logger.error(f"WHOIS failed for {ip}: {e}")
+            logger.error(f"WHOIS failedfor {ip}: {e}")
             return "WHOIS error"
 
 # ==================== ALICE NODE ====================
@@ -1227,62 +1228,15 @@ app.add_middleware(
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+# Mount static files from root directory (serves HTML files directly)
+app.mount("/", StaticFiles(directory=".", html=True), name="static")
+
 @app.on_event("startup")
 async def startup_event():
     logger.info(f"QSH Foam Production System starting on {Config.HOST}:{Config.PORT}")
     logger.info(f"Sagittarius A* lattice anchor: {Config.SAGITTARIUS_A_LATTICE}")
     logger.info(f"White hole lattice: {Config.WHITE_HOLE_LATTICE}")
     logger.info(f"IBM Torino backend: {Config.IBM_BACKEND}")
-
-# ==================== STATIC FILE ROUTES ====================
-
-@app.get("/email.html", response_class=HTMLResponse)
-async def email_html():
-    try:
-        with open("email.html", "r") as f:
-            return HTMLResponse(content=f.read())
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="email.html not found")
-
-@app.get("/blockchain.html", response_class=HTMLResponse)
-async def blockchain_html():
-    try:
-        with open("blockchain.html", "r") as f:
-            return HTMLResponse(content=f.read())
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="blockchain.html not found")
-
-@app.get("/shell.html", response_class=HTMLResponse)
-async def shell_html():
-    try:
-        with open("shell.html", "r") as f:
-            return HTMLResponse(content=f.read())
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="shell.html not found")
-
-@app.get("/encryption.html", response_class=HTMLResponse)
-async def encryption_html():
-    try:
-        with open("encryption.html", "r") as f:
-            return HTMLResponse(content=f.read())
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="encryption.html not found")
-
-@app.get("/holo_search.html", response_class=HTMLResponse)
-async def holo_search_html():
-    try:
-        with open("holo_search.html", "r") as f:
-            return HTMLResponse(content=f.read())
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="holo_search.html not found")
-
-@app.get("/networking.html", response_class=HTMLResponse)
-async def networking_html():
-    try:
-        with open("networking.html", "r") as f:
-            return HTMLResponse(content=f.read())
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="networking.html not found")
 
 # ==================== MAIN DASHBOARD ====================
 
@@ -1305,7 +1259,7 @@ async def root():
         </div>
         <div class="status-item">
             <div class="label">T1 Coherence</div>
-            <div class="value">{torino_status.get('t1_avg_us', 0):.2f} μs</div>
+            <div class="value">{torino_status.get('t1_avg_us, 0):.2f} μs</div>
         </div>
         <div class="status-item">
             <div class="label">Gate Error</div>
@@ -1333,7 +1287,7 @@ async def root():
             color: #0f0;
             min-height: 100vh;
             display: flex;
-            flex-direction: column;
+            flex-direction, column;
             align-items: center;
             justify-content: center;
             padding: 20px;
@@ -1571,7 +1525,7 @@ async def root():
                 <h2>🖥️ QSH Shell</h2>
                 <p>Production quantum shell with IBM Torino integration</p>
                 <ul class="features">
-                    <li>QuTiP quantum operations</li>
+                    <li>QuTiPquantum operations</li>
                     <li>Real Torino backend access</li>
                     <li>Lattice routing commands</li>
                     <li>Python + network tools</li>
@@ -1674,7 +1628,7 @@ async def get_inbox(user: dict = Depends(get_current_user_email)):
 @app.get("/api/emails/sent", tags=["email"])
 async def get_sent(user: dict = Depends(get_current_user_email)):
     if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(status_code=401,detail="Not authenticated")
     
     return Database.get_sent(user['email'])
 
