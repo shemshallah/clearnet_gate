@@ -27,11 +27,11 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy app code
 COPY main.py .
 
-# Create data directory for DB
+# Create data directory for DB (writable on ephemeral FS)
 RUN mkdir -p data
 
-# Expose port
-EXPOSE 8000
+# Expose dynamic port (Render uses 10000)
+EXPOSE ${PORT:-8000}
 
-# Run the app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the app with dynamic port (use Render's $PORT or default 8000)
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
