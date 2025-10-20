@@ -1,37 +1,37 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# Install system dependencies for cryptography and qutip/scipy
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    gcc \
-    gfortran \
-    libffi-dev \
-    libssl-dev \
-    libopenblas-dev \
-    liblapack-dev \
-    pkg-config \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set work directory
 WORKDIR /app
 
-# Copy requirements and install Python deps
+# Install system dependencies required by some Python packages
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    make \
+    libopenblas-dev \
+    liblapack-dev \
+    gfortran \
+    whois \
+    iputils-ping \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first (for better caching)
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
-COPY main.py .
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Create data directory for DB (writable on ephemeral FS)
-RUN mkdir -p data
+# Copy application code
+COPY . .
 
-# Expose dynamic port (Render uses 10000)
-EXPOSE ${PORT:-8000}
+# Ensure static directory exists
+RUN mkdir -p static
 
-# Run the app with dynamic port (use Render's $PORT or default 8000)
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+# Run the application
+CMD ["python", "main.py"]
