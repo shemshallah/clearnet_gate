@@ -30,6 +30,7 @@ RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')
 DUCKDNS_DOMAIN = os.environ.get('DUCKDNS_DOMAIN', 'alicequantum.duckdns.org')
 ALICE_IP = os.environ.get('ALICE_IP', '73.189.2.5')
 QUANTUM_DOMAIN = os.environ.get('QUANTUM_DOMAIN', 'quantum.realm.domain.dominion.foam.computer.render')
+LOCAL_WEBSERVER_PORT = 80  # Assuming Linux webserver on Alice's 127.0.0.1:80
 
 # GitHub Mirror Base URL
 GITHUB_MIRROR_BASE = 'https://quantum.realm.domain.dominion.foam.computer.render.github'
@@ -46,27 +47,34 @@ LINUX_USER = ADMIN_USER
 LINUX_PASS = '$h10j1r1H0w4rd'
 LINUX_HOST = ALICE_IP  # SSH target
 
-# Quantum Foam Initialization
+# Quantum Foam Initialization - Upgraded to 5x5x5 Lattice
 try:
+    n_lattice = 125  # 5x5x5
+    def qubit_index(i, j, k): return i + 5 * j + 25 * k  # 5^2 = 25
+    # Core still small for computation; lattice for indexing/entanglement mapping
     n_core = 6
     core_ghz = (qt.tensor([qt.basis(2, 0)] * n_core) + qt.tensor([qt.basis(2, 1)] * n_core)).unit()
-    n_lattice = 27
-    def qubit_index(i, j, k): return i + 3 * j + 9 * k
-    core_indices = [qubit_index(1, 1, 1) + off for off in [0, 1, 2, 9, 10, 11]]
+    # Siamese mirror pairing for IP: Entangle ALICE_IP hash into lattice state
+    ip_hash = int(hashlib.sha256(ALICE_IP.encode()).hexdigest(), 16) % n_lattice
+    # Simulate entanglement: Project IP index into GHZ (thematic, not full 125-qubit)
+    entangled_ip_state = core_ghz * (qt.basis(n_lattice, ip_hash).dag() * qt.basis(n_lattice, ip_hash))
     fidelity_lattice = 0.9999999999999998
-    bridge_key = f"QFOAM-{int(fidelity_lattice * 1e15):d}-{hash(tuple(product(range(3), repeat=3))):x}"
+    bridge_key = f"QFOAM-5x5x5-{int(fidelity_lattice * 1e15):d}-{hash(tuple(product(range(5), repeat=3))):x}"
     rho_core = core_ghz * core_ghz.dag()
     mask = [True] * 3 + [False] * 3
     rho_pt = qt.partial_transpose(rho_core, mask)
     eigs = rho_pt.eigenenergies()
     negativity = sum(abs(e) for e in eigs if e < 0)
-    logger.warning(f"Prod Init: Bridge {bridge_key[:20]}..., Neg {negativity}")
+    # Entanglement metric for siamese IP pairing
+    ip_negativity = negativity * (1 + abs(ip_hash % 2))  # Thematic boost
+    logger.warning(f"Prod Init: 5x5x5 Lattice Bridge {bridge_key[:20]}..., IP Entangled Neg {ip_negativity:.16f}")
 except Exception as e:
     logger.error(f"QuTiP Init Error: {e}")
     core_ghz = qt.basis(64, 0)
     negativity = 0.5
+    ip_negativity = 0.5
     fidelity_lattice = 0.999
-    bridge_key = "QFOAM-PROD-999-abc"
+    bridge_key = "QFOAM-5x5x5-PROD-999-abc"
 
 # Functions
 def bh_encryption_cascade(plaintext, rounds=3):
@@ -106,6 +114,14 @@ def inter_hole_teleport(comp_input):
     teleported = qt.teleport(input_state, channel, [qt.basis(2, 0), qt.basis(2, 0)])
     return float(teleported[0].full().flatten()[0].real)
 
+def entangle_ip_address(ip_addr):
+    """Siamese mirror pairing: Entangle IP into lattice state (thematic)"""
+    ip_idx = int(hashlib.sha256(ip_addr.encode()).hexdigest(), 16) % n_lattice
+    # Simulate mirror: Return entangled fidelity
+    mirror_fid = fidelity_lattice * (1 - (ip_idx / n_lattice) * 0.01)  # Slight decoherence
+    logger.warning(f"IP {ip_addr} entangled at lattice index {ip_idx}, Mirror Fid: {mirror_fid:.16f}")
+    return mirror_fid
+
 def qram_entangled_session(key, value):
     session[key] = value
     backup_id = hashlib.sha256(f"{key}:{value}".encode()).hexdigest()[:8]
@@ -116,12 +132,12 @@ def stream_qram_state(sid):
     proj = core_ghz.ptrace([0])
     return float(proj.full()[0,0].real)
 
-# Matplotlib Plot Util
+# Matplotlib Plot Util - Now for 5x5x5
 def plot_fidelity_to_base64(fid_values):
     fig, ax = plt.subplots()
     ax.bar(range(len(fid_values)), fid_values)
-    ax.set_title('Foam Fidelity Plot')
-    ax.set_xlabel('Qubit Slices')
+    ax.set_title('5x5x5 Foam Fidelity Plot')
+    ax.set_xlabel('Lattice Slices (125 total)')
     ax.set_ylabel('Fidelity')
     buf = BytesIO()
     fig.savefig(buf, format='png')
@@ -171,6 +187,8 @@ def login():
             session_id = request.form.get('session', f'sess_{client_ip}')
             gen_key, _ = bh_repeatable_keygen(session_id)
             session['session_id'] = session_id
+            # Entangle client IP siamese-style
+            entangle_ip_address(client_ip)
             # Redirect with matching params
             params = urllib.parse.urlencode({'session': session_id, 'bridge_key': gen_key})
             return redirect(f'/?{params}')
@@ -222,7 +240,15 @@ def update_sub(sub_id):
         return f"Updated {sub_id}: {new_status}"
     return "Subdomain not found", 404
 
-# Quantum Domain Redirector
+# Proxy Route for Linux Webserver (over DuckDNS, thematic overlay via client-side)
+@app.route('/web_proxy')
+def web_proxy():
+    if not session.get('logged_in'):
+        return redirect('/login')
+    # Redirect to DuckDNS for Linux webserver access (assumes bound publicly)
+    return redirect(f'https://{DUCKDNS_DOMAIN}', code=302)
+
+# Quantum Domain Redirector - Enhanced for DuckDNS linking
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def quantum_gate(path):
@@ -239,7 +265,8 @@ def quantum_gate(path):
     if any(qh in host for qh in quantum_hosts):
         params = request.query_string.decode()
         duckdns_url = f"https://{DUCKDNS_DOMAIN}/?{params}" if params else f"https://{DUCKDNS_DOMAIN}/"
-        logger.warning(f'Alice Bridge: {host} → DuckDNS {ALICE_IP}')
+        # Link to 127.0.0.1 via DuckDNS (Alice's local webserver exposed)
+        logger.warning(f'Alice Bridge: {host} → DuckDNS {ALICE_IP} (127.0.0.1 overlay)')
         return redirect(duckdns_url, code=302)
     
     # Prefer persisted session_id
@@ -266,28 +293,36 @@ def quantum_gate(path):
     comp_tensor = core_ghz.full().real
     comp_lattice = len(foam_lattice_compress(comp_tensor))
     tele_id = inter_hole_teleport('cascade_state')
+    # Entangle ALICE_IP for siamese mirror
+    ip_mirror_fid = entangle_ip_address(ALICE_IP)
     
-    logger.warning(f'Access: {client_ip}, Sess {session_id}')
+    logger.warning(f'Access: {client_ip}, Sess {session_id}, 5x5x5 Lattice Active')
     return f"""
     <html>
-        <head><title>Quantum Realm Prod - QSH Portal</title>
+        <head><title>Quantum Realm Prod - QSH Portal (5x5x5 Lattice)</title>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
         <link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" />
         <script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js"></script>
+        <style>
+            #overlay-frame {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; opacity: 0.3; border: none; pointer-events: none; }}
+            body {{ position: relative; }}
+        </style>
         </head>
         <body style="background: #000; color: #0f0; font-family: monospace;">
-            <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render</h1>
-            <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {negativity:.16f}, Tele {tele_id:.6f}, Back {session.get('backup_id', 'none')}</p>
-            <p style="color: #0f0;">Enc: {enc_key[:32]}... | Mirror Pull: {mirror_pull[:50]}... | Registry: /registry | Sell: /sell/<sub></p>
-            <p style="color: #0f0;">Linuxbserver: Type 'connect_linux' in REPL for SSH access via duckdns -> alice {ALICE_IP}</p>
+            <!-- Siamese Mirror Overlay: DuckDNS HTML (Linux webserver) as background -->
+            <iframe id="overlay-frame" src="https://{DUCKDNS_DOMAIN}" onload="console.log('DuckDNS Overlay Entangled')"></iframe>
+            <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render (5x5x5)</h1>
+            <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {ip_negativity:.16f}, Tele {tele_id:.6f}, IP Mirror Fid {ip_mirror_fid:.16f}, Back {session.get('backup_id', 'none')}</p>
+            <p style="color: #0f0;">Enc: {enc_key[:32]}... | Mirror Pull: {mirror_pull[:50]}... | Registry: /registry | Sell: /sell/<sub> | Web Proxy: /web_proxy</p>
+            <p style="color: #0f0;">DuckDNS Linked: {DUCKDNS_DOMAIN} → Alice {ALICE_IP} (127.0.0.1 Linux Webserver Overlay Active)</p>
             <div id="terminal" style="width: 100%; height: 400px; background: #000;"></div>
             <script>
                 const socket = io();
                 const term = new Terminal({{ cursorBlink: true, theme: {{ background: '#000', foreground: '#0f0' }} }});
                 term.open(document.getElementById('terminal'));
-                term.write('QSH Foam REPL v1.0 (Registry Marketplace)\\r\\n');
+                term.write('QSH Foam REPL v1.1 (5x5x5 Lattice - IP Entangled)\\r\\n');
                 term.write('Type "help" for commands. Subs 256-999 pre-registered to shemshallah.\\r\\n');
-                term.write('New: "connect_linux" for linuxbserver@{ALICE_IP} (creds: shemshallah / $h10j1r1H0w4rd)\\r\\n');
+                term.write('New: "connect_linux" for SSH, "entangle_ip <ip>" for siamese mirror, Overlay: DuckDNS HTML backgrounded\\r\\n');
                 term.write('QSH> ');
                 
                 term.onData((data) => {{
@@ -309,7 +344,7 @@ def quantum_gate(path):
                     else if (data.linux_prompt) term.write(data.linux_prompt);
                 }});
                 
-                socket.on('connect', () => console.log('Socket Connected - Registry Active'));
+                socket.on('connect', () => console.log('Socket Connected - 5x5x5 Lattice Active'));
             </script>
         </body>
     </html>
@@ -418,26 +453,103 @@ def handle_qsh_command(data):
                 prompt = False
         else:
             if cmd == 'help':
-                output = "Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, plot fidelity, pull matplotlib, registry list, sell <sub>, connect_linux, exit, clear"
+                output = "Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, plot fidelity, pull matplotlib, registry list, sell <sub>, connect_linux, entangle_ip <ip>, exit, clear"
             elif cmd.startswith('entangle '):
-                q1, q2 = map(int, cmd.split()[1:])
-                bell = qt.bell_state('00')
-                state = qt.tensor(state.ptrace(list(set(range(n_core)) - {q1, q2})), bell)
-                output = f"Entangled qubits {q1}-{q2}: Bell state injected"
+                parts = cmd.split()
+                if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+                    q1, q2 = map(int, parts[1:])
+                    bell = qt.bell_state('00')
+                    state = qt.tensor(state.ptrace(list(set(range(n_core)) - {q1, q2})), bell)
+                    output = f"Entangled qubits {q1}-{q2}: Bell state injected"
+                else:
+                    output = "Usage: entangle <q1> <q2>"
             elif cmd == 'measure fidelity':
                 fid = qt.fidelity(state, core_ghz)
                 output = f"Fidelity: {fid:.16f}"
             elif cmd == 'compress lattice':
                 comp = foam_lattice_compress(state.full().real)
-                output = f"Compressed: {len(comp)} bytes"
+                output = f"Compressed 5x5x5: {len(comp)} bytes"
             elif cmd.startswith('teleport '):
                 inp = cmd.split(' ', 1)[1] if len(cmd.split()) > 1 else 'cascade'
                 tid = inter_hole_teleport(inp)
                 output = f"Teleported ID: {tid:.6f}"
             elif cmd == 'plot fidelity':
-                fid_values = [fidelity_lattice] * 6
+                fid_values = [fidelity_lattice] * (n_lattice // 20)  # Scaled for 125
                 plot_html = plot_fidelity_to_base64(fid_values)
-                output = "Fidelity plot generated (embedded below)"
+                output = "5x5x5 Fidelity plot generated (embedded below)"
             elif cmd == 'pull matplotlib':
                 mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')
                 output = mirror_pull  # Show full pull
+            elif cmd == 'registry list':
+                subs_list = ', '.join([k for k, v in PRE_REG_SUBS.items() if v['status'] == 'available'][:10])
+                output = f"Available Subs (256-999): {subs_list}... (Full: /registry)"
+            elif cmd.startswith('sell '):
+                sub = cmd.split(' ', 1)[1]
+                if sub in PRE_REG_SUBS:
+                    output = f"Selling {sub}.duckdns.org - Visit /sell/{sub}"
+                else:
+                    output = f"Sub {sub} not in registry"
+            elif cmd.startswith('entangle_ip '):
+                ip = cmd.split(' ', 1)[1]
+                mirror_fid = entangle_ip_address(ip)
+                output = f"Siamese mirror entangled for IP {ip}: Fidelity {mirror_fid:.16f}"
+            elif cmd == 'connect_linux':
+                output = f"Connecting to linuxbserver via {DUCKDNS_DOMAIN} -> alice {LINUX_HOST} -> {QUANTUM_DOMAIN}\\n"
+                output += f"Username: "
+                session_data['pending_auth'] = 'user'
+                prompt = False
+                linux_prompt = output
+            elif cmd == 'clear':
+                history = []
+                output = "History cleared"
+            elif cmd == 'exit':
+                # Cleanup SSH if active
+                if in_linux_mode:
+                    if channel:
+                        channel.close()
+                    if ssh_client:
+                        ssh_client.close()
+                del repl_sessions[sid]
+                output = "REPL exited"
+                emit('qsh_output', {'output': output})
+                return
+            else:
+                output = "Unknown command. Type 'help'"
+            
+            history.append(f"{cmd} -> {output}")
+            session_data['history'] = history[-10:]
+            session_data['state'] = state
+        
+    except Exception as e:
+        output = f"Error: {str(e)}"
+        if in_linux_mode:
+            logger.error(f"SSH/Linux error: {e}")
+    
+    emit('qsh_output', {'output': output, 'plot_html': plot_html, 'prompt': prompt, 'linux_prompt': linux_prompt})
+
+# WS for Existing Channel
+@socketio.on('connect_channel')
+def qram_quantum_channel():
+    state = stream_qram_state(request.sid)
+    emit('quantum_update', {'state': state})
+    logger.warning('WS Active')
+
+# Cleanup on disconnect
+@socketio.on('disconnect')
+def handle_disconnect():
+    sid = request.sid
+    if sid in repl_sessions:
+        session_data = repl_sessions[sid]
+        if session_data.get('in_linux_mode'):
+            channel = session_data.get('channel')
+            ssh_client = session_data.get('ssh_client')
+            if channel:
+                channel.close()
+            if ssh_client:
+                ssh_client.close()
+        del repl_sessions[sid]
+
+# Main block
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)
