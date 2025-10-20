@@ -1228,8 +1228,12 @@ app.add_middleware(
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# Mount static files from root directory (serves HTML files directly)
-app.mount("/", StaticFiles(directory=".", html=True), name="static")
+# FIXED: Mount static files at /static/ instead of / to avoid shadowing the root route.
+# If you have a 'static' subdir for assets, use that. Otherwise, use '.' for current dir.
+app.mount("/static", StaticFiles(directory=".", html=True), name="static")  # Changed from "/" to "/static"
+
+# Optional: If you want to serve .html files directly from root (e.g., /email.html), add this AFTER the root route:
+# app.mount("/", StaticFiles(directory=".", html=True), name="html_files")  # But exclude index.html if needed
 
 @app.on_event("startup")
 async def startup_event():
@@ -1237,6 +1241,7 @@ async def startup_event():
     logger.info(f"Sagittarius A* lattice anchor: {Config.SAGITTARIUS_A_LATTICE}")
     logger.info(f"White hole lattice: {Config.WHITE_HOLE_LATTICE}")
     logger.info(f"IBM Torino backend: {Config.IBM_BACKEND}")
+
 
 # ==================== 404 HANDLER ====================
 @app.exception_handler(status.HTTP_404_NOT_FOUND)
