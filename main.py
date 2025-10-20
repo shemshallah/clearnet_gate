@@ -75,11 +75,6 @@ class Config:
     STORAGE_IP = "138.0.0.1"
     DNS_SERVER = "136.0.0.1"
     
-    # IBM Quantum - Torino Backend
-    IBM_QUANTUM_TOKEN = os.getenv("IBM_QUANTUM_TOKEN")
-    IBM_BACKEND = "ibm_torino"
-    QISKIT_RUNTIME_URL = "https://api.quantum-computing.ibm.com/runtime"
-    
     # Domain routing
     QUANTUM_DOMAIN = "quantum.realm.domain.dominion.foam.computer"
     QUANTUM_EMAIL_DOMAIN = "quantum.foam"
@@ -110,8 +105,6 @@ class Config:
         if cls.ENVIRONMENT == "production":
             if not cls.SECRET_KEY:
                 raise ValueError("SECRET_KEY must be set in production")
-            if not cls.IBM_QUANTUM_TOKEN:
-                logger.warning("IBM_QUANTUM_TOKEN not set - Torino metrics will be unavailable")
         
         cls.DATA_DIR.mkdir(exist_ok=True)
         cls.HOLO_MOUNT.mkdir(exist_ok=True)
@@ -184,23 +177,6 @@ class Config:
                 user_email TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 expires_at TEXT NOT NULL
-            )
-        """)
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS torino_metrics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                backend_status TEXT,
-                queue_length INTEGER,
-                num_qubits INTEGER,
-                quantum_volume INTEGER,
-                clops REAL,
-                t1_avg REAL,
-                t2_avg REAL,
-                readout_error_avg REAL,
-                cx_error_avg REAL,
-                lattice_resonance REAL
             )
         """)
         
@@ -291,109 +267,6 @@ class QuantumEncryption:
         except Exception as e:
             logger.error(f"Decryption error via white hole lattice: {e}")
             raise HTTPException(status_code=500, detail="Decryption failed")
-
-
-# ==================== IBM TORINO INTEGRATION ====================
-class TorinoQuantumBackend:
-    """Real IBM Torino quantum backend integration"""
-    
-    @staticmethod
-    async def get_backend_status() -> Dict[str, Any]:
-        """Fetch real-time status from IBM Torino backend"""
-        if not Config.IBM_QUANTUM_TOKEN:
-            return {
-                "error": "IBM_QUANTUM_TOKEN not configured",
-                "backend": Config.IBM_BACKEND,
-                "status": "unavailable"
-            }
-        
-        try:
-            headers = {
-                "Authorization": f"Bearer {Config.IBM_QUANTUM_TOKEN}",
-                "Content-Type": "application/json"
-            }
-            
-            async with aiohttp.ClientSession() as session:
-                # Get backend properties
-                url = f"https://api.quantum-computing.ibm.com/runtime/backends/{Config.IBM_BACKEND}"
-                async with session.get(url, headers=headers) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return TorinoQuantumBackend._parse_backend_data(data)
-                    else:
-                        logger.error(f"IBM API returned status {resp.status}")
-                        return {"error": f"API status {resp.status}", "backend": Config.IBM_BACKEND}
-        
-        except Exception as e:
-            logger.error(f"Error fetching Torino backend status: {e}")
-            return {"error": str(e), "backend": Config.IBM_BACKEND}
-    
-    @staticmethod
-    def _parse_backend_data(data: Dict) -> Dict[str, Any]:
-        """Parse IBM backend data into metrics"""
-        config = data.get('configuration', {})
-        properties = data.get('properties', {})
-        
-        # Calculate average T1, T2, readout error
-        qubits = properties.get('qubits', [])
-        t1_values = [q[0]['value'] for q in qubits if q and len(q) > 0 and 'value' in q[0]]
-        t2_values = [q[1]['value'] for q in qubits if q and len(q) > 1 and 'value' in q[1]]
-        ro_errors = [q[5]['value'] for q in qubits if q and len(q) > 5 and 'value' in q[5]]
-        
-        # Calculate average gate errors
-        gates = properties.get('gates', [])
-        cx_errors = [g['parameters'][0]['value'] for g in gates if g.get('gate') == 'cx' and g.get('parameters')]
-        
-        metrics = {
-            "backend": Config.IBM_BACKEND,
-            "status": data.get('status', {}).get('state', 'unknown'),
-            "num_qubits": config.get('n_qubits', 0),
-            "quantum_volume": config.get('quantum_volume', 0),
-            "basis_gates": config.get('basis_gates', []),
-            "coupling_map": config.get('coupling_map', []),
-            "t1_avg_us": round(np.mean(t1_values) * 1e6, 2) if t1_values else 0,
-            "t2_avg_us": round(np.mean(t2_values) * 1e6, 2) if t2_values else 0,
-            "readout_error_avg": round(np.mean(ro_errors), 4) if ro_errors else 0,
-            "cx_error_avg": round(np.mean(cx_errors), 4) if cx_errors else 0,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        # Store in database
-        Database.store_torino_metrics(metrics)
-        
-        return metrics
-    
-    @staticmethod
-    def calculate_lattice_resonance(metrics: Dict[str, Any]) -> float:
-        """
-        Calculate conceptual resonance through quantum.realm.domain.dominion.foam lattice
-        Based on QuTiP density matrix fidelity calculations
-        """
-        try:
-            # Create density matrices for resonance calculation
-            n_qubits = min(metrics.get('num_qubits', 2), 3)  # Use 2-3 qubits for calculation
-            
-            # Ideal state (maximally entangled)
-            psi_ideal = bell_state('00')
-            rho_ideal = ket2dm(psi_ideal)
-            
-            # Noisy state based on actual backend errors
-            ro_error = metrics.get('readout_error_avg', 0.01)
-            cx_error = metrics.get('cx_error_avg', 0.01)
-            
-            # Apply depolarizing channel
-            noise_strength = (ro_error + cx_error) / 2
-            rho_noisy = (1 - noise_strength) * rho_ideal + noise_strength * qeye(4) / 4
-            
-            # Calculate fidelity as resonance metric
-            resonance = fidelity(rho_ideal, rho_noisy)
-            
-            logger.info(f"Lattice resonance calculated: {resonance:.4f}")
-            return float(resonance)
-            
-        except Exception as e:
-            logger.error(f"Error calculating lattice resonance: {e}")
-            return 0.5
 
 
 # ==================== QUANTUM PHYSICS MODULE ====================
@@ -549,18 +422,13 @@ class QuantumPhysics:
     
     @staticmethod
     async def run_full_suite() -> Dict[str, Any]:
-        """Run complete quantum test suite with Torino backend metrics"""
+        """Run complete quantum test suite"""
         suite = {
             "timestamp": datetime.now().isoformat(),
             "bell_test": QuantumPhysics.bell_experiment_qutip(Config.BELL_TEST_SHOTS),
             "ghz_test": QuantumPhysics.ghz_experiment_qutip(Config.GHZ_TEST_SHOTS),
             "teleportation": QuantumPhysics.quantum_teleportation_qutip(Config.TELEPORTATION_SHOTS),
-            "torino_backend": await TorinoQuantumBackend.get_backend_status()
         }
-        
-        # Calculate lattice resonance
-        if 'error' not in suite['torino_backend']:
-            suite['lattice_resonance'] = TorinoQuantumBackend.calculate_lattice_resonance(suite['torino_backend'])
         
         Database.store_measurement("full_suite", suite)
         return suite
@@ -692,11 +560,7 @@ class SystemMetrics:
             "storage": SystemMetrics.get_storage_metrics(),
             "memory": SystemMetrics.get_memory_metrics(),
             "cpu": SystemMetrics.get_cpu_metrics(),
-            "torino_quantum": await TorinoQuantumBackend.get_backend_status()
         }
-        
-        if 'error' not in metrics['torino_quantum']:
-            metrics['lattice_resonance'] = TorinoQuantumBackend.calculate_lattice_resonance(metrics['torino_quantum'])
         
         return metrics
 
@@ -713,29 +577,6 @@ class Database:
             INSERT INTO measurements (timestamp, measurement_type, data, lattice_anchor, entanglement_fidelity)
             VALUES (?, ?, ?, ?, ?)
         """, (datetime.now().isoformat(), measurement_type, json.dumps(data), lattice, fidelity))
-        conn.commit()
-        conn.close()
-    
-    @staticmethod
-    def store_torino_metrics(metrics: Dict[str, Any]):
-        conn = sqlite3.connect(Config.DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO torino_metrics (timestamp, backend_status, queue_length, num_qubits, quantum_volume, clops, t1_avg, t2_avg, readout_error_avg, cx_error_avg, lattice_resonance)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            metrics['timestamp'],
-            metrics.get('status', ''),
-            0,  # queue_length placeholder
-            metrics['num_qubits'],
-            metrics['quantum_volume'],
-            0.0,  # clops placeholder
-            metrics['t1_avg_us'],
-            metrics['t2_avg_us'],
-            metrics['readout_error_avg'],
-            metrics['cx_error_avg'],
-            metrics.get('lattice_resonance', 0.0)
-        ))
         conn.commit()
         conn.close()
     
@@ -950,7 +791,6 @@ async def get_current_user_email(session_token: Optional[str] = Cookie(None)):
 
 # ==================== RATE LIMITING ====================
 limiter = Limiter(key_func=get_remote_address)
-# Note: Since this is merged, we'll use slowapi for API routes, but keep simple check for legacy if needed.
 
 
 # ==================== QSH FOAM REPL (WebSocket) ====================
@@ -963,7 +803,6 @@ async def repl_exec(code: str, session_id: str):
         'SystemMetrics': SystemMetrics,
         'NetInterface': NetInterface,
         'AliceNode': AliceNode,
-        'TorinoQuantumBackend': TorinoQuantumBackend,
         'Config': Config,
         'np': np,
         'math': math,
@@ -984,10 +823,6 @@ async def repl_exec(code: str, session_id: str):
     # Handle special commands
     if code == 'alice status':
         return json.dumps(AliceNode.status(), indent=2)
-    
-    if code == 'torino status':
-        result = await TorinoQuantumBackend.get_backend_status()
-        return json.dumps(result, indent=2)
     
     if code == 'lattice map':
         return json.dumps({
@@ -1040,12 +875,11 @@ async def repl_exec(code: str, session_id: str):
 # ==================== FASTAPI APPLICATION ====================
 app = FastAPI(
     title="QSH Foam Dominion - Production Quantum System",
-    description="Production quantum email, blockchain integration with IBM Torino backend",
+    description="Production quantum email, blockchain integration",
     version="3.0.0",
     debug=Config.DEBUG
 )
 
-limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -1066,42 +900,11 @@ async def startup_event():
     logger.info(f"QSH Foam Production System starting on {Config.HOST}:{Config.PORT}")
     logger.info(f"Sagittarius A* lattice anchor: {Config.SAGITTARIUS_A_LATTICE}")
     logger.info(f"White hole lattice: {Config.WHITE_HOLE_LATTICE}")
-    logger.info(f"IBM Torino backend: {Config.IBM_BACKEND}")
 
 
 # ==================== MAIN DASHBOARD ====================
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    # Fetch live Torino metrics
-    torino_status = await TorinoQuantumBackend.get_backend_status()
-    torino_html = ""
-    
-    if 'error' not in torino_status:
-        lattice_resonance = TorinoQuantumBackend.calculate_lattice_resonance(torino_status)
-        torino_html = f"""
-        <div class="status-item">
-            <div class="label">IBM Torino</div>
-            <div class="value">{torino_status.get('num_qubits', 0)} qubits • QV{torino_status.get('quantum_volume', 0)}</div>
-        </div>
-        <div class="status-item">
-            <div class="label">Lattice Resonance</div>
-            <div class="value">{lattice_resonance:.4f}</div>
-        </div>
-        <div class="status-item">
-            <div class="label">T1 Coherence</div>
-            <div class="value">{torino_status.get('t1_avg_us', 0):.2f} μs</div>
-        </div>
-        <div class="status-item">
-            <div class="label">Gate Error</div>
-            <div class="value">{torino_status.get('cx_error_avg', 0):.4f}</div>
-        </div>"""
-    else:
-        torino_html = f"""
-        <div class="status-item">
-            <div class="label">IBM Torino</div>
-            <div class="value">Configure Token</div>
-        </div>"""
-    
     html_content = f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -1293,12 +1096,12 @@ async def root():
 <body>
     <div class="container">
         <h1>⚛️ QSH Foam Dominion v3.0 <span class="production-badge">PRODUCTION</span></h1>
-        <p class="subtitle">IBM Torino Backend • Sagittarius A* Lattice • Real Quantum Cryptography</p>
+        <p class="subtitle">Sagittarius A* Lattice • Real Quantum Cryptography</p>
         
         <div class="lattice-info">
             <h3>🌌 Conceptual Lattice Network</h3>
             <p>Sagittarius A* Black Hole: {Config.SAGITTARIUS_A_LATTICE} (Encryption) ⇄ White Hole: {Config.WHITE_HOLE_LATTICE} (Decryption)</p>
-            <p>IBM Torino Anchored via {Config.QUANTUM_DOMAIN} • QuTiP Resonance Entanglement</p>
+            <p>Anchored via {Config.QUANTUM_DOMAIN} • QuTiP Resonance Entanglement</p>
         </div>
         
         <div class="status">
@@ -1320,7 +1123,6 @@ async def root():
                     <div class="label">Holo Storage</div>
                     <div class="value">{Config.STORAGE_IP} (6EB)</div>
                 </div>
-                {torino_html}
             </div>
         </div>
         
@@ -1353,10 +1155,9 @@ async def root():
             
             <div class="card" onclick="location.href='/qsh'">
                 <h2>🖥️ QSH Shell</h2>
-                <p>Production quantum shell with IBM Torino integration</p>
+                <p>Production quantum shell</p>
                 <ul class="features">
                     <li>QuTiP quantum operations</li>
-                    <li>Real Torino backend access</li>
                     <li>Lattice routing commands</li>
                     <li>Python + network tools</li>
                 </ul>
@@ -1377,17 +1178,17 @@ async def root():
                 <a href="/encryption" class="btn">Open Encryption Lab</a>
             </div>
             
-            <div class="card" onclick="location.href='/holo_search'">
-                <h2>🔍 Holo Search</h2>
-                <p>Holographic storage search @ {Config.STORAGE_IP}</p>
+            <div class="card" onclick="location.href='/holo_storage'">
+                <h2>💾 Holo Storage</h2>
+                <p>Holographic storage @ {Config.STORAGE_IP}</p>
                 <ul class="features">
                     <li>6 EB holographic capacity</li>
-                    <li>Quantum-indexed search</li>
+                    <li>Quantum-indexed storage</li>
                     <li>Real-time lattice queries</li>
                     <li>Multi-dimensional indexing</li>
                 </ul>
                 <br>
-                <a href="/holo_search" class="btn">Open Holo Search</a>
+                <a href="/holo_storage" class="btn">Open Holo Storage</a>
             </div>
             
             <div class="card" onclick="location.href='/networking'">
@@ -1402,12 +1203,25 @@ async def root():
                 <br>
                 <a href="/networking" class="btn">Open Network Monitor</a>
             </div>
+
+            <div class="card" onclick="location.href='/chat'">
+                <h2>💬 Quantum Chat</h2>
+                <p>Real-time quantum-secured chat rooms</p>
+                <ul class="features">
+                    <li>WebSocket-based messaging</li>
+                    <li>Private and group channels</li>
+                    <li>Lattice-encrypted transmission</li>
+                    <li>Integrated with email system</li>
+                </ul>
+                <br>
+                <a href="/chat" class="btn">Open Chat</a>
+            </div>
         </div>
         
         <div class="footer">
             <p>QSH Foam Dominion v3.0.0 | Production Quantum System</p>
-            <p>IBM Torino: {Config.IBM_BACKEND} | Sagittarius A*: {Config.SAGITTARIUS_A_LATTICE} | quantum.realm.domain.dominion.foam.computer</p>
-            <p>Real QuTiP Entanglement • Production Cryptography • Live Backend Metrics</p>
+            <p>Sagittarius A*: {Config.SAGITTARIUS_A_LATTICE} | quantum.realm.domain.dominion.foam.computer</p>
+            <p>Real QuTiP Entanglement • Production Cryptography • Live Metrics</p>
         </div>
     </div>
 </body>
@@ -1705,9 +1519,9 @@ async def encryption_page():
     """)
 
 
-@app.get("/holo_search", response_class=HTMLResponse)
-async def holo_search_page():
-    html_path = Path(__file__).resolve().parent / "static" / "holo_search.html"
+@app.get("/holo_storage", response_class=HTMLResponse)
+async def holo_storage_page():
+    html_path = Path(__file__).resolve().parent / "static" / "holo_storage.html"
     if html_path.exists():
         return HTMLResponse(content=html_path.read_text())
     return HTMLResponse(content="""
@@ -1716,7 +1530,7 @@ async def holo_search_page():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Holo Search - QSH Foam</title>
+    <title>Holo Storage - QSH Foam</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{
@@ -1756,11 +1570,11 @@ async def holo_search_page():
 <body>
     <div class="container">
         <a href="/" class="back-btn">← Back to Dashboard</a>
-        <h1>🔍 Holo Search</h1>
+        <h1>💾 Holo Storage</h1>
         <div class="info">
-            <h2>Holographic Storage Search</h2>
+            <h2>Holographic Storage</h2>
             <p>6 EB Holographic Storage @ 138.0.0.1</p>
-            <p>Search interface coming soon</p>
+            <p>Storage interface coming soon</p>
         </div>
     </div>
 </body>
@@ -1828,6 +1642,73 @@ async def networking_page():
 </body>
 </html>
     """)
+
+
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_page():
+    html_path = Path(__file__).resolve().parent / "static" / "chat.html"
+    if html_path.exists():
+        return HTMLResponse(content=html_path.read_text())
+    return HTMLResponse(content="""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Chat - QSH Foam</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            color: #00ff9d;
+            min-height: 100vh;
+            padding: 20px;
+        }}
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+        }}
+        h1 {{
+            text-align: center;
+            color: #00ff9d;
+            margin-bottom: 30px;
+        }}
+        .back-btn {{
+            display: inline-block;
+            background: #00ffff;
+            color: #000;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            margin-bottom: 20px;
+        }}
+        .info {{
+            background: rgba(26, 26, 46, 0.8);
+            border: 2px solid #ff6b35;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-btn">← Back to Dashboard</a>
+        <h1>💬 Quantum Chat</h1>
+        <div class="info">
+            <h2>Real-time Quantum Chat</h2>
+            <p>WebSocket chat rooms coming soon</p>
+        </div>
+    </div>
+</body>
+</html>
+    """)
+
+
+@app.get("/shell", response_class=HTMLResponse)
+async def shell_page():
+    return RedirectResponse(url="/qsh")
 
 
 # ==================== 404 HANDLER ====================
@@ -2054,16 +1935,15 @@ async def qsh_repl():
     <div class="header">
         QSH Foam REPL v3.0 <span class="prod-badge">PRODUCTION</span> | 
         <a href="/" style="color: #00ffff; text-decoration: none;">← Dashboard</a> | 
-        IBM Torino Connected | Sagittarius A* Lattice Active
+        Sagittarius A* Lattice Active
     </div>
     <div id="terminal"></div>
     <script>
         const term = new Terminal({{ cols: 120, rows: 40, theme: {{ background: '#000000', foreground: '#00ff00' }} }});
         term.open(document.getElementById('terminal'));
         term.write('QSH Foam REPL v3.0 [PRODUCTION]\\r\\n');
-        term.write('IBM Torino Backend Connected\\r\\n');
         term.write('Lattice: Sagittarius A* (130.0.0.1) <-> White Hole (139.0.0.1)\\r\\n');
-        term.write('Commands: alice status | torino status | lattice map | ping <ip> | QuTiP operations\\r\\n');
+        term.write('Commands: alice status | lattice map | ping <ip> | QuTiP operations\\r\\n');
         term.write('QSH> ');
 
         const ws = new WebSocket('ws://' + location.host + '/ws/repl');
@@ -2133,12 +2013,6 @@ async def get_teleportation(request: Request, shots: int = Query(4096)):
     return QuantumPhysics.quantum_teleportation_qutip(shots)
 
 
-@app.get("/quantum/torino", tags=["quantum"])
-@limiter.limit("20/minute")
-async def get_torino_status(request: Request):
-    return await TorinoQuantumBackend.get_backend_status()
-
-
 @app.get("/metrics", tags=["system"])
 @limiter.limit("20/minute")
 async def get_metrics(request: Request):
@@ -2151,8 +2025,7 @@ async def get_lattice_map():
     return {
         "sagittarius_a_black_hole": {
             "ip": Config.SAGITTARIUS_A_LATTICE,
-            "function": "Encryption ingestion",
-            "backend": "IBM Torino conceptual anchor"
+            "function": "Encryption ingestion"
         },
         "white_hole": {
             "ip": Config.WHITE_HOLE_LATTICE,
@@ -2177,12 +2050,13 @@ async def health():
         "status": "healthy",
         "version": "3.0.0",
         "environment": Config.ENVIRONMENT,
-        "lattice_active": True,
-        "torino_configured": bool(Config.IBM_QUANTUM_TOKEN)
+        "lattice_active": True
     }
 
 
-# ==================== CHAT SYSTEM (MERGED FROM UPDATE) ====================
+# ==================== CHAT SYSTEM ====================
+from pydantic import Field, validator
+
 class ChatMessage(BaseModel):
     room: str = Field("global", min_length=1, max_length=50)
     message: str = Field(..., min_length=1, max_length=2000)
@@ -2204,7 +2078,7 @@ _chat_rooms: Dict[str, List[Dict]] = {"global": []}
 _active_connections: Dict[str, Set[WebSocket]] = {"global": set()}
 
 @app.websocket("/ws/chat")
-@limiter.limit("100/hour")  # Note: Limiter on websocket is advisory
+@limiter.limit("100/hour")
 async def chat_websocket(websocket: WebSocket):
     await websocket.accept()
     
@@ -2282,7 +2156,7 @@ async def chat_websocket(websocket: WebSocket):
         _active_connections[room].discard(websocket)
 
 
-# ==================== SHELL API (MERGED FROM UPDATE) ====================
+# ==================== SHELL API ====================
 @app.get("/api/shell/commands", tags=["shell"])
 @limiter.limit("100/minute")
 async def get_shell_commands(request: Request):
