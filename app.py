@@ -10,7 +10,7 @@ from datetime import datetime
 import subprocess
 import threading
 
-# Production Logging
+# roduction Logging
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
