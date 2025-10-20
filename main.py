@@ -726,7 +726,35 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         raise HTTPException(status_code=401, detail="Invalid or expired session")
     return email
 
+
 # ===== API ROUTES =====
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def root_html(request: Request):
+    """Serve HTML interface for browser requests"""
+    # Check if request wants HTML
+    accept_header = request.headers.get("accept", "")
+    if "text/html" in accept_header:
+        html_file = Path("static/index.html")
+        if html_file.exists():
+            return FileResponse(html_file)
+    
+    # Otherwise return JSON
+    return {
+        "system": "Quantum Foam Production System",
+        "version": "1.0.0",
+        "environment": Config.ENVIRONMENT,
+        "quantum_domain": Config.QUANTUM_DOMAIN,
+        "email_domain": Config.QUANTUM_EMAIL_DOMAIN,
+        "lattice_anchors": {
+            "sagittarius_a": Config.SAGITTARIUS_A_LATTICE,
+            "white_hole": Config.WHITE_HOLE_LATTICE,
+            "alice_node": Config.ALICE_NODE_IP,
+            "storage": Config.STORAGE_IP
+        },
+        "ibm_backend": Config.IBM_BACKEND,
+        "timestamp": datetime.now().isoformat()
+    }
 
 # Root and Health Routes
 @app.api_route("/", methods=["GET", "HEAD"])
