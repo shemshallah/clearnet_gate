@@ -1,4 +1,3 @@
-import slowapi
 import os
 import logging
 import json
@@ -14,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 import uvicorn
 import secrets
 from collections import defaultdict
@@ -317,6 +316,10 @@ class QuantumPhysics:
         S = abs(correlations['a_b'] + correlations['a_b_prime'] + 
                 correlations['a_prime_b'] - correlations['a_prime_b_prime'])
         
+        # QuTiP fidelity is sqrt(F), square to get F
+        fid_sqrt = fidelity(rho, ket2dm(bell_state('00')))
+        fidelity_val = fid_sqrt ** 2
+        
         result = {
             "S": round(S, 4),
             "violates_inequality": S > 2.0,
@@ -324,12 +327,12 @@ class QuantumPhysics:
             "quantum_bound": 2.828,
             "shots": shots,
             "correlations": {k: round(v, 4) for k, v in correlations.items()},
-            "fidelity": float(fidelity(rho, ket2dm(bell_state('00')))),
+            "fidelity": round(fidelity_val, 6),
             "lattice_anchor": Config.SAGITTARIUS_A_LATTICE,
             "timestamp": datetime.now().isoformat()
         }
         
-        Database.store_measurement("bell_qutip", result, lattice=Config.SAGITTARIUS_A_LATTICE, fidelity=result["fidelity"])
+        Database.store_measurement("bell_qutip", result, lattice=Config.SAGITTARIUS_A_LATTICE, fidelity=fidelity_val)
         return result
     
     @staticmethod
@@ -364,6 +367,10 @@ class QuantumPhysics:
         # Mermin operator M = XXX - XYY - YXY - YYX
         M_val = expectations['XXX'] - expectations['XYY'] - expectations['YXY'] - expectations['YYX']
         
+        # QuTiP fidelity is sqrt(F), square to get F
+        fid_sqrt = fidelity(rho, ket2dm(psi_ghz))
+        fidelity_val = fid_sqrt ** 2
+        
         result = {
             "M": round(M_val, 4),
             "violates_inequality": abs(M_val) > 2.0,
@@ -371,12 +378,12 @@ class QuantumPhysics:
             "quantum_value": 4.0,
             "shots": shots,
             "expectation_values": {k: round(v, 4) for k, v in expectations.items()},
-            "fidelity": float(fidelity(rho, psi_ghz)),
+            "fidelity": round(fidelity_val, 6),
             "lattice_anchor": Config.SAGITTARIUS_A_LATTICE,
             "timestamp": datetime.now().isoformat()
         }
         
-        Database.store_measurement("ghz_qutip", result, lattice=Config.SAGITTARIUS_A_LATTICE, fidelity=result["fidelity"])
+        Database.store_measurement("ghz_qutip", result, lattice=Config.SAGITTARIUS_A_LATTICE, fidelity=fidelity_val)
         return result
     
     @staticmethod
@@ -384,25 +391,59 @@ class QuantumPhysics:
         """Real quantum teleportation using QuTiP"""
         logger.info(f"Running teleportation protocol with {shots} iterations via QuTiP")
         
+        # Bell projectors for Alice's measurement on qubits 0 and 1
+        phi_plus = (tensor(basis(2,0), basis(2,0)) + tensor(basis(2,1), basis(2,1))).unit()
+        phi_minus = (tensor(basis(2,0), basis(2,0)) - tensor(basis(2,1), basis(2,1))).unit()
+        psi_plus = (tensor(basis(2,0), basis(2,1)) + tensor(basis(2,1), basis(2,0))).unit()
+        psi_minus = (tensor(basis(2,0), basis(2,1)) - tensor(basis(2,1), basis(2,0))).unit()
+        
+        bell_projectors = [phi_plus, phi_minus, psi_plus, psi_minus]
+        # Corrections for Bob: 00: I, 01: Z, 10: X, 11: XZ
+        corrections = [qeye(2), sigmaz(), sigmax(), sigmax() * sigmaz()]
+        
         fidelities = []
         
         for _ in range(shots):
-            # Random state to teleport
+            # Random state to teleport on qubit 0
             theta = np.random.uniform(0, np.pi)
             phi = np.random.uniform(0, 2*np.pi)
             psi = (np.cos(theta/2) * basis(2,0) + 
                    np.exp(1j*phi) * np.sin(theta/2) * basis(2,1)).unit()
             
-            # Bell pair shared between Alice and Bob
+            # Bell pair on qubits 1 (Alice) and 2 (Bob)
             bell = bell_state('00')
             
-            # Total system: |ψ⟩_A ⊗ |Φ+⟩_AB
-            full_state = tensor(psi, bell)
+            # Full state: |ψ⟩_0 ⊗ |Φ+⟩_{12}
+            full_ket = tensor(psi, bell)
             
-            # Teleportation fidelity (ideal)
-            rho_bob = ptrace(ket2dm(full_state), [2])
-            f = fidelity(ket2dm(psi), rho_bob)
-            fidelities.append(float(f))
+            # Simulate Bell measurement: random outcome (equal prob in ideal case)
+            proj_idx = np.random.randint(0, 4)
+            projector = ket2dm(bell_projectors[proj_idx])
+            
+            # Full projector: projector on 0,1 ⊗ I on 2
+            full_projector = tensor(projector, qeye(2))
+            
+            # Project the state
+            projected = full_projector * full_ket
+            norm = projected.norm()
+            if norm > 1e-10:  # Avoid zero norm due to numerical issues
+                projected = projected.unit()
+                
+                # Bob's correction on qubit 2: I ⊗ I ⊗ correction
+                correction = tensor(qeye(2), qeye(2), corrections[proj_idx])
+                
+                # Apply correction
+                corrected = correction * projected
+                
+                # Trace out Alice's qubits (0 and 1), get Bob's state
+                rho_bob = ptrace(ket2dm(corrected), [2])
+                
+                # Fidelity (QuTiP returns sqrt(F), square to get F)
+                f_sqrt = fidelity(ket2dm(psi), rho_bob)
+                f = f_sqrt ** 2
+                fidelities.append(f)
+            else:
+                fidelities.append(0.0)
         
         avg_fidelity = np.mean(fidelities)
         
@@ -787,7 +828,7 @@ async def get_current_user_email(session_token: Optional[str] = Cookie(None)):
     if not user:
         return None
     
-    return user
+    return user['email']
 
 
 # ==================== RATE LIMITING ====================
@@ -881,6 +922,8 @@ app = FastAPI(
     debug=Config.DEBUG
 )
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -905,7 +948,7 @@ async def startup_event():
 
 # ==================== MAIN DASHBOARD ====================
 @app.get("/", response_class=HTMLResponse)
-async def root():
+async def root(request: Request):
     html_content = f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -1233,7 +1276,7 @@ async def root():
 
 # ==================== HTML PAGE ROUTES ====================
 @app.get("/email", response_class=HTMLResponse)
-async def email_page():
+async def email_page(request: Request):
     html_path = Path(__file__).resolve().parent / "static" / "email.html"
     if html_path.exists():
         return HTMLResponse(content=html_path.read_text())
@@ -1245,36 +1288,36 @@ async def email_page():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quantum Foam Email</title>
     <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
             font-family: 'Segoe UI', sans-serif;
             background: #0a0a0a;
             color: #e0e0e0;
             height: 100vh;
             overflow: hidden;
-        }}
+        }
         
-        .header {{
+        .header {
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             padding: 15px 30px;
             border-bottom: 2px solid #00ff9d;
             display: flex;
             justify-content: space-between;
             align-items: center;
-        }}
+        }
         
-        .logo {{
+        .logo {
             font-size: 1.5em;
             color: #00ff9d;
             font-weight: bold;
-        }}
+        }
         
-        .nav-buttons {{
+        .nav-buttons {
             display: flex;
             gap: 10px;
-        }}
+        }
         
-        .btn {{
+        .btn {
             padding: 8px 16px;
             border: none;
             border-radius: 5px;
@@ -1282,78 +1325,78 @@ async def email_page():
             font-weight: 500;
             transition: all 0.3s;
             text-decoration: none;
-        }}
+        }
         
-        .btn-primary {{
+        .btn-primary {
             background: #00ff9d;
             color: #000;
-        }}
+        }
         
-        .btn-secondary {{
+        .btn-secondary {
             background: transparent;
             border: 1px solid #00ffff;
             color: #00ffff;
-        }}
+        }
         
-        .btn:hover {{
+        .btn:hover {
             opacity: 0.8;
             transform: translateY(-2px);
-        }}
+        }
         
-        .container {{
+        .container {
             display: flex;
             height: calc(100vh - 65px);
-        }}
+        }
         
-        .sidebar {{
+        .sidebar {
             width: 200px;
             background: #1a1a2e;
             border-right: 1px solid #333;
             padding: 20px 0;
-        }}
+        }
         
-        .nav-item {{
+        .nav-item {
             padding: 12px 25px;
             cursor: pointer;
             transition: all 0.3s;
-        }}
+        }
         
-        .nav-item:hover {{
+        .nav-item:hover {
             background: rgba(0, 255, 157, 0.1);
-        }}
+        }
         
-        .nav-item.active {{
+        .nav-item.active {
             background: rgba(0, 255, 157, 0.2);
             color: #00ff9d;
             border-left: 3px solid #00ff9d;
-        }}
+        }
         
-        .main-content {{
+        .main-content {
             flex: 1;
             padding: 30px;
             overflow-y: auto;
             text-align: center;
-        }}
+        }
         
-        .welcome {{
+        .welcome {
             max-width: 600px;
             margin: 100px auto;
             padding: 40px;
             background: rgba(26, 26, 46, 0.9);
             border: 2px solid #00ff9d;
             border-radius: 15px;
-        }}
+        }
         
-        .welcome h1 {{
+        .welcome h1 {
             color: #00ff9d;
             margin-bottom: 20px;
-        }}
+        }
         
-        .info {{
+        .info {
             color: #00ffff;
             margin: 15px 0;
             line-height: 1.8;
-        }}
+        }
     </style>
 </head>
 <body>
@@ -1397,7 +1440,7 @@ async def email_page():
 
 
 @app.get("/blockchain", response_class=HTMLResponse)
-async def blockchain_page():
+async def blockchain_page(request: Request):
     html_path = Path(__file__).resolve().parent / "static" / "blockchain.html"
     if html_path.exists():
         return HTMLResponse(content=html_path.read_text())
@@ -1409,24 +1452,24 @@ async def blockchain_page():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bitcoin Client - QSH Foam</title>
     <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
             font-family: 'Courier New', monospace;
             background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
             color: #00ff9d;
             min-height: 100vh;
             padding: 20px;
-        }}
-        .container {{
+        }
+        .container {
             max-width: 1200px;
             margin: 0 auto;
-        }}
-        h1 {{
+        }
+        h1 {
             text-align: center;
             color: #00ff9d;
             margin-bottom: 30px;
-        }}
-        .back-btn {{
+        }
+        .back-btn {
             display: inline-block;
             background: #00ffff;
             color: #000;
@@ -1434,14 +1477,14 @@ async def blockchain_page():
             border-radius: 5px;
             text-decoration: none;
             margin-bottom: 20px;
-        }}
-        .info {{
+        }
+        .info {
             background: rgba(26, 26, 46, 0.8);
             border: 2px solid #ff6b35;
             border-radius: 10px;
             padding: 30px;
             text-align: center;
-        }}
+        }
     </style>
 </head>
 <body>
@@ -1459,7 +1502,7 @@ async def blockchain_page():
 
 
 @app.get("/encryption", response_class=HTMLResponse)
-async def encryption_page():
+async def encryption_page(request: Request):
     html_path = Path(__file__).resolve().parent / "static" / "encryption.html"
     if html_path.exists():
         return HTMLResponse(content=html_path.read_text())
@@ -1471,24 +1514,24 @@ async def encryption_page():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Encryption Lab - QSH Foam</title>
     <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
             font-family: 'Courier New', monospace;
             background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
             color: #00ff9d;
             min-height: 100vh;
             padding: 20px;
-        }}
-        .container {{
+        }
+        .container {
             max-width: 1200px;
             margin: 0 auto;
-        }}
-        h1 {{
+        }
+        h1 {
             text-align: center;
             color: #00ff9d;
             margin-bottom: 30px;
-        }}
-        .back-btn {{
+        }
+        .back-btn {
             display: inline-block;
             background: #00ffff;
             color: #000;
@@ -1496,14 +1539,14 @@ async def encryption_page():
             border-radius: 5px;
             text-decoration: none;
             margin-bottom: 20px;
-        }}
-        .info {{
+        }
+        .info {
             background: rgba(26, 26, 46, 0.8);
             border: 2px solid #ff6b35;
             border-radius: 10px;
             padding: 30px;
             text-align: center;
-        }}
+        }
     </style>
 </head>
 <body>
@@ -1521,7 +1564,7 @@ async def encryption_page():
 
 
 @app.get("/holo_storage", response_class=HTMLResponse)
-async def holo_storage_page():
+async def holo_storage_page(request: Request):
     html_path = Path(__file__).resolve().parent / "static" / "holo_storage.html"
     if html_path.exists():
         return HTMLResponse(content=html_path.read_text())
@@ -1533,24 +1576,24 @@ async def holo_storage_page():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Holo Storage - QSH Foam</title>
     <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
             font-family: 'Courier New', monospace;
             background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
             color: #00ff9d;
             min-height: 100vh;
             padding: 20px;
-        }}
-        .container {{
+        }
+        .container {
             max-width: 1200px;
             margin: 0 auto;
-        }}
-        h1 {{
+        }
+        h1 {
             text-align: center;
             color: #00ff9d;
             margin-bottom: 30px;
-        }}
-        .back-btn {{
+        }
+        .back-btn {
             display: inline-block;
             background: #00ffff;
             color: #000;
@@ -1558,14 +1601,14 @@ async def holo_storage_page():
             border-radius: 5px;
             text-decoration: none;
             margin-bottom: 20px;
-        }}
-        .info {{
+        }
+        .info {
             background: rgba(26, 26, 46, 0.8);
             border: 2px solid #ff6b35;
             border-radius: 10px;
             padding: 30px;
             text-align: center;
-        }}
+        }
     </style>
 </head>
 <body>
@@ -1584,11 +1627,11 @@ async def holo_storage_page():
 
 
 @app.get("/networking", response_class=HTMLResponse)
-async def networking_page():
+async def networking_page(request: Request):
     html_path = Path(__file__).resolve().parent / "static" / "networking.html"
     if html_path.exists():
         return HTMLResponse(content=html_path.read_text())
-    return HTMLResponse(content="""
+    return HTMLResponse(content=f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1636,8 +1679,9 @@ async def networking_page():
         <a href="/" class="back-btn">← Back to Dashboard</a>
         <h1>🌐 Network Monitor</h1>
         <div class="info">
-            <h2>*.computer.networking Domain Routing</h2>
-            <p>Network monitoring interface coming soon</p>
+            <h2>Quantum Network Diagnostics</h2>
+            <p>Real-time lattice node monitoring and DNS resolution</p>
+            <p>Alice Node: {Config.ALICE_NODE_IP} | Domain: {Config.QUANTUM_DOMAIN}</p>
         </div>
     </div>
 </body>
@@ -1646,7 +1690,7 @@ async def networking_page():
 
 
 @app.get("/chat", response_class=HTMLResponse)
-async def chat_page():
+async def chat_page(request: Request):
     html_path = Path(__file__).resolve().parent / "static" / "chat.html"
     if html_path.exists():
         return HTMLResponse(content=html_path.read_text())
@@ -1658,24 +1702,24 @@ async def chat_page():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quantum Chat - QSH Foam</title>
     <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
             font-family: 'Courier New', monospace;
             background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
             color: #00ff9d;
             min-height: 100vh;
             padding: 20px;
-        }}
-        .container {{
+        }
+        .container {
             max-width: 1200px;
             margin: 0 auto;
-        }}
-        h1 {{
+        }
+        h1 {
             text-align: center;
             color: #00ff9d;
             margin-bottom: 30px;
-        }}
-        .back-btn {{
+        }
+        .back-btn {
             display: inline-block;
             background: #00ffff;
             color: #000;
@@ -1683,14 +1727,14 @@ async def chat_page():
             border-radius: 5px;
             text-decoration: none;
             margin-bottom: 20px;
-        }}
-        .info {{
+        }
+        .info {
             background: rgba(26, 26, 46, 0.8);
             border: 2px solid #ff6b35;
             border-radius: 10px;
             padding: 30px;
             text-align: center;
-        }}
+        }
     </style>
 </head>
 <body>
@@ -1698,8 +1742,8 @@ async def chat_page():
         <a href="/" class="back-btn">← Back to Dashboard</a>
         <h1>💬 Quantum Chat</h1>
         <div class="info">
-            <h2>Real-time Quantum Chat</h2>
-            <p>WebSocket chat rooms coming soon</p>
+            <h2>Real-time Quantum-Secured Chat</h2>
+            <p>Lattice-encrypted WebSocket chat rooms coming soon</p>
         </div>
     </div>
 </body>
@@ -1707,487 +1751,230 @@ async def chat_page():
     """)
 
 
-@app.get("/shell", response_class=HTMLResponse)
-async def shell_page():
-    return RedirectResponse(url="/qsh")
-
-
-# ==================== 404 HANDLER ====================
-@app.exception_handler(status.HTTP_404_NOT_FOUND)
-async def not_found_handler(request: Request, exc: HTTPException):
-    html_content = f"""
+@app.get("/qsh", response_class=HTMLResponse)
+async def qsh_page(request: Request):
+    return HTMLResponse(content="""
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>404 - Not Found | QSH Foam Dominion</title>
+    <title>QSH Foam REPL - Production Shell</title>
     <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
-            font-family: 'Courier New', monospace;
-            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
-            color: #0f0;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+        body { 
+            background: #000; 
+            color: #0f0; 
+            font-family: 'Courier New', monospace; 
+            margin: 0; 
             padding: 20px;
-        }}
-        .container {{
-            text-align: center;
-            max-width: 600px;
-        }}
-        h1 {{
-            color: #ff6b35;
-            font-size: 4em;
-            margin-bottom: 10px;
-            text-shadow: 0 0 20px rgba(255, 107, 53, 0.8);
-        }}
-        p {{
-            color: #00ffff;
-            font-size: 1.2em;
-            margin-bottom: 20px;
-        }}
-        a {{
-            display: inline-block;
-            background: #00ff9d;
-            color: #000;
-            padding: 12px 24px;
-            border-radius: 5px;
-            text-decoration: none;
-            font-weight: bold;
-            transition: all 0.3s;
-        }}
-        a:hover {{
-            background: #00ffff;
-            box-shadow: 0 5px 15px rgba(0, 255, 157, 0.5);
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>404</h1>
-        <p>Quantum Entanglement Lost - The requested lattice route does not exist in the foam.</p>
-        <p>Lattice Anchor: {Config.SAGITTARIUS_A_LATTICE}</p>
-        <a href="/">Return to QSH Foam Dominion</a>
-    </div>
-</body>
-</html>
-    """
-    return HTMLResponse(content=html_content, status_code=404)
-
-
-# ==================== API ROUTES ====================
-@app.post("/api/register", tags=["auth"])
-@limiter.limit("5/hour")
-async def register(user: UserRegister):
-    result = Database.create_user(user.username, user.password)
-    if "error" in result:
-        raise HTTPException(status_code=400, detail=result["error"])
-    return result
-
-
-@app.post("/api/login", tags=["auth"])
-@limiter.limit("10/minute")
-async def login(user: UserLogin):
-    auth_user = Database.authenticate_user(user.username, user.password)
-    
-    if not auth_user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    token = Database.create_session(auth_user['email'])
-    
-    response = JSONResponse(content={"message": "Login successful", "user": auth_user})
-    response.set_cookie(
-        key="session_token",
-        value=token,
-        httponly=True,
-        max_age=7*24*60*60,
-        samesite="lax"
-    )
-    
-    return response
-
-
-@app.post("/api/logout", tags=["auth"])
-async def logout():
-    response = JSONResponse(content={"message": "Logged out"})
-    response.delete_cookie("session_token")
-    return response
-
-
-@app.get("/api/emails/inbox", tags=["email"])
-@limiter.limit("30/minute")
-async def get_inbox(user: dict = Depends(get_current_user_email)):
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    return Database.get_inbox(user['email'])
-
-
-@app.get("/api/emails/sent", tags=["email"])
-@limiter.limit("30/minute")
-async def get_sent(user: dict = Depends(get_current_user_email)):
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    return Database.get_sent(user['email'])
-
-
-@app.post("/api/emails/send", tags=["email"])
-@limiter.limit("20/minute")
-async def send_email(email: EmailCreate, user: dict = Depends(get_current_user_email)):
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    return Database.send_email(user['email'], email.to, email.subject, email.body)
-
-
-@app.post("/api/emails/{email_id}/read", tags=["email"])
-@limiter.limit("50/minute")
-async def mark_read(email_id: int, user: dict = Depends(get_current_user_email)):
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    Database.mark_as_read(email_id, user['email'])
-    return {"message": "Marked as read"}
-
-
-@app.post("/api/emails/{email_id}/star", tags=["email"])
-@limiter.limit("50/minute")
-async def toggle_star_email(email_id: int, user: dict = Depends(get_current_user_email)):
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    Database.toggle_star(email_id, user['email'])
-    return {"message": "Star toggled"}
-
-
-@app.post("/api/emails/delete", tags=["email"])
-@limiter.limit("20/minute")
-async def delete_emails_route(email_ids: Dict[str, List[int]], user: dict = Depends(get_current_user_email)):
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    Database.delete_emails(email_ids['email_ids'], user['email'])
-    return {"message": "Emails deleted"}
-
-
-# ==================== ENCRYPTION API ====================
-@app.post("/api/encrypt", tags=["encryption"])
-@limiter.limit("50/minute")
-async def encrypt_text(data: Dict[str, str]):
-    plaintext = data.get('plaintext', '')
-    encrypted = QuantumEncryption.encrypt_via_sagittarius_lattice(plaintext)
-    return {
-        "encrypted": encrypted.hex(),
-        "lattice_route": Config.SAGITTARIUS_A_LATTICE,
-        "algorithm": "Fernet"
-    }
-
-
-@app.post("/api/decrypt", tags=["encryption"])
-@limiter.limit("50/minute")
-async def decrypt_text(data: Dict[str, str]):
-    try:
-        ciphertext = bytes.fromhex(data.get('ciphertext', ''))
-        decrypted = QuantumEncryption.decrypt_via_whitehole_lattice(ciphertext)
-        return {
-            "decrypted": decrypted,
-            "lattice_route": Config.WHITE_HOLE_LATTICE
         }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Decryption failed: {str(e)}")
-
-
-# ==================== QSH REPL ROUTES ====================
-@app.get("/qsh", tags=["repl"])
-async def qsh_repl():
-    return HTMLResponse(content="""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>QSH Foam REPL v3.0</title>
-    <script src="https://cdn.jsdelivr.net/npm/xterm@5.5.0/lib/xterm.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.5.0/css/xterm.css" />
-    <style> 
-        body {{ margin: 0; padding: 0; background: #000; }} 
-        #terminal {{ width: 100vw; height: 100vh; }}
-        .header {{
-            background: #1a1a2e;
-            padding: 10px 20px;
-            color: #00ff9d;
-            font-family: monospace;
-            border-bottom: 2px solid #00ff9d;
-        }}
-        .prod-badge {{
-            background: #ff6b35;
-            color: #000;
-            padding: 2px 8px;
-            border-radius: 3px;
-            font-size: 0.8em;
-            margin-left: 10px;
-        }}
+        h1 { color: #00ff9d; text-align: center; margin-bottom: 20px; }
+        #output { 
+            background: #001100; 
+            border: 1px solid #0f0; 
+            height: 400px; 
+            overflow-y: scroll; 
+            padding: 10px; 
+            margin-bottom: 10px;
+            white-space: pre-wrap;
+        }
+        #input-container { display: flex; }
+        #input { 
+            flex: 1; 
+            background: #000; 
+            color: #0f0; 
+            border: 1px solid #0f0; 
+            padding: 5px; 
+            font-family: 'Courier New', monospace;
+        }
+        button { 
+            background: #00ff9d; 
+            color: #000; 
+            border: none; 
+            padding: 5px 10px; 
+            cursor: pointer; 
+            font-weight: bold;
+        }
+        button:hover { background: #00ffff; }
     </style>
 </head>
 <body>
-    <div class="header">
-        QSH Foam REPL v3.0 <span class="prod-badge">PRODUCTION</span> | 
-        <a href="/" style="color: #00ffff; text-decoration: none;">← Dashboard</a> | 
-        Sagittarius A* Lattice Active
+    <h1>🖥️ QSH Foam Dominion REPL</h1>
+    <div id="output">QSH Foam REPL initialized. Type commands like 'alice status' or Python code.<br>Available: QuTiP, numpy, network tools.<br>>></div>
+    <div id="input-container">
+        <input id="input" type="text" autofocus placeholder="Enter code or command...">
+        <button onclick="execCode()">Execute</button>
     </div>
-    <div id="terminal"></div>
     <script>
-        const term = new Terminal({{ cols: 120, rows: 40, theme: {{ background: '#000000', foreground: '#00ff00' }} }});
-        term.open(document.getElementById('terminal'));
-        term.write('QSH Foam REPL v3.0 [PRODUCTION]\\r\\n');
-        term.write('Lattice: Sagittarius A* (130.0.0.1) <-> White Hole (139.0.0.1)\\r\\n');
-        term.write('Commands: alice status | lattice map | ping <ip> | QuTiP operations\\r\\n');
-        term.write('QSH> ');
-
-        const ws = new WebSocket('ws://' + location.host + '/ws/repl');
-        ws.onopen = () => term.write('[Connected]\\r\\nQSH> ');
-        ws.onmessage = (event) => term.write(event.data + '\\r\\nQSH> ');
-
-        let buffer = '';
-        term.onData(data => {{
-            if (data === '\\r') {{
-                if (buffer.trim()) ws.send(buffer.trim());
-                term.write('\\r\\n');
-                buffer = '';
-            }} else if (data === '\\u007F') {{
-                if (buffer.length > 0) {{
-                    buffer = buffer.slice(0, -1);
-                    term.write('\\b \\b');
-                }}
-            }} else {{
-                buffer += data;
-                term.write(data);
-            }}
-        }});
+        const ws = new WebSocket(`ws://${window.location.host}/ws`);
+        const output = document.getElementById('output');
+        const inputElem = document.getElementById('input');
+        
+        ws.onopen = () => { appendOutput('Connected to REPL server.'); };
+        
+        ws.onmessage = (event) => {
+            appendOutput(event.data);
+        };
+        
+        ws.onerror = (error) => { appendOutput('WebSocket error: ' + error); };
+        
+        function appendOutput(text) {
+            output.textContent += text + '\n';
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function execCode() {
+            const code = inputElem.value.trim();
+            if (code) {
+                appendOutput('\n>>> ' + code);
+                ws.send(JSON.stringify({session_id: 'user_session', code: code}));
+                inputElem.value = '';
+            }
+        }
+        
+        inputElem.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') execCode();
+        });
     </script>
 </body>
 </html>
     """)
 
 
-@app.websocket("/ws/repl")
-async def websocket_repl(websocket: WebSocket):
-    await websocket.accept()
-    session_id = str(uuid.uuid4())
-    repl_sessions[session_id] = {}
-    
-    try:
-        while True:
-            data = await websocket.receive_text()
-            output = await repl_exec(data, session_id)
-            await websocket.send_text(output)
-    except WebSocketDisconnect:
-        logger.info(f"QSH REPL session {session_id} disconnected")
-        del repl_sessions[session_id]
+# ==================== API ROUTES ====================
+@app.post("/api/register")
+@limiter.limit(Config.RATE_LIMIT_PER_MINUTE)
+async def api_register(user: UserRegister):
+    result = Database.create_user(user.username, user.password)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
 
 
-# ==================== QUANTUM & METRICS ROUTES ====================
-@app.get("/quantum/suite", tags=["quantum"])
-@limiter.limit("10/minute")
-async def get_quantum_suite(request: Request):
+@app.post("/api/login")
+@limiter.limit(Config.RATE_LIMIT_PER_MINUTE)
+async def api_login(user: UserLogin):
+    auth = Database.authenticate_user(user.username, user.password)
+    if not auth:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = Database.create_session(auth['email'])
+    resp = JSONResponse(content={"message": "Login successful", "token": token})
+    resp.set_cookie(key="session_token", value=token, httponly=True, max_age=7*24*3600)
+    return resp
+
+
+@app.post("/api/send_email")
+async def api_send_email(email: EmailCreate, current_user_email: Optional[str] = Depends(get_current_user_email)):
+    if not current_user_email:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    to_email = f"{email.to}@{Config.QUANTUM_EMAIL_DOMAIN}"
+    from_email = current_user_email
+    result = Database.send_email(from_email, to_email, email.subject, email.body)
+    return result
+
+
+@app.get("/api/inbox")
+async def api_get_inbox(current_user_email: Optional[str] = Depends(get_current_user_email)):
+    if not current_user_email:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return Database.get_inbox(current_user_email)
+
+
+@app.get("/api/sent")
+async def api_get_sent(current_user_email: Optional[str] = Depends(get_current_user_email)):
+    if not current_user_email:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return Database.get_sent(current_user_email)
+
+
+@app.post("/api/emails/{email_id}/read")
+async def api_mark_read(email_id: int, current_user_email: Optional[str] = Depends(get_current_user_email)):
+    if not current_user_email:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    Database.mark_as_read(email_id, current_user_email)
+    return {"message": "Marked as read"}
+
+
+@app.post("/api/emails/{email_id}/star")
+async def api_toggle_star(email_id: int, current_user_email: Optional[str] = Depends(get_current_user_email)):
+    if not current_user_email:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    Database.toggle_star(email_id, current_user_email)
+    return {"message": "Star toggled"}
+
+
+@app.delete("/api/emails")
+async def api_delete_emails(email_ids: List[int] = Query(...), current_user_email: Optional[str] = Depends(get_current_user_email)):
+    if not current_user_email:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    Database.delete_emails(email_ids, current_user_email)
+    return {"message": "Emails deleted"}
+
+
+@app.get("/api/quantum/bell")
+async def api_bell():
+    return QuantumPhysics.bell_experiment_qutip()
+
+
+@app.get("/api/quantum/ghz")
+async def api_ghz():
+    return QuantumPhysics.ghz_experiment_qutip()
+
+
+@app.get("/api/quantum/teleportation")
+async def api_teleportation():
+    return QuantumPhysics.quantum_teleportation_qutip()
+
+
+@app.get("/api/quantum/suite")
+async def api_suite():
     return await QuantumPhysics.run_full_suite()
 
 
-@app.get("/quantum/bell", tags=["quantum"])
-@limiter.limit("5/minute")
-async def get_bell_test(request: Request, shots: int = Query(8192)):
-    return QuantumPhysics.bell_experiment_qutip(shots)
-
-
-@app.get("/quantum/ghz", tags=["quantum"])
-@limiter.limit("5/minute")
-async def get_ghz_test(request: Request, shots: int = Query(8192)):
-    return QuantumPhysics.ghz_experiment_qutip(shots)
-
-
-@app.get("/quantum/teleportation", tags=["quantum"])
-@limiter.limit("5/minute")
-async def get_teleportation(request: Request, shots: int = Query(4096)):
-    return QuantumPhysics.quantum_teleportation_qutip(shots)
-
-
-@app.get("/metrics", tags=["system"])
-@limiter.limit("20/minute")
-async def get_metrics(request: Request):
+@app.get("/api/metrics")
+async def api_metrics():
     return await SystemMetrics.get_all_metrics()
 
 
-@app.get("/metrics/lattice", tags=["system"])
-@limiter.limit("50/minute")
-async def get_lattice_map():
-    return {
-        "sagittarius_a_black_hole": {
-            "ip": Config.SAGITTARIUS_A_LATTICE,
-            "function": "Encryption ingestion"
-        },
-        "white_hole": {
-            "ip": Config.WHITE_HOLE_LATTICE,
-            "function": "Decryption expansion"
-        },
-        "alice_node": {
-            "ip": Config.ALICE_NODE_IP,
-            "function": "Local quantum operations"
-        },
-        "storage": {
-            "ip": Config.STORAGE_IP,
-            "capacity_eb": Config.HOLOGRAPHIC_CAPACITY_EB
-        },
-        "quantum_domain": Config.QUANTUM_DOMAIN,
-        "network_domain": Config.COMPUTER_NETWORK_DOMAIN
-    }
+@app.get("/api/network/ping")
+async def api_ping(ip: str = Query(...)):
+    result = NetInterface.ping(ip)
+    return {"ip": ip, "latency_ms": result}
 
 
-@app.get("/health", tags=["info"])
-async def health():
-    return {
-        "status": "healthy",
-        "version": "3.0.0",
-        "environment": Config.ENVIRONMENT,
-        "lattice_active": True
-    }
+@app.get("/api/network/resolve")
+async def api_resolve(domain: str = Query(...)):
+    result = NetInterface.resolve(domain)
+    return {"domain": domain, "ip": result}
 
 
-# ==================== CHAT SYSTEM ====================
-from pydantic import Field, validator
+@app.get("/api/network/whois")
+async def api_whois(ip: str = Query(...)):
+    result = NetInterface.whois(ip)
+    return {"ip": ip, "organization": result}
 
-class ChatMessage(BaseModel):
-    room: str = Field("global", min_length=1, max_length=50)
-    message: str = Field(..., min_length=1, max_length=2000)
-    to_user: Optional[str] = None
 
-    @validator("room")
-    def validate_room_name(cls, v):
-        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
-            raise ValueError("Room name must be alphanumeric with underscores/dashes")
-        return v
-
-    @validator("to_user")
-    def validate_to_user(cls, v):
-        if v and not v.endswith("@quantum.foam"):
-            raise ValueError("Private message recipient must be a quantum.foam address")
-        return v
-
-_chat_rooms: Dict[str, List[Dict]] = {"global": []}
-_active_connections: Dict[str, Set[WebSocket]] = {"global": set()}
-
-@app.websocket("/ws/chat")
-@limiter.limit("100/hour")
-async def chat_websocket(websocket: WebSocket):
+# ==================== WEBSOCKET ROUTES ====================
+@app.websocket("/ws")
+async def websocket_repl(websocket: WebSocket):
     await websocket.accept()
-    
-    session_id = websocket.query_params.get("session_id")
-    if not session_id:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-
-    user = Database.get_user_from_token(session_id)
-    if not user:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-
-    room = websocket.query_params.get("room", "global")
-    if not re.match(r"^[a-zA-Z0-9_-]+$", room):
-        await websocket.close(code=status.WS_1003_UNSUPPORTED_DATA)
-        return
-
-    # Initialize room if needed
-    if room not in _active_connections:
-        _active_connections[room] = set()
-        _chat_rooms[room] = []
-
-    user_email = user['email']
-    _active_connections[room].add(websocket)
-    
+    session_id = str(uuid.uuid4())
     try:
         while True:
-            data = await websocket.receive_json()
-            try:
-                chat_msg = ChatMessage(**data)
-            except Exception as e:
-                await websocket.send_json({"error": "Invalid message format"})
-                continue
-
-            msg_content = {
-                "from": user_email,
-                "message": chat_msg.message,
-                "timestamp": datetime.now().isoformat(),
-                "room": chat_msg.room
-            }
-
-            if chat_msg.to_user:
-                msg_content["type"] = "private"
-                msg_content["to"] = chat_msg.to_user
-                
-                # Deliver to specific user (simplified, assuming room-based)
-                delivered = False
-                for conn in _active_connections.get(chat_msg.room, set()):
-                    try:
-                        await conn.send_json(msg_content)
-                        delivered = True
-                    except:
-                        pass
-                
-                # Confirm to sender
-                msg_content["delivery_status"] = "delivered" if delivered else "offline"
-                await websocket.send_json(msg_content)
-            else:
-                msg_content["type"] = "global"
-                _chat_rooms[chat_msg.room].append(msg_content)
-                
-                # Broadcast to room
-                disconnected = set()
-                for conn in _active_connections[room]:
-                    try:
-                        await conn.send_json(msg_content)
-                    except:
-                        disconnected.add(conn)
-                
-                # Cleanup
-                _active_connections[room] -= disconnected
-
+            data = await websocket.receive_text()
+            msg = json.loads(data)
+            code = msg.get("code", "")
+            if code:
+                result = await repl_exec(code, session_id)
+                await websocket.send_text(result)
     except WebSocketDisconnect:
-        _active_connections[room].discard(websocket)
-
-
-# ==================== SHELL API ====================
-@app.get("/api/shell/commands", tags=["shell"])
-@limiter.limit("100/minute")
-async def get_shell_commands(request: Request):
-    return {
-        "commands": [
-            "qubit-init --entangle",
-            "foam-scan --depth=∞",
-            "lattice-sync --anchor=sgrA",
-            "quantum-teleport --target=white_hole",
-            "holo-store --block=100GB",
-            "entangle --partner=alice_node",
-            "collapse --observe=true"
-        ],
-        "alice_node": Config.ALICE_NODE_IP,
-        "status": "ready"
-    }
-
-
-# ==================== START SERVER ====================
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    logger.info(f"Starting QSH Foam Dominion on 0.0.0.0:{port}")
-    
-    try:
-        uvicorn.run(
-            app,
-            host="0.0.0.0",
-            port=port,
-            log_level="info" if not Config.DEBUG else "debug"
-        )
+        logger.info(f"REPL WebSocket disconnected for session {session_id}")
+    except json.JSONDecodeError:
+        await websocket.send_text("Invalid JSON received.")
     except Exception as e:
-        logger.error(f"Failed to start server: {e}", exc_info=True)
-        sys.exit(1)
+        logger.error(f"REPL error: {e}")
+        await websocket.send_text(f"Error: {str(e)}")
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host=Config.HOST, port=Config.PORT, log_level="info" if not Config.DEBUG else "debug")
