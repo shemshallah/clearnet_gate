@@ -837,6 +837,149 @@ class Database:
             WHERE to_user = ? AND deleted_receiver = 0
             ORDER BY sent_at DESC
         """, (email,))
+
+
+
+# ==================== DATABASE MODULE ====================
+class Database:
+    """SQLite database wrapper for quantum foam operations"""
+    
+    @staticmethod
+    def store_measurement(measurement_type: str, data: Dict[str, Any], lattice: Optional[str] = None, fidelity: Optional[float] = None):
+        conn = sqlite3.connect(Config.DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO measurements (timestamp, measurement_type, data, lattice_anchor, entanglement_fidelity)
+            VALUES (?, ?, ?, ?, ?)
+        """, (datetime.now().isoformat(), measurement_type, json.dumps(data), lattice, fidelity))
+        conn.commit()
+        conn.close()
+    
+    @staticmethod
+    def store_torino_metrics(metrics: Dict[str, Any]):
+        conn = sqlite3.connect(Config.DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO torino_metrics (timestamp, backend_status, queue_length, num_qubits, quantum_volume, clops, t1_avg, t2_avg, readout_error_avg, cx_error_avg, lattice_resonance)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            metrics['timestamp'],
+            metrics.get('status', ''),
+            0,  # queue_length placeholder
+            metrics['num_qubits'],
+            metrics['quantum_volume'],
+            0.0,  # clops placeholder
+            metrics['t1_avg_us'],
+            metrics['t2_avg_us'],
+            metrics['readout_error_avg'],
+            metrics['cx_error_avg'],
+            metrics.get('lattice_resonance', 0.0)
+        ))
+        conn.commit()
+        conn.close()
+    
+    @staticmethod
+    def create_user(username: str, password: str) -> Dict[str, Any]:
+        salt = os.urandom(32)
+        pwdhash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+        password_hash = salt.hex() + pwdhash.hex()
+        email = f"{username}@{Config.QUANTUM_EMAIL_DOMAIN}"
+        quantum_key = secrets.token_urlsafe(32)
+        
+        conn = sqlite3.connect(Config.DB_PATH)
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("""
+                INSERT INTO users (username, password_hash, email, created_at, quantum_key)
+                VALUES (?, ?, ?, ?, ?)
+            """, (username, password_hash, email, datetime.now().isoformat(), quantum_key))
+            conn.commit()
+            logger.info(f"User created: {username} @ {email}")
+            return {"username": username, "email": email, "created": True}
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=400, detail="Username or email already exists")
+        finally:
+            conn.close()
+    
+    @staticmethod
+    def verify_user(username: str, password: str) -> Optional[Dict[str, Any]]:
+        conn = sqlite3.connect(Config.DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT password_hash, email, quantum_key FROM users WHERE username = ?", (username,))
+        result = cursor.fetchone()
+        conn.close()
+        
+        if not result:
+            return None
+        
+        stored_hash, email, quantum_key = result
+        salt = bytes.fromhex(stored_hash[:64])
+        stored_pwdhash = stored_hash[64:]
+        pwdhash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000).hex()
+        
+        if pwdhash == stored_pwdhash:
+            return {"username": username, "email": email, "quantum_key": quantum_key}
+        return None
+    
+    @staticmethod
+    def create_session(email: str) -> str:
+        token = secrets.token_urlsafe(32)
+        expires_at = (datetime.now() + timedelta(hours=24)).isoformat()
+        
+        conn = sqlite3.connect(Config.DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO sessions (token, user_email, created_at, expires_at)
+            VALUES (?, ?, ?, ?)
+        """, (token, email, datetime.now().isoformat(), expires_at))
+        conn.commit()
+        conn.close()
+        
+        return token
+    
+    @staticmethod
+    def verify_session(token: str) -> Optional[str]:
+        conn = sqlite3.connect(Config.DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT user_email, expires_at FROM sessions WHERE token = ?
+        """, (token,))
+        result = cursor.fetchone()
+        conn.close()
+        
+        if not result:
+            return None
+        
+        email, expires_at = result
+        if datetime.fromisoformat(expires_at) > datetime.now():
+            return email
+        return None
+    
+    @staticmethod
+    def store_email(from_user: str, to_user: str, subject: str, body: str, lattice_route: str):
+        encrypted_body = QuantumEncryption.encrypt_via_sagittarius_lattice(body)
+        
+        conn = sqlite3.connect(Config.DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO emails (from_user, to_user, subject, body, encrypted_body, lattice_route, sent_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (from_user, to_user, subject, body, encrypted_body, lattice_route, datetime.now().isoformat()))
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Email stored: {from_user} -> {to_user} via lattice {lattice_route}")
+    
+    @staticmethod
+    def get_inbox(email: str) -> List[Dict[str, Any]]:
+        conn = sqlite3.connect(Config.DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, from_user, subject, sent_at, read, starred FROM emails 
+            WHERE to_user = ? AND deleted_receiver = 0
+            ORDER BY sent_at DESC
+        """, (email,))
         results = cursor.fetchall()
         conn.close()
         
@@ -886,7 +1029,6 @@ class Database:
             "read": bool(result[6]),
             "starred": bool(result[7])
         }
-
 
 # ==================== FASTAPI APPLICATION ====================
 app = FastAPI(
