@@ -1,4 +1,6 @@
 flask
 qutip
 numpy
-gunicorn  # For production WSGI
+gunicorn
+flask-socketio
+eventlet  # For WS on Render
