@@ -92,7 +92,12 @@ def stream_qram_state(sid):
     proj = core_ghz.ptrace([0])
     return float(proj.full()[0,0].real)
 
-# QSH Foam REPL Backend (unchanged)
+# Production App (socketio defined early)
+app = Flask(__name__)
+app.secret_key = hashlib.sha256(bridge_key.encode()).digest()[:32]
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger=False, engineio_logger=False)
+
+# QSH Foam REPL Backend (decorators after socketio init)
 repl_sessions = {}
 
 @socketio.on('qsh_command')
@@ -144,12 +149,12 @@ def handle_qsh_command(data):
     
     emit('qsh_output', {'output': output, 'prompt': True})
 
-# Production App
-app = Flask(__name__)
-app.secret_key = hashlib.sha256(bridge_key.encode()).digest()[:32]
-
-# SocketIO must be defined before using it in decorators
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger=False, engineio_logger=False)
+# WS for Existing Channel (after socketio)
+@socketio.on('connect_channel')
+def qram_quantum_channel():
+    state = stream_qram_state(request.sid)
+    emit('quantum_update', {'state': state})
+    logger.warning('WS Active')
 
 # Health Check
 @app.route('/health')
@@ -235,14 +240,7 @@ def quantum_gate(path):
     </html>
     """
 
-# WS for Existing Channel
-@socketio.on('connect_channel')
-def qram_quantum_channel():
-    state = stream_qram_state(request.sid)
-    emit('quantum_update', {'state': state})
-    logger.warning('WS Active')
-
-# Main block AFTER socketio definition
+# Main block AFTER all definitions
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
