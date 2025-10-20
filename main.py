@@ -606,8 +606,7 @@ class Database:
         body = QuantumEncryption.decrypt_via_whitehole_lattice(result[3])
         return {"id": email_id, "from": result[0], "to": result[1], "subject": result[2], "body": body, "lattice_route": result[4], "sent_at": result[5], "read": bool(result[6]), "starred": bool(result[7])}
 
-app = FastAPI(title="Quantum Foam Production System", description="Production quantum computing system with IBM```python
- Torino backend integration", version="1.0.0")
+app = FastAPI(title="Quantum Foam Production System", description="Production quantum computing system with IBM Torino backend integration", version="1.0.0")
 
 app.add_middleware(CORSMiddleware, allow_origins=Config.ALLOWED_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(GZipMiddleware, minimum_size=1000)
