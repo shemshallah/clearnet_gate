@@ -4,6 +4,7 @@ import hashlib
 import numpy as np
 import base64
 import requests
+import subprocess
 from io import BytesIO
 from flask import Flask, redirect, request, session, Response, jsonify
 from flask_socketio import SocketIO, emit
@@ -27,6 +28,7 @@ RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')
 DUCKDNS_DOMAIN = os.environ.get('DUCKDNS_DOMAIN', 'alicequantum.duckdns.org')
 ALICE_IP = os.environ.get('ALICE_IP', '73.189.2.5')
 QUANTUM_DOMAIN = os.environ.get('QUANTUM_DOMAIN', 'quantum.realm.domain.dominion.foam.computer.render')
+LINUXBSERVER_HOST = '127.0.0.1'  # Alice local for linuxbserver
 
 # GitHub Mirror Base URL
 GITHUB_MIRROR_BASE = 'https://quantum.realm.domain.dominion.foam.computer.render.github'
@@ -37,6 +39,10 @@ ADMIN_PASS_HASH = hashlib.sha3_256(b'$h10j1r1H0w4rd').hexdigest()
 
 # Registry (Pre-Registered Subs 256-999 to Admin)
 PRE_REG_SUBS = {str(i): {'owner': ADMIN_USER, 'status': 'available', 'price': 1.00} for i in range(256, 1000)}
+
+# Linuxbserver Config (same creds)
+LINUX_USER = ADMIN_USER
+LINUX_PASS = '$h10j1r1H0w4rd'
 
 # Quantum Foam Initialization
 try:
@@ -80,11 +86,11 @@ def entangled_cpu_offload(task_code):
         return str(fidelity_lattice)
 
 def bh_repeatable_keygen(session_id):
-    bh_ts = datetime.utcnow()
-    qram_hash = hashlib.sha256(str(bh_ts.timestamp()).encode()).hexdigest()
-    key_material = f"{session_id}{bh_ts.isoformat()}{qram_hash}"
+    # Deterministic: no ts in material
+    qram_hash = hashlib.sha256(session_id.encode()).hexdigest()
+    key_material = f"{session_id}{qram_hash}"
     key = hashlib.shake_256(key_material.encode()).digest(32)
-    return key.hex(), bh_ts
+    return key.hex(), datetime.utcnow()
 
 def foam_lattice_compress(data_tensor):
     U, S, Vh = np.linalg.svd(data_tensor, full_matrices=False)
@@ -158,7 +164,14 @@ def login():
         if user == ADMIN_USER and hashlib.sha3_256(passw.encode()).hexdigest() == ADMIN_PASS_HASH:
             session['logged_in'] = True
             session['user'] = user
-            return redirect('/?bridge_key=' + bridge_key)
+            # Generate session_id & matching gen_key
+            client_ip = request.remote_addr
+            session_id = request.form.get('session', f'sess_{client_ip}')
+            gen_key, _ = bh_repeatable_keygen(session_id)
+            session['session_id'] = session_id
+            # Redirect with matching params
+            params = urllib.parse.urlencode({'session': session_id, 'bridge_key': gen_key})
+            return redirect(f'/?{params}')
         else:
             return "Invalid credentials", 401
     return '''
@@ -178,6 +191,8 @@ def registry():
 
 @app.route('/sell/<sub_id>', methods=['GET', 'POST'])
 def sell_sub(sub_id):
+    if not session.get('logged_in') or session['user'] != ADMIN_USER:
+        return redirect('/login')
     if sub_id not in PRE_REG_SUBS or PRE_REG_SUBS[sub_id]['status'] != 'available':
         return "Subdomain not available", 400
     if request.method == 'POST':
@@ -225,12 +240,14 @@ def quantum_gate(path):
         logger.warning(f'Alice Bridge: {host} → DuckDNS {ALICE_IP}')
         return redirect(duckdns_url, code=302)
     
-    session_id = request.args.get('session', f'sess_{client_ip}')
+    # Prefer persisted session_id
+    session_id = session.get('session_id', request.args.get('session', f'sess_{client_ip}'))
     
     qram_entangled_session('user_ip', client_ip)
     qram_entangled_session('session_id', session_id)
     
     provided_key = request.args.get('bridge_key', '')
+    session['session_id'] = session_id  # Ensure it's set
     
     gen_key, ts = bh_repeatable_keygen(session_id)
     enc_key = bh_encryption_cascade(bridge_key)
@@ -260,6 +277,7 @@ def quantum_gate(path):
             <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render</h1>
             <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {negativity:.16f}, Tele {tele_id:.6f}, Back {session.get('backup_id', 'none')}</p>
             <p style="color: #0f0;">Enc: {enc_key[:32]}... | Mirror Pull: {mirror_pull[:50]}... | Registry: /registry | Sell: /sell/<sub></p>
+            <p style="color: #0f0;">Linuxbserver: Type 'connect_linux' in REPL for access via duckdns -> alice 127.0.0.1</p>
             <div id="terminal" style="width: 100%; height: 400px; background: #000;"></div>
             <script>
                 const socket = io();
@@ -267,6 +285,7 @@ def quantum_gate(path):
                 term.open(document.getElementById('terminal'));
                 term.write('QSH Foam REPL v1.0 (Registry Marketplace)\\r\\n');
                 term.write('Type "help" for commands. Subs 256-999 pre-registered to shemshallah.\\r\\n');
+                term.write('New: "connect_linux" for linuxbserver@127.0.0.1 (creds: shemshallah / $h10j1r1H0w4rd)\\r\\n');
                 term.write('QSH> ');
                 
                 term.onData((data) => {{
@@ -285,6 +304,7 @@ def quantum_gate(path):
                     term.write(data.output + '\\r\\n');
                     if (data.plot_html) term.write('\\r\\n' + data.plot_html + '\\r\\n');
                     if (data.prompt) term.write('QSH> ');
+                    else if (data.linux_prompt) term.write(data.linux_prompt);
                 }});
                 
                 socket.on('connect', () => console.log('Socket Connected - Registry Active'));
@@ -301,66 +321,149 @@ def handle_qsh_command(data):
     sid = request.sid
     cmd = data.get('command', '').strip()
     if sid not in repl_sessions:
-        repl_sessions[sid] = {'state': core_ghz.copy(), 'history': []}
+        repl_sessions[sid] = {'state': core_ghz.copy(), 'history': [], 'in_linux_mode': False, 'bash_proc': None, 'pending_auth': None}
     
-    state = repl_sessions[sid]['state']
-    history = repl_sessions[sid]['history']
+    session_data = repl_sessions[sid]
+    state = session_data['state']
+    history = session_data['history']
+    in_linux_mode = session_data['in_linux_mode']
+    bash_proc = session_data['bash_proc']
+    pending_auth = session_data.get('pending_auth')
     
-    output = "QSH Foam REPL > "
+    output = ""
     plot_html = None
+    prompt = True
+    linux_prompt = None
     try:
-        if cmd == 'help':
-            output += "Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, plot fidelity, pull matplotlib, registry list, sell <sub>, exit, clear"
-        elif cmd.startswith('entangle '):
-            q1, q2 = map(int, cmd.split()[1:])
-            bell = qt.bell_state('00')
-            state = qt.tensor(state.ptrace(list(set(range(n_core)) - {q1, q2})), bell)
-            output += f"Entangled qubits {q1}-{q2}: Bell state injected"
-        elif cmd == 'measure fidelity':
-            fid = qt.fidelity(state, core_ghz)
-            output += f"Fidelity: {fid:.16f}"
-        elif cmd == 'compress lattice':
-            comp = foam_lattice_compress(state.full().real)
-            output += f"Compressed: {len(comp)} bytes"
-        elif cmd.startswith('teleport '):
-            inp = cmd.split(' ', 1)[1] if len(cmd.split()) > 1 else 'cascade'
-            tid = inter_hole_teleport(inp)
-            output += f"Teleported ID: {tid:.6f}"
-        elif cmd == 'plot fidelity':
-            fid_values = [fidelity_lattice] * 6
-            plot_html = plot_fidelity_to_base64(fid_values)
-            output += "Fidelity plot generated (embedded below)"
-        elif cmd == 'pull matplotlib':
-            mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')
-            output += "Pulled Matplotlib config from GitHub mirror (post-network connect)"
-        elif cmd == 'registry list':
-            subs_list = ', '.join([k for k, v in PRE_REG_SUBS.items() if v['status'] == 'available'][:10])
-            output += f"Available Subs (256-999): {subs_list}... (Full: /registry)"
-        elif cmd.startswith('sell '):
-            sub = cmd.split(' ', 1)[1]
-            if sub in PRE_REG_SUBS:
-                output += f"Selling {sub}.duckdns.org - Visit /sell/{sub}"
-            else:
-                output += f"Sub {sub} not in registry"
-        elif cmd == 'clear':
-            history = []
-            output += "History cleared"
-        elif cmd == 'exit':
-            del repl_sessions[sid]
-            output += "REPL exited"
-            emit('qsh_output', {'output': output})
+        if pending_auth:
+            # Handle auth input
+            if pending_auth == 'user':
+                if cmd == LINUX_USER:
+                    output = f"Password: "
+                    session_data['pending_auth'] = 'pass'
+                    prompt = False
+                    linux_prompt = output  # But since it's password, maybe echo off, but xterm doesn't hide
+                else:
+                    output = "Login incorrect"
+                    session_data['pending_auth'] = None
+                    prompt = True
+            elif pending_auth == 'pass':
+                if cmd == LINUX_PASS:
+                    output = f"Welcome to linuxbserver@{LINUXBSERVER_HOST}\\n"
+                    # Start bash
+                    bash_proc = subprocess.Popen(
+                        ['bash'], 
+                        stdin=subprocess.PIPE, 
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.STDOUT,  # Merge stderr
+                        text=True, 
+                        bufsize=0,
+                        universal_newline=True
+                    )
+                    # Send initial whoami or something
+                    bash_proc.stdin.write('echo "Connected via duckdns -> alice ' + LINUXBSERVER_HOST + ' -> quantum.realm...render" && whoami\\n')
+                    bash_proc.stdin.flush()
+                    initial_out = bash_proc.stdout.readline()
+                    output += initial_out
+                    session_data['bash_proc'] = bash_proc
+                    session_data['in_linux_mode'] = True
+                    session_data['pending_auth'] = None
+                    linux_prompt = f"{LINUX_USER}@{LINUXBSERVER_HOST}:~$ "
+                else:
+                    output = "Login incorrect"
+                    session_data['pending_auth'] = None
+                    prompt = True
+            emit('qsh_output', {'output': output, 'prompt': prompt, 'linux_prompt': linux_prompt})
             return
+
+        if in_linux_mode:
+            if cmd in ['exit', 'logout', 'qsh']:
+                # Cleanup
+                if bash_proc:
+                    bash_proc.stdin.write('exit\\n')
+                    bash_proc.stdin.flush()
+                    bash_proc.wait()
+                    session_data['bash_proc'] = None
+                session_data['in_linux_mode'] = False
+                output = "Disconnected from linuxbserver. Back to QSH."
+                prompt = True
+            else:
+                # Send to bash
+                bash_proc.stdin.write(cmd + '\\n')
+                bash_proc.stdin.flush()
+                # Read output (non-blocking, but for simplicity, read until prompt or timeout)
+                bash_out = ""
+                while True:
+                    line = bash_proc.stdout.readline()
+                    if not line:
+                        break
+                    bash_out += line
+                    if line.strip().endswith('$ ') or line.strip().endswith('# '):
+                        break
+                output = bash_out.rstrip()
+                linux_prompt = f"{LINUX_USER}@{LINUXBSERVER_HOST}:~$ "
+                prompt = False
         else:
-            output += "Unknown command. Type 'help'"
-        
-        history.append(f"{cmd} -> {output}")
-        repl_sessions[sid]['history'] = history[-10:]
-        repl_sessions[sid]['state'] = state
+            if cmd == 'help':
+                output = "Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, plot fidelity, pull matplotlib, registry list, sell <sub>, connect_linux, exit, clear"
+            elif cmd.startswith('entangle '):
+                q1, q2 = map(int, cmd.split()[1:])
+                bell = qt.bell_state('00')
+                state = qt.tensor(state.ptrace(list(set(range(n_core)) - {q1, q2})), bell)
+                output = f"Entangled qubits {q1}-{q2}: Bell state injected"
+            elif cmd == 'measure fidelity':
+                fid = qt.fidelity(state, core_ghz)
+                output = f"Fidelity: {fid:.16f}"
+            elif cmd == 'compress lattice':
+                comp = foam_lattice_compress(state.full().real)
+                output = f"Compressed: {len(comp)} bytes"
+            elif cmd.startswith('teleport '):
+                inp = cmd.split(' ', 1)[1] if len(cmd.split()) > 1 else 'cascade'
+                tid = inter_hole_teleport(inp)
+                output = f"Teleported ID: {tid:.6f}"
+            elif cmd == 'plot fidelity':
+                fid_values = [fidelity_lattice] * 6
+                plot_html = plot_fidelity_to_base64(fid_values)
+                output = "Fidelity plot generated (embedded below)"
+            elif cmd == 'pull matplotlib':
+                mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')
+                output = "Pulled Matplotlib config from GitHub mirror (post-network connect)"
+            elif cmd == 'registry list':
+                subs_list = ', '.join([k for k, v in PRE_REG_SUBS.items() if v['status'] == 'available'][:10])
+                output = f"Available Subs (256-999): {subs_list}... (Full: /registry)"
+            elif cmd.startswith('sell '):
+                sub = cmd.split(' ', 1)[1]
+                if sub in PRE_REG_SUBS:
+                    output = f"Selling {sub}.duckdns.org - Visit /sell/{sub}"
+                else:
+                    output = f"Sub {sub} not in registry"
+            elif cmd == 'connect_linux':
+                output = f"Connecting to linuxbserver via {DUCKDNS_DOMAIN} -> alice {LINUXBSERVER_HOST} -> {QUANTUM_DOMAIN}\\n"
+                output += f"Username: "
+                session_data['pending_auth'] = 'user'
+                prompt = False
+                linux_prompt = output  # Initial prompt for user
+            elif cmd == 'clear':
+                history = []
+                output = "History cleared"
+            elif cmd == 'exit':
+                del repl_sessions[sid]
+                output = "REPL exited"
+                emit('qsh_output', {'output': output})
+                return
+            else:
+                output = "Unknown command. Type 'help'"
+            
+            history.append(f"{cmd} -> {output}")
+            session_data['history'] = history[-10:]
+            session_data['state'] = state
         
     except Exception as e:
-        output += f"Error: {str(e)}"
+        output = f"Error: {str(e)}"
+        if in_linux_mode:
+            logger.error(f"Bash error: {e}")
     
-    emit('qsh_output', {'output': output, 'plot_html': plot_html, 'prompt': True})
+    emit('qsh_output', {'output': output, 'plot_html': plot_html, 'prompt': prompt, 'linux_prompt': linux_prompt})
 
 # WS for Existing Channel
 @socketio.on('connect_channel')
@@ -368,6 +471,16 @@ def qram_quantum_channel():
     state = stream_qram_state(request.sid)
     emit('quantum_update', {'state': state})
     logger.warning('WS Active')
+
+# Cleanup on disconnect
+@socketio.on('disconnect')
+def handle_disconnect():
+    sid = request.sid
+    if sid in repl_sessions:
+        session_data = repl_sessions[sid]
+        if session_data['bash_proc']:
+            session_data['bash_proc'].terminate()
+        del repl_sessions[sid]
 
 # Main block
 if __name__ == '__main__':
