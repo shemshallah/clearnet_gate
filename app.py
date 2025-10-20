@@ -2,11 +2,13 @@ import os
 import logging
 import hashlib
 import numpy as np
-from flask import Flask, redirect, request, session
+from flask import Flask, redirect, request, session, Response
 from flask_socketio import SocketIO, emit
 import qutip as qt
 from itertools import product
 from datetime import datetime
+import subprocess
+import threading
 
 # Production Logging
 logging.basicConfig(level=logging.WARNING)
@@ -38,7 +40,7 @@ except Exception as e:
     fidelity_lattice = 0.999
     bridge_key = "QFOAM-PROD-999-abc"
 
-# Functions (unchanged from prior prod version)
+# Functions (unchanged)
 def bh_encryption_cascade(plaintext, rounds=3):
     rand_unitary = qt.rand_unitary(2)
     seed = rand_unitary.full().tobytes()[:32]
@@ -86,12 +88,64 @@ def stream_qram_state(sid):
     proj = core_ghz.ptrace([0])
     return float(proj.full()[0,0].real)
 
+# QSH Foam REPL Backend (SocketIO Handler)
+repl_sessions = {}  # Per-SID state for REPL
+
+@socketio.on('qsh_command')
+def handle_qsh_command(data):
+    sid = request.sid
+    cmd = data.get('command', '').strip()
+    if sid not in repl_sessions:
+        repl_sessions[sid] = {'state': core_ghz.copy(), 'history': []}
+    
+    state = repl_sessions[sid]['state']
+    history = repl_sessions[sid]['history']
+    
+    output = "QSH Foam REPL > "
+    try:
+        if cmd == 'help':
+            output += "Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, exit, clear"
+        elif cmd.startswith('entangle '):
+            q1, q2 = map(int, cmd.split()[1:])
+            bell = qt.bell_state('00')
+            state = qt.tensor(state.ptrace(list(set(range(n_core)) - {q1, q2})), bell)
+            output += f"Entangled qubits {q1}-{q2}: Bell state injected"
+        elif cmd == 'measure fidelity':
+            fid = qt.fidelity(state, core_ghz)
+            output += f"Fidelity: {fid:.16f}"
+        elif cmd == 'compress lattice':
+            comp = foam_lattice_compress(state.full().real)
+            output += f"Compressed: {len(comp)} bytes"
+        elif cmd.startswith('teleport '):
+            inp = cmd.split(' ', 1)[1] if len(cmd.split()) > 1 else 'cascade'
+            tid = inter_hole_teleport(inp)
+            output += f"Teleported ID: {tid:.6f}"
+        elif cmd == 'clear':
+            history = []
+            output += "History cleared"
+        elif cmd == 'exit':
+            del repl_sessions[sid]
+            output += "REPL exited"
+            emit('qsh_output', {'output': output})
+            return
+        else:
+            output += "Unknown command. Type 'help'"
+        
+        history.append(f"{cmd} -> {output}")
+        repl_sessions[sid]['history'] = history[-10:]  # Last 10
+        repl_sessions[sid]['state'] = state  # Update state
+        
+    except Exception as e:
+        output += f"Error: {str(e)}"
+    
+    emit('qsh_output', {'output': output, 'prompt': True})
+
 # Production App
 app = Flask(__name__)
 app.secret_key = hashlib.sha256(bridge_key.encode()).digest()[:32]
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger=False, engineio_logger=False)
 
-# Health Check Endpoint (Fixes Hang: Returns 200 for Render Probes)
+# Health Check
 @app.route('/health')
 def health_check():
     return 'OK', 200
@@ -119,27 +173,42 @@ def quantum_gate(path):
         logger.warning(f'Access: {client_ip}, Sess {session_id}')
         return f"""
         <html>
-            <head><title>Quantum Realm Prod</title>
+            <head><title>Quantum Realm Prod - QSH Portal</title>
             <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+            <link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" />
+            <script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js"></script>
             </head>
-            <body>
-                <h1>quantum.realm.domain.dominion.foam.computer</h1>
-                <p>Prod Foam: Fid {offload_res}, Comp {comp_lattice}B.</p>
-                <p>Neg {negativity:.16f}, Tele {tele_id:.6f}, Back {session.get('backup_id', 'none')}</p>
-                <p>Enc: {enc_key[:32]}...</p>
-                <button id="connectWS">Connect WS</button>
-                <div id="wsStatus">Disconnected</div>
-                <pre>GHZ Diag: {list(core_ghz.full().diagonal().real[:3])}...</pre>
+            <body style="background: #000; color: #0f0; font-family: monospace;">
+                <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render</h1>
+                <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {negativity:.16f}, Tele {tele_id:.6f}, Back {session.get('backup_id', 'none')}</p>
+                <p style="color: #0f0;">Enc: {enc_key[:32]}...</p>
+                <div id="terminal" style="width: 100%; height: 400px; background: #000;"></div>
                 <script>
                     const socket = io();
-                    document.getElementById('connectWS').onclick = () => {{
-                        socket.emit('connect_channel');
-                        socket.on('quantum_update', (data) => {{
-                            document.getElementById('wsStatus').innerHTML = `State: ${{data.state.toFixed(6)}}`;
-                        }});
-                    }};
-                    socket.on('connect', () => document.getElementById('wsStatus').innerHTML += ' | Conn');
-                    socket.on('disconnect', () => document.getElementById('wsStatus').innerHTML = 'Disc');
+                    const term = new Terminal({{ cursorBlink: true, theme: {{ background: '#000', foreground: '#0f0' }} }});
+                    term.open(document.getElementById('terminal'));
+                    term.write('QSH Foam REPL v1.0\\r\\n');
+                    term.write('Type "help" for commands. Foam lattice loaded.\\r\\n');
+                    term.write('QSH> ');
+                    
+                    term.onData((data) => {{
+                        if (data === '\\r') {{
+                            const cmd = term.buffer.active.getLine( term.buffer.active.baseY + term.buffer.active.cursorY ).translateToString(true).trim();
+                            socket.emit('qsh_command', {{ command: cmd }});
+                            term.write('\\r\\n');
+                        }} else if (data === '\\u007F') {{ // Backspace
+                            term.write('\\b \\b');
+                        }} else {{
+                            term.write(data);
+                        }}
+                    }});
+                    
+                    socket.on('qsh_output', (data) => {{
+                        term.write(data.output + '\\r\\n');
+                        if (data.prompt) term.write('QSH> ');
+                    }});
+                    
+                    socket.on('connect', () => console.log('Socket Connected'));
                 </script>
             </body>
         </html>
@@ -148,6 +217,7 @@ def quantum_gate(path):
         logger.warning(f'Redir: {client_ip}')
         return redirect(f'https://quantum.realm.domain.dominion.foam.computer.render?initiate=cascade&enc_key={enc_key}&session={session_id}', code=302)
 
+# WS for Existing Channel
 @socketio.on('connect_channel')
 def qram_quantum_channel():
     state = stream_qram_state(request.sid)
