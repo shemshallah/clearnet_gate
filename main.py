@@ -1,5 +1,5 @@
 
-    def get_recent_measurements(limit: int = 10) -> List[Dict[str, Any]]:
+    def get_recent_measurements(limit: int = 10) -> List[Dict[str, Any]]
         try:
             conn = sqlite3.connect(Config.DB_PATH)
             cursor = conn.cursor()
