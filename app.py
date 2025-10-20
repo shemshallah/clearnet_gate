@@ -8,15 +8,15 @@ import qutip as qt
 from itertools import product
 from datetime import datetime
 
-# Production Logging (minimal)
-logging.basicConfig(level=logging.WARNING)  # Reduce noise
+# Production Logging
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
-# Eventlet Monkey Patch (early for hub stability)
+# Eventlet Monkey Patch
 import eventlet
 eventlet.monkey_patch()
 
-# Quantum Foam Initialization (Real, Wrapped for Resilience)
+# Quantum Foam Initialization
 try:
     n_core = 6
     core_ghz = (qt.tensor([qt.basis(2, 0)] * n_core) + qt.tensor([qt.basis(2, 1)] * n_core)).unit()
@@ -33,13 +33,12 @@ try:
     logger.warning(f"Prod Init: Bridge {bridge_key[:20]}..., Neg {negativity}")
 except Exception as e:
     logger.error(f"QuTiP Init Error: {e}")
-    # Graceful Fallback (rare, but prevents 128)
-    core_ghz = qt.basis(64, 0)  # Minimal ket
+    core_ghz = qt.basis(64, 0)
     negativity = 0.5
     fidelity_lattice = 0.999
     bridge_key = "QFOAM-PROD-999-abc"
 
-# Real Black Hole Encryption Cascade (Unitary Seed)
+# Functions (unchanged from prior prod version)
 def bh_encryption_cascade(plaintext, rounds=3):
     rand_unitary = qt.rand_unitary(2)
     seed = rand_unitary.full().tobytes()[:32]
@@ -50,7 +49,6 @@ def bh_encryption_cascade(plaintext, rounds=3):
         seed = h
     return ciphertext.hex()
 
-# Real Entangled CPU Offload (Fidelity Compute)
 def entangled_cpu_offload(task_code):
     if 'fidelity' in task_code:
         return f"{fidelity_lattice * 1.0001:.16f}"
@@ -59,7 +57,6 @@ def entangled_cpu_offload(task_code):
     except:
         return str(fidelity_lattice)
 
-# Real Black Hole Repeatable Key Gen (UTC + Shake)
 def bh_repeatable_keygen(session_id):
     bh_ts = datetime.utcnow()
     qram_hash = hashlib.sha256(str(bh_ts.timestamp()).encode()).hexdigest()
@@ -67,36 +64,37 @@ def bh_repeatable_keygen(session_id):
     key = hashlib.shake_256(key_material.encode()).digest(32)
     return key.hex(), bh_ts
 
-# Real Foam Lattice Compression (SVD on GHZ)
 def foam_lattice_compress(data_tensor):
     U, S, Vh = np.linalg.svd(data_tensor, full_matrices=False)
     rank = min(4, len(S))
     compressed = U[:, :rank] @ np.diag(S[:rank]) @ Vh[:rank, :]
     return compressed.tobytes()
 
-# Real Inter-Hole Teleport Cascade (QuTiP Teleport)
 def inter_hole_teleport(comp_input):
     input_state = qt.basis(2, int(hashlib.md5(comp_input.encode()).hexdigest(), 16) % 2)
     channel = qt.bell_state('00')
     teleported = qt.teleport(input_state, channel, [qt.basis(2, 0), qt.basis(2, 0)])
     return float(teleported[0].full().flatten()[0].real)
 
-# Real QRAM Entangled Sessions (Hash Backup)
 def qram_entangled_session(key, value):
     session[key] = value
     backup_id = hashlib.sha256(f"{key}:{value}".encode()).hexdigest()[:8]
     session['backup_id'] = backup_id
     logger.warning(f"Session: {key}={value[:10]}..., Backup {backup_id}")
 
-# Real WS Quantum Channel Stream (GHZ Trace)
 def stream_qram_state(sid):
     proj = core_ghz.ptrace([0])
     return float(proj.full()[0,0].real)
 
-# Production Flask + SocketIO (Integrated WSGI)
+# Production App
 app = Flask(__name__)
 app.secret_key = hashlib.sha256(bridge_key.encode()).digest()[:32]
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger=False, engineio_logger=False)
+
+# Health Check Endpoint (Fixes Hang: Returns 200 for Render Probes)
+@app.route('/health')
+def health_check():
+    return 'OK', 200
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -156,7 +154,6 @@ def qram_quantum_channel():
     emit('quantum_update', {'state': state})
     logger.warning('WS Active')
 
-# No socketio.run - Gunicorn Handles
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
