@@ -1,10 +1,10 @@
-fastapi
-uvicorn[standard]
-slowapi
-qutip
-numpy
-psutil
-cryptography
-aiohttp
-sqlite3  # Built-in, but explicit for clarity
-pydantic
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+slowapi==0.1.9
+qutip==5.0.4
+numpy==1.26.4
+scipy==1.14.1  # Explicit for QuTiP compatibility
+psutil==6.0.0
+cryptography==43.0.1
+aiohttp==3.10.5
+pydantic==2.9.2
