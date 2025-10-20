@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
-from fastapi import FastAPI, Request, HTTPException, Depends, Security, Query, WebSocket, WebSocketDisconnect, Cookie, Form
+from fastapi import FastAPI, Request, HTTPException, Depends, Security, Query, WebSocket, WebSocketDisconnect, Cookie, Form, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -1237,6 +1237,72 @@ async def startup_event():
     logger.info(f"Sagittarius A* lattice anchor: {Config.SAGITTARIUS_A_LATTICE}")
     logger.info(f"White hole lattice: {Config.WHITE_HOLE_LATTICE}")
     logger.info(f"IBM Torino backend: {Config.IBM_BACKEND}")
+
+# ==================== 404 HANDLER ====================
+@app.exception_handler(status.HTTP_404_NOT_FOUND)
+async def not_found_handler(request: Request, exc: HTTPException):
+    html_content = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - Not Found | QSH Foam Dominion</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+            color: #0f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }}
+        .container {{
+            text-align: center;
+            max-width: 600px;
+        }}
+        h1 {{
+            color: #ff6b35;
+            font-size: 4em;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(255, 107, 53, 0.8);
+        }}
+        p {{
+            color: #00ffff;
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }}
+        a {{
+            display: inline-block;
+            background: #00ff9d;
+            color: #000;
+            padding: 12px 24px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s;
+        }}
+        a:hover {{
+            background: #00ffff;
+            box-shadow: 0 5px 15px rgba(0, 255, 157, 0.5);
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>404</h1>
+        <p>Quantum Entanglement Lost - The requested lattice route does not exist in the foam.</p>
+        <p>Lattice Anchor: {Config.SAGITTARIUS_A_LATTICE}</p>
+        <a href="/">Return to QSH Foam Dominion</a>
+    </div>
+</body>
+</html>
+    """
+    return HTMLResponse(content=html_content, status_code=404)
 
 # ==================== MAIN DASHBOARD ====================
 
