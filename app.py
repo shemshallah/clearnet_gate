@@ -4,7 +4,9 @@ import hashlib
 import numpy as np
 import base64
 import requests
-import subprocess
+import time
+import select
+import paramiko  # Requires: pip install paramiko
 from io import BytesIO
 from flask import Flask, redirect, request, session, Response, jsonify
 from flask_socketio import SocketIO, emit
@@ -28,7 +30,6 @@ RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')
 DUCKDNS_DOMAIN = os.environ.get('DUCKDNS_DOMAIN', 'alicequantum.duckdns.org')
 ALICE_IP = os.environ.get('ALICE_IP', '73.189.2.5')
 QUANTUM_DOMAIN = os.environ.get('QUANTUM_DOMAIN', 'quantum.realm.domain.dominion.foam.computer.render')
-LINUXBSERVER_HOST = '127.0.0.1'  # Alice local for linuxbserver
 
 # GitHub Mirror Base URL
 GITHUB_MIRROR_BASE = 'https://quantum.realm.domain.dominion.foam.computer.render.github'
@@ -40,9 +41,10 @@ ADMIN_PASS_HASH = hashlib.sha3_256(b'$h10j1r1H0w4rd').hexdigest()
 # Registry (Pre-Registered Subs 256-999 to Admin)
 PRE_REG_SUBS = {str(i): {'owner': ADMIN_USER, 'status': 'available', 'price': 1.00} for i in range(256, 1000)}
 
-# Linuxbserver Config (same creds)
+# Linuxbserver Config (SSH to Alice)
 LINUX_USER = ADMIN_USER
 LINUX_PASS = '$h10j1r1H0w4rd'
+LINUX_HOST = ALICE_IP  # SSH target
 
 # Quantum Foam Initialization
 try:
@@ -277,7 +279,7 @@ def quantum_gate(path):
             <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render</h1>
             <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {negativity:.16f}, Tele {tele_id:.6f}, Back {session.get('backup_id', 'none')}</p>
             <p style="color: #0f0;">Enc: {enc_key[:32]}... | Mirror Pull: {mirror_pull[:50]}... | Registry: /registry | Sell: /sell/<sub></p>
-            <p style="color: #0f0;">Linuxbserver: Type 'connect_linux' in REPL for access via duckdns -> alice 127.0.0.1</p>
+            <p style="color: #0f0;">Linuxbserver: Type 'connect_linux' in REPL for SSH access via duckdns -> alice {ALICE_IP}</p>
             <div id="terminal" style="width: 100%; height: 400px; background: #000;"></div>
             <script>
                 const socket = io();
@@ -285,7 +287,7 @@ def quantum_gate(path):
                 term.open(document.getElementById('terminal'));
                 term.write('QSH Foam REPL v1.0 (Registry Marketplace)\\r\\n');
                 term.write('Type "help" for commands. Subs 256-999 pre-registered to shemshallah.\\r\\n');
-                term.write('New: "connect_linux" for linuxbserver@127.0.0.1 (creds: shemshallah / $h10j1r1H0w4rd)\\r\\n');
+                term.write('New: "connect_linux" for linuxbserver@{ALICE_IP} (creds: shemshallah / $h10j1r1H0w4rd)\\r\\n');
                 term.write('QSH> ');
                 
                 term.onData((data) => {{
@@ -321,13 +323,14 @@ def handle_qsh_command(data):
     sid = request.sid
     cmd = data.get('command', '').strip()
     if sid not in repl_sessions:
-        repl_sessions[sid] = {'state': core_ghz.copy(), 'history': [], 'in_linux_mode': False, 'bash_proc': None, 'pending_auth': None}
+        repl_sessions[sid] = {'state': core_ghz.copy(), 'history': [], 'in_linux_mode': False, 'ssh_client': None, 'channel': None, 'pending_auth': None}
     
     session_data = repl_sessions[sid]
     state = session_data['state']
     history = session_data['history']
     in_linux_mode = session_data['in_linux_mode']
-    bash_proc = session_data['bash_proc']
+    ssh_client = session_data['ssh_client']
+    channel = session_data['channel']
     pending_auth = session_data.get('pending_auth')
     
     output = ""
@@ -342,33 +345,40 @@ def handle_qsh_command(data):
                     output = f"Password: "
                     session_data['pending_auth'] = 'pass'
                     prompt = False
-                    linux_prompt = output  # But since it's password, maybe echo off, but xterm doesn't hide
+                    linux_prompt = output
                 else:
                     output = "Login incorrect"
                     session_data['pending_auth'] = None
                     prompt = True
             elif pending_auth == 'pass':
                 if cmd == LINUX_PASS:
-                    output = f"Welcome to linuxbserver@{LINUXBSERVER_HOST}\\n"
-                    # Start bash
-                    bash_proc = subprocess.Popen(
-                        ['bash'], 
-                        stdin=subprocess.PIPE, 
-                        stdout=subprocess.PIPE, 
-                        stderr=subprocess.STDOUT,  # Merge stderr
-                        text=True, 
-                        bufsize=0,
-                        universal_newline=True
-                    )
-                    # Send initial whoami or something
-                    bash_proc.stdin.write('echo "Connected via duckdns -> alice ' + LINUXBSERVER_HOST + ' -> quantum.realm...render" && whoami\\n')
-                    bash_proc.stdin.flush()
-                    initial_out = bash_proc.stdout.readline()
-                    output += initial_out
-                    session_data['bash_proc'] = bash_proc
-                    session_data['in_linux_mode'] = True
-                    session_data['pending_auth'] = None
-                    linux_prompt = f"{LINUX_USER}@{LINUXBSERVER_HOST}:~$ "
+                    output = f"Connecting via SSH to linuxbserver@{LINUX_HOST} (duckdns -> alice -> quantum.realm...render)\\n"
+                    try:
+                        ssh = paramiko.SSHClient()
+                        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                        ssh.connect(LINUX_HOST, username=LINUX_USER, password=LINUX_PASS, timeout=10)
+                        channel = ssh.invoke_shell()
+                        time.sleep(1)  # Wait for shell to start
+                        initial_out = ''
+                        # Read initial output (banner, prompt, etc.)
+                        ready, _, _ = select.select([channel], [], [], 2)
+                        if ready:
+                            initial_out += channel.recv(4096).decode('utf-8', errors='ignore')
+                        # Drain any more
+                        while channel.recv_ready():
+                            initial_out += channel.recv(1024).decode('utf-8', errors='ignore')
+                        output += initial_out
+                        session_data['ssh_client'] = ssh
+                        session_data['channel'] = channel
+                        session_data['in_linux_mode'] = True
+                        session_data['pending_auth'] = None
+                        linux_prompt = f"{LINUX_USER}@{LINUX_HOST}:~$ "
+                        logger.warning(f'SSH connected for sid {sid}')
+                    except Exception as ssh_err:
+                        output += f"SSH Connection failed: {str(ssh_err)}"
+                        session_data['pending_auth'] = None
+                        prompt = True
+                        logger.error(f'SSH Error: {ssh_err}')
                 else:
                     output = "Login incorrect"
                     session_data['pending_auth'] = None
@@ -379,29 +389,32 @@ def handle_qsh_command(data):
         if in_linux_mode:
             if cmd in ['exit', 'logout', 'qsh']:
                 # Cleanup
-                if bash_proc:
-                    bash_proc.stdin.write('exit\\n')
-                    bash_proc.stdin.flush()
-                    bash_proc.wait()
-                    session_data['bash_proc'] = None
+                if channel:
+                    channel.close()
+                if ssh_client:
+                    ssh_client.close()
+                session_data['ssh_client'] = None
+                session_data['channel'] = None
                 session_data['in_linux_mode'] = False
                 output = "Disconnected from linuxbserver. Back to QSH."
                 prompt = True
+                logger.warning(f'SSH disconnected for sid {sid}')
             else:
-                # Send to bash
-                bash_proc.stdin.write(cmd + '\\n')
-                bash_proc.stdin.flush()
-                # Read output (non-blocking, but for simplicity, read until prompt or timeout)
-                bash_out = ""
-                while True:
-                    line = bash_proc.stdout.readline()
-                    if not line:
-                        break
-                    bash_out += line
-                    if line.strip().endswith('$ ') or line.strip().endswith('# '):
-                        break
-                output = bash_out.rstrip()
-                linux_prompt = f"{LINUX_USER}@{LINUXBSERVER_HOST}:~$ "
+                # Send command to SSH channel
+                channel.send(cmd + '\n')
+                time.sleep(0.2)  # Brief wait for processing
+                bash_out = ''
+                # Wait for output with timeout
+                ready, _, _ = select.select([channel], [], [], 5)  # 5s timeout
+                if ready:
+                    bash_out += channel.recv(4096).decode('utf-8', errors='ignore')
+                # Drain remaining
+                while channel.recv_ready():
+                    bash_out += channel.recv(1024).decode('utf-8', errors='ignore')
+                # Strip trailing newlines
+                bash_out = bash_out.rstrip()
+                output = bash_out if bash_out else f"No output from command: {cmd}"
+                linux_prompt = f"{LINUX_USER}@{LINUX_HOST}:~$ "
                 prompt = False
         else:
             if cmd == 'help':
@@ -427,62 +440,4 @@ def handle_qsh_command(data):
                 output = "Fidelity plot generated (embedded below)"
             elif cmd == 'pull matplotlib':
                 mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')
-                output = "Pulled Matplotlib config from GitHub mirror (post-network connect)"
-            elif cmd == 'registry list':
-                subs_list = ', '.join([k for k, v in PRE_REG_SUBS.items() if v['status'] == 'available'][:10])
-                output = f"Available Subs (256-999): {subs_list}... (Full: /registry)"
-            elif cmd.startswith('sell '):
-                sub = cmd.split(' ', 1)[1]
-                if sub in PRE_REG_SUBS:
-                    output = f"Selling {sub}.duckdns.org - Visit /sell/{sub}"
-                else:
-                    output = f"Sub {sub} not in registry"
-            elif cmd == 'connect_linux':
-                output = f"Connecting to linuxbserver via {DUCKDNS_DOMAIN} -> alice {LINUXBSERVER_HOST} -> {QUANTUM_DOMAIN}\\n"
-                output += f"Username: "
-                session_data['pending_auth'] = 'user'
-                prompt = False
-                linux_prompt = output  # Initial prompt for user
-            elif cmd == 'clear':
-                history = []
-                output = "History cleared"
-            elif cmd == 'exit':
-                del repl_sessions[sid]
-                output = "REPL exited"
-                emit('qsh_output', {'output': output})
-                return
-            else:
-                output = "Unknown command. Type 'help'"
-            
-            history.append(f"{cmd} -> {output}")
-            session_data['history'] = history[-10:]
-            session_data['state'] = state
-        
-    except Exception as e:
-        output = f"Error: {str(e)}"
-        if in_linux_mode:
-            logger.error(f"Bash error: {e}")
-    
-    emit('qsh_output', {'output': output, 'plot_html': plot_html, 'prompt': prompt, 'linux_prompt': linux_prompt})
-
-# WS for Existing Channel
-@socketio.on('connect_channel')
-def qram_quantum_channel():
-    state = stream_qram_state(request.sid)
-    emit('quantum_update', {'state': state})
-    logger.warning('WS Active')
-
-# Cleanup on disconnect
-@socketio.on('disconnect')
-def handle_disconnect():
-    sid = request.sid
-    if sid in repl_sessions:
-        session_data = repl_sessions[sid]
-        if session_data['bash_proc']:
-            session_data['bash_proc'].terminate()
-        del repl_sessions[sid]
-
-# Main block
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    socketio.run(app, host='0.0.0.0', port=port, debug=False)
+                output = mirror_pull  # Show full pull
