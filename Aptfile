@@ -1,0 +1,6 @@
+build-essential  # g++, gcc, make
+gfortran         # Fortran for QuTiP
+libopenblas-dev  # BLAS for matrix ops
+liblapack-dev    # LAPACK for linear algebra
+libatlas-base-dev # Optimized ATLAS
+git              # For GitHub mirror
