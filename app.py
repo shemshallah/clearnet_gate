@@ -79,9 +79,7 @@ try:
     core_ghz = (qt.tensor([qt.basis(2, 0)] * n_core) + qt.tensor([qt.basis(2, 1)] * n_core)).unit()
     # Siamese mirror pairing for IP: Entangle ALICE_IP hash into lattice state
     ip_hash = int(hashlib.sha256(ALICE_IP.encode()).hexdigest(), 16) % n_lattice
-    # Fixed: Correct projector |ip><ip| = ket * ket.dag(), then trace to scalar (1.0)
-    projector = qt.basis(n_lattice, ip_hash) * qt.basis(n_lattice, ip_hash).dag()
-    entangled_ip_state = core_ghz * projector.tr()  # Thematic, multiplies by 1.0
+    # Removed: projector and entangled_ip_state to avoid potential index errors in older QuTiP versions
     fidelity_lattice = 0.9999999999999998
     bridge_key = f"QFOAM-5x5x5-{int(fidelity_lattice * 1e15):d}-{hash(tuple(product(range(5), repeat=3))):x}"
     rho_core = core_ghz * core_ghz.dag()
@@ -96,7 +94,7 @@ except Exception as e:
     logger.error(f"QuTiP Init Error: {e}")
     core_ghz = qt.basis(64, 0)
     negativity = 0.5
-    ip_negativity = 0.5
+    ip_negativity = 0.5 * (1 + abs(int(hashlib.sha256(ALICE_IP.encode()).hexdigest(), 16) % 125 % 2))  # Fallback with ip_hash
     fidelity_lattice = 0.999
     bridge_key = "QFOAM-5x5x5-PROD-999-abc"
 
