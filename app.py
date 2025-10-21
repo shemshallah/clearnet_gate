@@ -33,9 +33,9 @@ logger = logging.getLogger(__name__)
 import eventlet
 eventlet.monkey_patch()
 
-# Domain Configs
+# Domain Configs - Permanently Set to alicequantum
 RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')
-DUCKDNS_DOMAIN = os.environ.get('DUCKDNS_DOMAIN', 'duckdnsserver.duckdns.org')
+DUCKDNS_DOMAIN = os.environ.get('DUCKDNS_DOMAIN', 'alicequantum.duckdns.org')  # Permanently alicequantum
 ALICE_IP = os.environ.get('ALICE_IP', '73.189.2.5')
 QUANTUM_DOMAIN = os.environ.get('QUANTUM_DOMAIN', 'quantum.realm.domain.dominion.foam.computer.render')
 LOCAL_WEBSERVER_PORT = 80
@@ -383,6 +383,4 @@ def quantum_gate(path):
                     term.onData((data) => {{
                         if (data === '\\r') {{
                             const cmd = term.buffer.active.getLine( term.buffer.active.baseY + term.buffer.active.cursorY ).translateToString(true).trim();
-                            socket.emit('qsh_command', {{ command: cmd }});
-                            term.write('\\r\\n');
-                        }} else if (data
+                            socket.emit('qsh_command', {{ command:
