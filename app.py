@@ -2203,7 +2203,7 @@ def quantum_gate():
         ''', session_id=session_id, ip_display=ip_display, setup_complete=setup_complete, 
               connection_info=connection_info, client_ip=client_ip, quantum_ip=quantum_ip, 
               metrics=metrics, ssh_status=ssh_status, QUANTUM_NET=QUANTUM_NET, 
-              QUANTUM_DNS_PRIMARY=QUANTUM_DNS_PRIMARY, QUANTUM_GATEWAY=QUANTUM_GATEWAY)
+              QUANTUM_DNS_PRIMARY=QUANTUM_DNS_PRIMARY, QUANTUM_GATEWAY=QUANTUM_GATEWAY
     
     return html
 
