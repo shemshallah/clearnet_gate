@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 import os
 import logging
 import hashlib
@@ -31,10 +34,6 @@ except ImportError:
 # Production Logging
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
-
-# Eventlet Monkey Patch
-import eventlet
-eventlet.monkey_patch()
 
 # Domain Configs
 RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')
@@ -71,8 +70,8 @@ LINUX_PASS = os.environ.get('LINUX_PASS', '$h10j1r1H0w4rd')  # Secure via env
 LINUX_HOST = ALICE_IP  # SSH target (Ubuntu gateway)
 
 # Quantum Foam Initialization - Upgraded to 5x5x5 Lattice
+n_lattice = 125  # Define outside try for fallback
 try:
-    n_lattice = 125  # 5x5x5
     def qubit_index(i, j, k): return i + 5 * j + 25 * k  # 5^2 = 25
     # Core still small for computation; lattice for indexing/entanglement mapping
     n_core = 6
@@ -94,7 +93,8 @@ except Exception as e:
     logger.error(f"QuTiP Init Error: {e}")
     core_ghz = qt.basis(64, 0)
     negativity = 0.5
-    ip_negativity = 0.5 * (1 + abs(int(hashlib.sha256(ALICE_IP.encode()).hexdigest(), 16) % 125 % 2))  # Fallback with ip_hash
+    ip_hash = int(hashlib.sha256(ALICE_IP.encode()).hexdigest(), 16) % n_lattice
+    ip_negativity = negativity * (1 + abs(ip_hash % 2))
     fidelity_lattice = 0.999
     bridge_key = "QFOAM-5x5x5-PROD-999-abc"
 
@@ -351,7 +351,12 @@ def sell_domain(domain):
             # For .render: Issue IP & add to DNS via SSH (autonomous)
             issued_ip = None
             if domain.endswith('.render'):
-                issued_ip = issue_quantum_ip(buyer)
+                # Fixed: For buyer, use a temporary session context or separate logic; here, simulate without modifying current session
+                temp_session = {}
+                idx = random.randint(0, len(IP_POOL) - 1)
+                issued_ip = IP_POOL[idx]
+                temp_session['issued_ip'] = issued_ip
+                logger.warning(f"Issued quantum IP {issued_ip} for buyer {buyer}")
                 combined[domain]['ip'] = issued_ip
                 # Trigger SSH to update Bind9 zonefile
                 update_dns_zone(domain, issued_ip)
@@ -453,6 +458,9 @@ def quantum_gate(path):
         # Entangle ALICE_IP for siamese mirror
         ip_mirror_fid = entangle_ip_address(ALICE_IP)
         
+        backup_id = session.get('backup_id', 'none')
+        ssh_status = ('Enabled' if paramiko else 'Disabled - Add paramiko to requirements.txt')
+        
         logger.warning(f'Access: {client_ip}, Sess {session_id}, Issued IP {issued_ip}, 5x5x5 Lattice Active')
         html_content = f"""
         <html>
@@ -469,7 +477,7 @@ def quantum_gate(path):
                 <!-- Siamese Mirror Overlay: DuckDNS HTML (Linux webserver) as background -->
                 <iframe id="overlay-frame" src="https://{DUCKDNS_DOMAIN}" onload="console.log('DuckDNS Overlay Entangled')"></iframe>
                 <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render (5x5x5)</h1>
-                <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {ip_negativity:.16f}, Tele {tele_id:.6f}, IP Mirror Fid {ip_mirror_fid:.16f}, Back {session.get('backup_id', 'none')}{' | SSH: ' + ('Enabled' if paramiko else 'Disabled - Add paramiko to requirements.txt')}</p>
+                <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {ip_negativity:.16f}, Tele {tele_id:.6f}, IP Mirror Fid {ip_mirror_fid:.16f}, Back {backup_id} | SSH: {ssh_status}</p>
                 <p style="color: #0f0;">Issued Quantum IP: {issued_ip} | Network: {QUANTUM_NET_CIDR} (Gateway: {QUANTUM_GATEWAY}, DNS: {QUANTUM_DNS}) | Enc: {enc_key[:32]}... | Mirror Pull (Local Root): {mirror_pull[:50]}... | Registry: /registry | Sell: /sell/<domain> | Web Proxy: /web_proxy</p>
                 <p style="color: #0f0;">DuckDNS Linked: {DUCKDNS_DOMAIN} → Alice {ALICE_IP} (127.0.0.1 Linux Webserver Overlay Active)</p>
                 <div id="terminal" style="width: 100%; height: 400px; background: #000;"></div>
@@ -612,33 +620,33 @@ def handle_qsh_command(data):
                 else:
                     output = "Autonomous DNS Setup on Ubuntu (.render TLD)...\n"
                     # Fixed: Wrap in sudo with password pipe for apt/systemctl/ufw
-                    setup_script = f'echo "{LINUX_PASS}" | sudo -S bash -c \\"'
+                    setup_script = f'echo "{LINUX_PASS}" | sudo -S bash -c "'
                     setup_script += 'apt update && apt install -y bind9 bind9utils dnsutils && '
-                    setup_script += 'cat > /etc/bind/named.conf.local << EOF\\n'
-                    setup_script += 'zone "render" {\\n'
-                    setup_script += '    type master;\\n'
-                    setup_script += '    file "/etc/bind/db.render";\\n'
-                    setup_script += '};\\nEOF\\n'
-                    setup_script += 'cat > /etc/bind/db.render << EOF\\n'
-                    setup_script += '$TTL    604800\\n'
-                    setup_script += '@       IN      SOA     ns1.render. root.render. (\\n'
-                    setup_script += '                              2         ; Serial\\n'
-                    setup_script += '                         604800         ; Refresh\\n'
-                    setup_script += '                          86400         ; Retry\\n'
-                    setup_script += '                        2419200         ; Expire\\n'
-                    setup_script += '                         604800 )       ; Negative Cache TTL\\n'
-                    setup_script += ';\\n'
-                    setup_script += '@       IN      NS      ns1.render.\\n'
-                    setup_script += 'ns1     IN      A       133.7.0.1\\n'
-                    setup_script += '@       IN      A       216.24.57.1\\n'
-                    setup_script += '*       IN      A       216.24.57.1  ; Wildcard for issuance\\n'
-                    setup_script += 'forwarders {\\n'
-                    setup_script += '    8.8.8.8;\\n'
-                    setup_script += '    8.8.4.4;\\n'
-                    setup_script += '};\\nEOF\\n'
+                    setup_script += 'cat > /etc/bind/named.conf.local << EOF\n'
+                    setup_script += 'zone "render" {\n'
+                    setup_script += '    type master;\n'
+                    setup_script += '    file "/etc/bind/db.render";\n'
+                    setup_script += '};\nEOF\n'
+                    setup_script += 'cat > /etc/bind/db.render << EOF\n'
+                    setup_script += '$TTL    604800\n'
+                    setup_script += '@       IN      SOA     ns1.render. root.render. (\n'
+                    setup_script += '                              2         ; Serial\n'
+                    setup_script += '                         604800         ; Refresh\n'
+                    setup_script += '                          86400         ; Retry\n'
+                    setup_script += '                        2419200         ; Expire\n'
+                    setup_script += '                         604800 )       ; Negative Cache TTL\n'
+                    setup_script += ';\n'
+                    setup_script += '@       IN      NS      ns1.render.\n'
+                    setup_script += 'ns1     IN      A       133.7.0.1\n'
+                    setup_script += '@       IN      A       216.24.57.1\n'
+                    setup_script += '*       IN      A       216.24.57.1  ; Wildcard for issuance\n'
+                    setup_script += 'forwarders {\n'
+                    setup_script += '    8.8.8.8;\n'
+                    setup_script += '    8.8.4.4;\n'
+                    setup_script += '};\nEOF\n'
                     setup_script += 'systemctl restart bind9 && systemctl enable bind9 && ufw allow 53 && '
-                    setup_script += 'echo \\"Bind9 configured for .render TLD on 133.7.0.1\\"'
-                    setup_script += '\\"'
+                    setup_script += 'echo "Bind9 configured for .render TLD on 133.7.0.1"'
+                    setup_script += '"'
                     ssh = paramiko.SSHClient()
                     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                     ssh.connect(LINUX_HOST, username=LINUX_USER, password=LINUX_PASS)
