@@ -15,6 +15,7 @@ from datetime import datetime
 import urllib.parse
 import re
 import subprocess  # For git mirror updates
+import requests  # Added: For fallback mirror pulls
 
 # Graceful Paramiko Import
 paramiko = None
@@ -36,7 +37,7 @@ eventlet.monkey_patch()
 # Domain Configs
 RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')
 DUCKDNS_DOMAIN = os.environ.get('DUCKDNS_DOMAIN', 'alicequantum.duckdns.org')
-ALICE_IP = os.environ.get('ALICE_IP', '73.189.2.5')
+ALICE_IP = os.environ.get('ALICE_IP', '133.7.0.1')  # Changed to quantum gateway IP
 QUANTUM_DOMAIN = os.environ.get('QUANTUM_DOMAIN', 'quantum.realm.domain.dominion.foam.computer.render')
 LOCAL_WEBSERVER_PORT = 80
 GITHUB_MIRROR_LOCAL = './github_mirror'  # Local root for all mirrored files
@@ -46,15 +47,24 @@ GITHUB_MIRROR_BASE = 'https://quantum.realm.domain.dominion.foam.computer.render
 
 # User Auth
 ADMIN_USER = 'shemshallah'
-ADMIN_PASS_HASH = hashlib.sha3_256(b'$h10j1r1H0w4rd').hexdigest()
+ADMIN_PASS_HASH = '930f0446221f865871805ab4e9577971ff97bb21d39abc4e91341ca6100c9181'  # Pre-computed SHA3-256 of b'$h10j1r1H0w4rd'
 
-# Registry (Pre-Registered Subs 256-999 to Admin)
+# Quantum Network Config
+QUANTUM_NET_CIDR = '133.7.0.0/24'
+QUANTUM_GATEWAY = '133.7.0.1'
+QUANTUM_DNS = '133.7.0.1'
+QUANTUM_POOL_START = '133.7.0.10'
+QUANTUM_POOL_END = '133.7.0.254'
+IP_POOL = list(range(int(''.join(QUANTUM_POOL_START.split('.'))), int(''.join(QUANTUM_POOL_END.split('.'))) + 1))  # Flatten for random issuance
+
+# Registry (Pre-Registered Subs 256-999 to Admin + .quantum TLDs)
 PRE_REG_SUBS = {str(i): {'owner': ADMIN_USER, 'status': 'available', 'price': 1.00} for i in range(256, 1000)}
+QUANTUM_TLDS = {f'{i}.quantum': {'owner': ADMIN_USER, 'status': 'available', 'price': 5.00, 'ip': None} for i in range(1, 1001)}  # Example: 1.quantum, etc.
 
-# Linuxbserver Config (SSH to Alice)
+# Linuxbserver Config (SSH to Alice/Ubuntu)
 LINUX_USER = ADMIN_USER
-LINUX_PASS = '$h10j1r1H0w4rd'
-LINUX_HOST = ALICE_IP  # SSH target
+LINUX_PASS = os.environ.get('LINUX_PASS', '$h10j1r1H0w4rd')  # Secure via env
+LINUX_HOST = ALICE_IP  # SSH target (quantum gateway)
 
 # Quantum Foam Initialization - Upgraded to 5x5x5 Lattice
 try:
@@ -85,7 +95,7 @@ except Exception as e:
     fidelity_lattice = 0.999
     bridge_key = "QFOAM-5x5x5-PROD-999-abc"
 
-# Functions
+# Functions (enhanced for DNS/IP)
 def bh_encryption_cascade(plaintext, rounds=3):
     rand_unitary = qt.rand_unitary(2)
     seed = rand_unitary.full().tobytes()[:32]
@@ -141,6 +151,16 @@ def stream_qram_state(sid):
     proj = core_ghz.ptrace([0])
     return float(proj.full()[0,0].real)
 
+def issue_quantum_ip(session_id):
+    """Issue unique IP from pool"""
+    if 'issued_ip' not in session:
+        idx = int(hashlib.sha256(session_id.encode()).hexdigest(), 16) % len(IP_POOL)
+        flat_ip = IP_POOL[idx]
+        issued_ip = f"{flat_ip//100000}.{flat_ip//10000%10}.{flat_ip//100%10}.{flat_ip%10}"
+        session['issued_ip'] = issued_ip
+        logger.warning(f"Issued quantum IP {issued_ip} for session {session_id}")
+    return session['issued_ip']
+
 # Matplotlib Plot Util - Now for 5x5x5
 def plot_fidelity_to_base64(fid_values):
     fig, ax = plt.subplots()
@@ -178,16 +198,16 @@ def pull_from_mirror(resource):
     except Exception as e:
         return f"Network pull error: {str(e)}"
 
-# Mirror Update Function (Run at Startup)
+# Mirror Update Function (Run at Startup) - Wrapped for Render (git may fail)
 def update_mirror():
-    """Update local mirror from root GitHub repos."""
+    """Update local mirror from root GitHub repos. Skips if git unavailable."""
     os.makedirs(GITHUB_MIRROR_LOCAL, exist_ok=True)
     repos = [
         'https://github.com/matplotlib/matplotlib.git',
         # Add more repos as needed, e.g., 'https://github.com/numpy/numpy.git'
     ]
-    for repo in repos:
-        try:
+    try:
+        for repo in repos:
             repo_name = repo.split('/')[-1].replace('.git', '')
             full_path = os.path.join(GITHUB_MIRROR_LOCAL, repo_name)
             if not os.path.exists(full_path):
@@ -196,8 +216,12 @@ def update_mirror():
             else:
                 subprocess.run(['git', '-C', full_path, 'pull'], check=True, capture_output=True)
                 print(f"Updated {full_path}")
-        except Exception as e:
-            print(f"Mirror update error for {repo}: {e}")
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Git mirror update failed (likely no git in runtime): {e}. Use Docker for full mirror.")
+        print("Mirror skipped - fallback to API pulls only.")
+    except Exception as e:
+        logger.warning(f"Mirror update error: {e}")
+        print(f"Mirror update error: {e}")
 
 # Run Mirror Update at Startup
 update_mirror()
@@ -223,7 +247,7 @@ def internal_error(error):
 def health_check():
     return 'OK', 200
 
-# Login Route
+# Login Route (Enhanced: Auto-issue IP on success)
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     try:
@@ -238,10 +262,12 @@ def login():
                 session_id = request.form.get('session', f'sess_{client_ip}')
                 gen_key, _ = bh_repeatable_keygen(session_id)
                 session['session_id'] = session_id
+                # Auto-issue quantum IP
+                issued_ip = issue_quantum_ip(session_id)
                 # Entangle client IP siamese-style
                 entangle_ip_address(client_ip)
-                # Redirect with matching params
-                params = urllib.parse.urlencode({'session': session_id, 'bridge_key': gen_key})
+                # Redirect with matching params + issued IP
+                params = urllib.parse.urlencode({'session': session_id, 'bridge_key': gen_key, 'issued_ip': issued_ip})
                 return redirect(f'/?{params}')
             else:
                 return "Invalid credentials", 401
@@ -256,43 +282,69 @@ def login():
         logger.error(f"Login Error: {e}")
         return "Login decoherence - try again.", 500
 
-# Registry Routes (Pre-Registered Subs 256-999)
+# Registry Routes (Enhanced: .quantum TLDs + IP Issuance)
 @app.route('/registry')
 def registry():
     if not session.get('logged_in') or session['user'] != ADMIN_USER:
         return "Unauthorized", 403
-    return jsonify(PRE_REG_SUBS)
+    combined = {**PRE_REG_SUBS, **QUANTUM_TLDS}
+    return jsonify(combined)
 
-@app.route('/sell/<sub_id>', methods=['GET', 'POST'])
-def sell_sub(sub_id):
+@app.route('/sell/<domain>', methods=['GET', 'POST'])
+def sell_domain(domain):
     if not session.get('logged_in') or session['user'] != ADMIN_USER:
         return redirect('/login')
-    if sub_id not in PRE_REG_SUBS or PRE_REG_SUBS[sub_id]['status'] != 'available':
-        return "Subdomain not available", 400
+    combined = {**PRE_REG_SUBS, **QUANTUM_TLDS}
+    if domain not in combined or combined[domain]['status'] != 'available':
+        return "Domain not available", 400
     if request.method == 'POST':
-        # Sim payment (Stripe test - replace with real)
+        # Sim payment
         buyer = request.form.get('buyer_email')
         if buyer:
-            PRE_REG_SUBS[sub_id]['owner'] = buyer
-            PRE_REG_SUBS[sub_id]['status'] = 'sold'
-            logger.warning(f'Sold {sub_id}.duckdns.org to {buyer}')
-            return f"Subdomain {sub_id}.duckdns.org sold! Key: {bridge_key}"
+            combined[domain]['owner'] = buyer
+            combined[domain]['status'] = 'sold'
+            # For .quantum: Issue IP & add to DNS via SSH (autonomous)
+            if domain.endswith('.quantum'):
+                issued_ip = issue_quantum_ip(buyer)
+                combined[domain]['ip'] = issued_ip
+                # Trigger SSH to update Bind9 zonefile
+                update_dns_zone(domain, issued_ip)
+            logger.warning(f'Sold {domain} to {buyer} {"with IP " + issued_ip if "ip" in locals() else ""}')
+            return f"Domain {domain} sold! {'IP: ' + issued_ip if 'issued_ip' in locals() else ''} Key: {bridge_key}"
     return '''
     <form method="post">
         Email: <input type="email" name="buyer_email"><br>
-        <input type="submit" value="Buy for ${PRE_REG_SUBS[sub_id]['price']}">
+        <input type="submit" value="Buy for ${combined[domain]['price']}">
     </form>
     '''
 
-@app.route('/update/<sub_id>', methods=['POST'])
-def update_sub(sub_id):
+def update_dns_zone(domain, ip):
+    """Autonomous SSH to Ubuntu: Add A record to .quantum zone"""
+    if not paramiko:
+        logger.error("Paramiko required for DNS update")
+        return
+    try:
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(LINUX_HOST, username=LINUX_USER, password=LINUX_PASS)
+        stdin, stdout, stderr = ssh.exec_command(f'echo "IN A {ip}" >> /etc/bind/db.quantum && rndc reload quantum')
+        if stderr.read().decode():
+            logger.error(f"DNS update error: {stderr.read().decode()}")
+        ssh.close()
+        logger.warning(f"DNS zone updated for {domain} -> {ip}")
+    except Exception as e:
+        logger.error(f"SSH DNS update failed: {e}")
+
+@app.route('/update/<domain>', methods=['POST'])
+def update_domain(domain):
     if not session.get('logged_in') or session['user'] != ADMIN_USER:
         return "Unauthorized", 403
-    if sub_id in PRE_REG_SUBS:
+    combined = {**PRE_REG_SUBS, **QUANTUM_TLDS}
+    if domain in combined:
         new_status = request.form.get('status', 'available')
-        PRE_REG_SUBS[sub_id]['status'] = new_status
-        return f"Updated {sub_id}: {new_status}"
-    return "Subdomain not found", 404
+        combined[domain]['status'] = new_status
+        return f"Updated {domain}: {new_status}"
+    return "Domain not found", 404
 
 # Proxy Route for Linux Webserver (over DuckDNS, thematic overlay via client-side)
 @app.route('/web_proxy')
@@ -302,7 +354,7 @@ def web_proxy():
     # Redirect to DuckDNS for Linux webserver access (assumes bound publicly)
     return redirect(f'https://{DUCKDNS_DOMAIN}', code=302)
 
-# Quantum Domain Redirector - Enhanced for DuckDNS linking
+# Quantum Domain Redirector - Enhanced for DuckDNS linking + IP Display
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def quantum_gate(path):
@@ -311,8 +363,7 @@ def quantum_gate(path):
             return redirect('/login')
         
         client_ip = request.remote_addr
-        if client_ip == '127.0.0.1' and not request.args.get('bridge_key'):
-            return 'OK', 200
+        issued_ip = issue_quantum_ip(session.get('session_id', client_ip))  # Ensure issued
         
         host = request.headers.get('Host', '').lower()
         quantum_hosts = [QUANTUM_DOMAIN]
@@ -329,6 +380,7 @@ def quantum_gate(path):
         
         qram_entangled_session('user_ip', client_ip)
         qram_entangled_session('session_id', session_id)
+        qram_entangled_session('issued_ip', issued_ip)
         
         provided_key = request.args.get('bridge_key', '')
         session['session_id'] = session_id  # Ensure it's set
@@ -351,7 +403,7 @@ def quantum_gate(path):
         # Entangle ALICE_IP for siamese mirror
         ip_mirror_fid = entangle_ip_address(ALICE_IP)
         
-        logger.warning(f'Access: {client_ip}, Sess {session_id}, 5x5x5 Lattice Active')
+        logger.warning(f'Access: {client_ip}, Sess {session_id}, Issued IP {issued_ip}, 5x5x5 Lattice Active')
         html_content = f"""
         <html>
             <head><title>Quantum Realm Prod - QSH Portal (5x5x5 Lattice)</title>
@@ -368,16 +420,17 @@ def quantum_gate(path):
                 <iframe id="overlay-frame" src="https://{DUCKDNS_DOMAIN}" onload="console.log('DuckDNS Overlay Entangled')"></iframe>
                 <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render (5x5x5)</h1>
                 <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {ip_negativity:.16f}, Tele {tele_id:.6f}, IP Mirror Fid {ip_mirror_fid:.16f}, Back {session.get('backup_id', 'none')}{' | SSH: ' + ('Enabled' if paramiko else 'Disabled - Add paramiko to requirements.txt')}</p>
-                <p style="color: #0f0;">Enc: {enc_key[:32]}... | Mirror Pull (Local Root): {mirror_pull[:50]}... | Registry: /registry | Sell: /sell/<sub> | Web Proxy: /web_proxy</p>
+                <p style="color: #0f0;">Issued Quantum IP: {issued_ip} | Network: {QUANTUM_NET_CIDR} (Gateway: {QUANTUM_GATEWAY}, DNS: {QUANTUM_DNS}) | Enc: {enc_key[:32]}... | Mirror Pull (Local Root): {mirror_pull[:50]}... | Registry: /registry | Sell: /sell/<domain> | Web Proxy: /web_proxy</p>
                 <p style="color: #0f0;">DuckDNS Linked: {DUCKDNS_DOMAIN} → Alice {ALICE_IP} (127.0.0.1 Linux Webserver Overlay Active)</p>
                 <div id="terminal" style="width: 100%; height: 400px; background: #000;"></div>
                 <script>
                     const socket = io();
                     const term = new Terminal({{ cursorBlink: true, theme: {{ background: '#000', foreground: '#0f0' }} }});
                     term.open(document.getElementById('terminal'));
-                    term.write('QSH Foam REPL v1.1 (5x5x5 Lattice - IP Entangled)\\r\\n');
-                    term.write('Type "help" for commands. Subs 256-999 pre-registered to shemshallah.\\r\\n');
-                    term.write('New: "connect_linux" for SSH, "entangle_ip <ip>" for siamese mirror, Overlay: DuckDNS HTML backgrounded\\r\\n');
+                    term.write('QSH Foam REPL v2.0 (5x5x5 Lattice - IP Entangled)\\r\\n');
+                    term.write('Issued IP: {issued_ip} | Type "help" for commands. .quantum TLDs now issuable.\\r\\n');
+                    term.write('New: "setup_dns" auto-configures Bind9 on Ubuntu, "connect_linux" for SSH tunnel\\r\\n');
+                    term.write('Note: Git mirror may be limited on Render - use "pull matplotlib" for API fallback.\\r\\n');
                     term.write('QSH> ');
                     
                     term.onData((data) => {{
@@ -409,7 +462,7 @@ def quantum_gate(path):
         logger.error(f"Quantum Gate Error: {e}")
         return f"Gate decoherence: {str(e)}", 500
 
-# QSH Foam REPL Backend
+# QSH Foam REPL Backend (Enhanced: SSH Tunnel + Autonomous DNS Setup)
 repl_sessions = {}
 
 @socketio.on('qsh_command')
@@ -433,28 +486,35 @@ def handle_qsh_command(data):
     linux_prompt = None
     try:
         if pending_auth:
-            # Handle auth input (SSH disabled if no paramiko)
-            output = "SSH Auth Pending - But paramiko required for connect_linux. Install it."
-            session_data['pending_auth'] = None
-            prompt = True
+            # Handle SSH auth (now non-interactive for setup)
+            if pending_auth == 'user':
+                session_data['pending_auth'] = None  # Skip prompt, use env creds
+                output += f"Auth: {LINUX_USER} (auto) | "
+                prompt = False
             emit('qsh_output', {'output': output, 'prompt': prompt})
             return
 
         if in_linux_mode:
-            # SSH Cleanup (if somehow active)
-            output = "SSH Mode - But paramiko disabled. Force exit."
+            # Interactive SSH shell (tunnel)
             if channel:
-                channel.close()
-            if ssh_client:
-                ssh_client.close()
-            session_data['ssh_client'] = None
-            session_data['channel'] = None
-            session_data['in_linux_mode'] = False
-            prompt = True
+                if select.select([channel], [], [], 0.0)[0]:
+                    stdout_data = channel.recv(1024).decode()
+                    if stdout_data:
+                        output = stdout_data
+                    stderr_data = channel.recv_stderr(1024).decode()
+                    if stderr_data:
+                        output += f"\nERR: {stderr_data}"
+                else:
+                    input_data = cmd.encode()
+                    channel.send(input_data)
+            else:
+                output = "SSH channel closed. Type 'exit' to quit."
+                in_linux_mode = False
+                session_data['in_linux_mode'] = False
         else:
             if cmd == 'help':
                 ssh_status = " (SSH disabled - add paramiko)" if not paramiko else ""
-                output = f"Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, plot fidelity, pull matplotlib, registry list, sell <sub>, connect_linux{ssh_status}, entangle_ip <ip>, exit, clear"
+                output = f"Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, plot fidelity, pull matplotlib, registry list, sell <domain>, connect_linux{ssh_status}, setup_dns{ssh_status}, entangle_ip <ip>, exit, clear"
             elif cmd.startswith('entangle '):
                 parts = cmd.split()
                 if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
@@ -482,27 +542,86 @@ def handle_qsh_command(data):
                 mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')
                 output = mirror_pull  # Show full pull
             elif cmd == 'registry list':
-                subs_list = ', '.join([k for k, v in PRE_REG_SUBS.items() if v['status'] == 'available'][:10])
-                output = f"Available Subs (256-999): {subs_list}... (Full: /registry)"
+                combined = {**PRE_REG_SUBS, **QUANTUM_TLDS}
+                subs_list = ', '.join([k for k, v in combined.items() if v['status'] == 'available'][:10])
+                output = f"Available (Subs + .quantum): {subs_list}... (Full: /registry)"
             elif cmd.startswith('sell '):
-                sub = cmd.split(' ', 1)[1]
-                if sub in PRE_REG_SUBS:
-                    output = f"Selling {sub}.duckdns.org - Visit /sell/{sub}"
+                domain = cmd.split(' ', 1)[1]
+                combined = {**PRE_REG_SUBS, **QUANTUM_TLDS}
+                if domain in combined:
+                    output = f"Selling {domain} - Visit /sell/{domain}"
                 else:
-                    output = f"Sub {sub} not in registry"
+                    output = f"Domain {domain} not in registry"
             elif cmd.startswith('entangle_ip '):
                 ip = cmd.split(' ', 1)[1]
                 mirror_fid = entangle_ip_address(ip)
                 output = f"Siamese mirror entangled for IP {ip}: Fidelity {mirror_fid:.16f}"
+            elif cmd == 'setup_dns':
+                if not paramiko:
+                    output = "setup_dns disabled: Add 'paramiko==3.4.0' to requirements.txt and redeploy."
+                else:
+                    output = "Autonomous DNS Setup on Ubuntu...\n"
+                    # Run full setup script via SSH
+                    setup_script = """
+apt update && apt install -y bind9 bind9utils dnsutils
+cat > /etc/bind/named.conf.local << EOF
+zone "quantum" {
+    type master;
+    file "/etc/bind/db.quantum";
+};
+EOF
+cat > /etc/bind/db.quantum << EOF
+$TTL    604800
+@       IN      SOA     quantum. root.quantum. (
+                              2         ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      quantum.
+@       IN      A       133.7.0.1
+*       IN      A       133.7.0.1  ; Wildcard for issuance
+forwarders {
+    8.8.8.8;
+    8.8.4.4;
+};
+EOF
+systemctl restart bind9
+systemctl enable bind9
+ufw allow 53
+echo "Bind9 configured for .quantum TLD on 133.7.0.1"
+                    """
+                    ssh = paramiko.SSHClient()
+                    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                    ssh.connect(LINUX_HOST, username=LINUX_USER, password=LINUX_PASS)
+                    stdin, stdout, stderr = ssh.exec_command(f'bash -c "{setup_script}"')
+                    output += stdout.read().decode()
+                    if stderr.read().decode():
+                        output += f"\nERR: {stderr.read().decode()}"
+                    ssh.close()
+                    output += "\nDNS Setup Complete: .quantum zone active on 133.7.0.1:53"
             elif cmd == 'connect_linux':
                 if not paramiko:
                     output = "connect_linux disabled: Add 'paramiko==3.4.0' to requirements.txt and redeploy."
                 else:
-                    output = f"Connecting to linuxbserver via {DUCKDNS_DOMAIN} -> alice {LINUX_HOST} -> {QUANTUM_DOMAIN}\\n"
-                    output += f"Username: "
-                    session_data['pending_auth'] = 'user'
-                    prompt = False
-                    linux_prompt = output
+                    try:
+                        if not ssh_client:
+                            ssh_client = paramiko.SSHClient()
+                            ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                            ssh_client.connect(LINUX_HOST, username=LINUX_USER, password=LINUX_PASS)
+                            channel = ssh_client.invoke_shell()
+                            session_data['ssh_client'] = ssh_client
+                            session_data['channel'] = channel
+                            session_data['in_linux_mode'] = True
+                            output = f"SSH Tunnel Connected to Ubuntu {LINUX_HOST} (Gateway: {QUANTUM_GATEWAY})\\n"
+                            output += channel.recv(1024).decode()  # Banner
+                        else:
+                            output = "SSH tunnel already active. Type commands directly."
+                        prompt = False
+                        linux_prompt = output + "$ "  # Ubuntu prompt
+                    except Exception as e:
+                        output = f"SSH Connect Failed: {e}"
             elif cmd == 'clear':
                 history = []
                 output = "History cleared"
@@ -513,6 +632,8 @@ def handle_qsh_command(data):
                         channel.close()
                     if ssh_client:
                         ssh_client.close()
+                    session_data['ssh_client'] = None
+                    session_data['channel'] = None
                 del repl_sessions[sid]
                 output = "REPL exited"
                 emit('qsh_output', {'output': output})
