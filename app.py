@@ -258,6 +258,7 @@ class QuantumFoamLattice:
         self.base_dim = 3  # Base 3D lattice
         self.max_dim = 11  # Up to 11D for QRAM
         self.n_sites_base = self.base_size ** self.base_dim  # 27 for 3x3x3
+        self.qram_dims = QRAM_DIMS  # Moved early for _initialize_multi_dim_lattice
         
         logger.info("Initializing production-grade multi-dimensional quantum foam lattice (3x3x3 base scaling to 11D for QRAM)...")
         logger.info("Connecting to existing 3x3x3 lattice at quantum.* routes for routing...")
@@ -275,7 +276,6 @@ class QuantumFoamLattice:
             self.bridge_key = f"QFOAM-MULTIDIM-{state_hash[:32]}"
             
             self.ip_entanglement = {}
-            self.qram_dims = QRAM_DIMS  # 3 to 11 dims for QRAM node
             
             # Connect to prior points and entangle QRAM dims + quantum routes
             for domain, ip in FOAM_QUANTUM_IPS.items():
@@ -1469,6 +1469,15 @@ def issue_user_ip_and_hex(username):
         
         return user_ip, hex_address
 
+def issue_quantum_ip(session_id):
+    """Fallback quantum IP issuance for admin"""
+    available_ips = [ip for ip in IP_POOL if ip not in ALLOCATED_IPS.values()]
+    if not available_ips:
+        available_ips = IP_POOL
+    ip = random.choice(available_ips)
+    ALLOCATED_IPS[session_id] = ip
+    return ip
+
 def run_autonomous_setup_background():
     """Background thread for autonomous setup"""
     autonomous_setup.run_autonomous_setup()
@@ -1826,15 +1835,6 @@ def email_html():
 </body>
 </html>
     '''
-
-def issue_quantum_ip(session_id):
-    """Fallback quantum IP issuance for admin"""
-    available_ips = [ip for ip in IP_POOL if ip not in ALLOCATED_IPS.values()]
-    if not available_ips:
-        available_ips = IP_POOL
-    ip = random.choice(available_ips)
-    ALLOCATED_IPS[session_id] = ip
-    return ip
 
 @app.route('/computer/render/gate')
 def quantum_gate():
