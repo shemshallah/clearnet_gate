@@ -19,7 +19,7 @@ from flask_socketio import SocketIO, emit
 import qutip as qt
 import matplotlib.pyplot as plt
 from itertools import product
-from datetime import datetime
+from datetime import datetime, timezone
 import urllib.parse
 import re
 import subprocess  # For git mirror updates
@@ -123,7 +123,7 @@ def bh_repeatable_keygen(session_id):
     qram_hash = hashlib.sha256(session_id.encode()).hexdigest()
     key_material = f"{session_id}{qram_hash}"
     key = hashlib.shake_256(key_material.encode()).digest(32)
-    return key.hex(), datetime.utcnow()
+    return key.hex(), datetime.now(timezone.utc)
 
 def foam_lattice_compress(data_tensor):
     U, S, Vh = np.linalg.svd(data_tensor, full_matrices=False)
@@ -281,6 +281,11 @@ app = Flask(__name__)
 app.secret_key = hashlib.sha256(bridge_key.encode()).digest()[:32]
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger=False, engineio_logger=False)
 
+# Simple root for Render port detection (quick 200)
+@app.route('/', methods=['GET'])
+def root_detect():
+    return 'Quantum Gate Active', 200
+
 # 404 Handler
 @app.errorhandler(404)
 def not_found(error):
@@ -312,6 +317,7 @@ def login():
                 session_id = request.form.get('session', f'sess_{client_ip}')
                 gen_key, _ = bh_repeatable_keygen(session_id)
                 session['session_id'] = session_id
+                session['gen_key'] = gen_key  # Fixed: Store in session for verification
                 # Auto-issue quantum IP
                 issued_ip = issue_quantum_ip(session_id)
                 # Entangle client IP siamese-style
@@ -413,9 +419,8 @@ def web_proxy():
     return redirect(f'https://{DUCKDNS_DOMAIN}', code=302)
 
 # Quantum Domain Redirector - Enhanced for DuckDNS linking + IP Display
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def quantum_gate(path):
+@app.route('/gate', methods=['GET'])  # Fixed: Separate route for gate to avoid conflict with root_detect
+def quantum_gate(path=''):
     try:
         if not session.get('logged_in'):
             return redirect('/login')
@@ -446,11 +451,18 @@ def quantum_gate(path):
         gen_key, ts = bh_repeatable_keygen(session_id)
         enc_key = bh_encryption_cascade(bridge_key)
         
-        if not hashlib.sha256(provided_key.encode()).hexdigest() == hashlib.sha256(gen_key.encode()).hexdigest():
-            params = urllib.parse.urlencode({'enc_key': enc_key, 'session': session_id})
-            gate_url = f"https://{RENDER_DOMAIN}/?{params}"
-            logger.warning(f'Invalid Key Redirect: {client_ip} -> Gate with params')
-            return redirect(gate_url, code=302)
+        # Fixed: Only check if bridge_key provided, to avoid loop
+        key_valid = True
+        if 'bridge_key' in request.args:
+            if not hashlib.sha256(provided_key.encode()).hexdigest() == hashlib.sha256(gen_key.encode()).hexdigest():
+                key_valid = False
+                params = urllib.parse.urlencode({'enc_key': enc_key, 'session': session_id})
+                gate_url = f"https://{RENDER_DOMAIN}/gate?{params}"
+                logger.warning(f'Invalid Key Redirect: {client_ip} -> Gate with params')
+                return redirect(gate_url, code=302)
+        
+        if not key_valid:
+            return "Invalid session key", 403
         
         mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')  # Now from local/root
         
@@ -522,6 +534,11 @@ def quantum_gate(path):
     except Exception as e:
         logger.error(f"Quantum Gate Error: {e}")
         return f"Gate decoherence: {str(e)}", 500
+
+# Redirect / to /gate after simple check
+@app.route('/', methods=['GET'])
+def root_redirect():
+    return redirect('/gate', code=302)
 
 # QSH Foam REPL Backend (Enhanced: SSH Tunnel + Autonomous DNS Setup)
 repl_sessions = {}
