@@ -2002,8 +2002,9 @@ def quantum_gate():
                                client_ip=client_ip, quantum_ip=quantum_ip, metrics=metrics,
                                ssh_status=ssh_status, QUANTUM_NET=QUANTUM_NET, 
                                QUANTUM_DNS_PRIMARY=QUANTUM_DNS_PRIMARY, QUANTUM_GATEWAY=QUANTUM_GATEWAY)
-    except:
-        # Fallback inline
+    except Exception as e:  # Broaden to catch template/render errors
+        logger.warning(f"Template render failed (using fallback): {e}")
+        # Fallback inline - properly indented under except
         html = f'''
 <!DOCTYPE html>
 <html>
@@ -2078,7 +2079,7 @@ def quantum_gate():
             <strong>Connection:</strong> {connection_info}
         </div>
         <div class="info-line">
-            <strong>Session ID:</strong> {session_id}
+            <strong>Session ID:</strong> {session_id or 'N/A'}
         </div>
         <div class="info-line">
             <strong>Client IP:</strong> {client_ip}
@@ -2097,27 +2098,27 @@ def quantum_gate():
     <div class="metrics-grid">
         <div class="metric">
             <div class="metric-label">LATTICE FIDELITY</div>
-            <div class="metric-value">{metrics['fidelity']:.15f}</div>
+            <div class="metric-value">{metrics.get("fidelity", 0):.15f}</div>
         </div>
         <div class="metric">
             <div class="metric-label">ENTANGLEMENT NEGATIVITY</div>
-            <div class="metric-value">{metrics['negativity']:.6f}</div>
+            <div class="metric-value">{metrics.get("negativity", 0):.6f}</div>
         </div>
         <div class="metric">
             <div class="metric-label">LATTICE SITES BASE</div>
-            <div class="metric-value">{metrics['lattice_sites_base']}</div>
+            <div class="metric-value">{metrics.get("lattice_sites_base", 0)}</div>
         </div>
         <div class="metric">
             <div class="metric-label">ENTANGLED IPs</div>
-            <div class="metric-value">{metrics['entangled_ips']}</div>
+            <div class="metric-value">{metrics.get("entangled_ips", 0)}</div>
         </div>
         <div class="metric">
             <div class="metric-label">QRAM DIMS</div>
-            <div class="metric-value">{metrics['qram_dims']}</div>
+            <div class="metric-value">{metrics.get("qram_dims", [])}</div>
         </div>
         <div class="metric">
             <div class="metric-label">QRAM CAPACITY (GB)</div>
-            <div class="metric-value">{metrics['qram_effective_capacity_gb']:.2f}</div>
+            <div class="metric-value">{metrics.get("qram_effective_capacity_gb", 0):.2f}</div>
         </div>
         <div class="metric">
             <div class="metric-label">SETUP STATUS</div>
@@ -2148,7 +2149,7 @@ def quantum_gate():
         term.writeln('║  QRAM: 3x3x3 Base Scaling to 11D (27+ sites, 300+ GB effective)     ║');
         term.writeln('╚══════════════════════════════════════════════════════════════════════╝');
         term.writeln('');
-        term.writeln('Session: {session_id}');
+        term.writeln('Session: {session_id or "N/A"}');
         term.writeln('{ip_display}');
         term.writeln('Setup: {setup_complete}');
         term.writeln('DNS Base: {QUANTUM_DNS_PRIMARY}');
@@ -2200,7 +2201,7 @@ def quantum_gate():
 </body>
 </html>
         '''
-    return html
+        return html
 
 @socketio.on('qsh_command')
 def handle_qsh_command(data):
