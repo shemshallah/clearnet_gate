@@ -33,9 +33,9 @@ logger = logging.getLogger(__name__)
 import eventlet
 eventlet.monkey_patch()
 
-# Domain Configs - Permanently Set to alicequantum
+# Domain Configs
 RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')
-DUCKDNS_DOMAIN = os.environ.get('DUCKDNS_DOMAIN', 'alicequantum.duckdns.org')  # Permanently alicequantum
+DUCKDNS_DOMAIN = os.environ.get('DUCKDNS_DOMAIN', 'alicequantum.duckdns.org')
 ALICE_IP = os.environ.get('ALICE_IP', '73.189.2.5')
 QUANTUM_DOMAIN = os.environ.get('QUANTUM_DOMAIN', 'quantum.realm.domain.dominion.foam.computer.render')
 LOCAL_WEBSERVER_PORT = 80
@@ -352,7 +352,7 @@ def quantum_gate(path):
         ip_mirror_fid = entangle_ip_address(ALICE_IP)
         
         logger.warning(f'Access: {client_ip}, Sess {session_id}, 5x5x5 Lattice Active')
-        return f"""
+        html_content = f"""
         <html>
             <head><title>Quantum Realm Prod - QSH Portal (5x5x5 Lattice)</title>
             <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
@@ -383,4 +383,177 @@ def quantum_gate(path):
                     term.onData((data) => {{
                         if (data === '\\r') {{
                             const cmd = term.buffer.active.getLine( term.buffer.active.baseY + term.buffer.active.cursorY ).translateToString(true).trim();
-                            socket.emit('qsh_command', {{ command:
+                            socket.emit('qsh_command', {{ command: cmd }});
+                            term.write('\\r\\n');
+                        }} else if (data === '\\u007F') {{
+                            term.write('\\b \\b');
+                        }} else {{
+                            term.write(data);
+                        }}
+                    }});
+                    
+                    socket.on('qsh_output', (data) => {{
+                        term.write(data.output + '\\r\\n');
+                        if (data.plot_html) term.write('\\r\\n' + data.plot_html + '\\r\\n');
+                        if (data.prompt) term.write('QSH> ');
+                        else if (data.linux_prompt) term.write(data.linux_prompt);
+                    }});
+                    
+                    socket.on('connect', () => console.log('Socket Connected - 5x5x5 Lattice Active'));
+                </script>
+            </body>
+        </html>
+        """
+        return html_content
+    except Exception as e:
+        logger.error(f"Quantum Gate Error: {e}")
+        return f"Gate decoherence: {str(e)}", 500
+
+# QSH Foam REPL Backend
+repl_sessions = {}
+
+@socketio.on('qsh_command')
+def handle_qsh_command(data):
+    sid = request.sid
+    cmd = data.get('command', '').strip()
+    if sid not in repl_sessions:
+        repl_sessions[sid] = {'state': core_ghz.copy(), 'history': [], 'in_linux_mode': False, 'ssh_client': None, 'channel': None, 'pending_auth': None}
+    
+    session_data = repl_sessions[sid]
+    state = session_data['state']
+    history = session_data['history']
+    in_linux_mode = session_data['in_linux_mode']
+    ssh_client = session_data['ssh_client']
+    channel = session_data['channel']
+    pending_auth = session_data.get('pending_auth')
+    
+    output = ""
+    plot_html = None
+    prompt = True
+    linux_prompt = None
+    try:
+        if pending_auth:
+            # Handle auth input (SSH disabled if no paramiko)
+            output = "SSH Auth Pending - But paramiko required for connect_linux. Install it."
+            session_data['pending_auth'] = None
+            prompt = True
+            emit('qsh_output', {'output': output, 'prompt': prompt})
+            return
+
+        if in_linux_mode:
+            # SSH Cleanup (if somehow active)
+            output = "SSH Mode - But paramiko disabled. Force exit."
+            if channel:
+                channel.close()
+            if ssh_client:
+                ssh_client.close()
+            session_data['ssh_client'] = None
+            session_data['channel'] = None
+            session_data['in_linux_mode'] = False
+            prompt = True
+        else:
+            if cmd == 'help':
+                ssh_status = " (SSH disabled - add paramiko)" if not paramiko else ""
+                output = f"Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, plot fidelity, pull matplotlib, registry list, sell <sub>, connect_linux{ssh_status}, entangle_ip <ip>, exit, clear"
+            elif cmd.startswith('entangle '):
+                parts = cmd.split()
+                if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+                    q1, q2 = map(int, parts[1:])
+                    bell = qt.bell_state('00')
+                    state = qt.tensor(state.ptrace(list(set(range(n_core)) - {q1, q2})), bell)
+                    output = f"Entangled qubits {q1}-{q2}: Bell state injected"
+                else:
+                    output = "Usage: entangle <q1> <q2>"
+            elif cmd == 'measure fidelity':
+                fid = qt.fidelity(state, core_ghz)
+                output = f"Fidelity: {fid:.16f}"
+            elif cmd == 'compress lattice':
+                comp = foam_lattice_compress(state.full().real)
+                output = f"Compressed 5x5x5: {len(comp)} bytes"
+            elif cmd.startswith('teleport '):
+                inp = cmd.split(' ', 1)[1] if len(cmd.split()) > 1 else 'cascade'
+                tid = inter_hole_teleport(inp)
+                output = f"Teleported ID: {tid:.6f}"
+            elif cmd == 'plot fidelity':
+                fid_values = [fidelity_lattice] * (n_lattice // 20)  # Scaled for 125
+                plot_html = plot_fidelity_to_base64(fid_values)
+                output = "5x5x5 Fidelity plot generated (embedded below)"
+            elif cmd == 'pull matplotlib':
+                mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')
+                output = mirror_pull  # Show full pull
+            elif cmd == 'registry list':
+                subs_list = ', '.join([k for k, v in PRE_REG_SUBS.items() if v['status'] == 'available'][:10])
+                output = f"Available Subs (256-999): {subs_list}... (Full: /registry)"
+            elif cmd.startswith('sell '):
+                sub = cmd.split(' ', 1)[1]
+                if sub in PRE_REG_SUBS:
+                    output = f"Selling {sub}.duckdns.org - Visit /sell/{sub}"
+                else:
+                    output = f"Sub {sub} not in registry"
+            elif cmd.startswith('entangle_ip '):
+                ip = cmd.split(' ', 1)[1]
+                mirror_fid = entangle_ip_address(ip)
+                output = f"Siamese mirror entangled for IP {ip}: Fidelity {mirror_fid:.16f}"
+            elif cmd == 'connect_linux':
+                if not paramiko:
+                    output = "connect_linux disabled: Add 'paramiko==3.4.0' to requirements.txt and redeploy."
+                else:
+                    output = f"Connecting to linuxbserver via {DUCKDNS_DOMAIN} -> alice {LINUX_HOST} -> {QUANTUM_DOMAIN}\\n"
+                    output += f"Username: "
+                    session_data['pending_auth'] = 'user'
+                    prompt = False
+                    linux_prompt = output
+            elif cmd == 'clear':
+                history = []
+                output = "History cleared"
+            elif cmd == 'exit':
+                # Cleanup SSH if active
+                if in_linux_mode:
+                    if channel:
+                        channel.close()
+                    if ssh_client:
+                        ssh_client.close()
+                del repl_sessions[sid]
+                output = "REPL exited"
+                emit('qsh_output', {'output': output})
+                return
+            else:
+                output = "Unknown command. Type 'help'"
+            
+            history.append(f"{cmd} -> {output}")
+            session_data['history'] = history[-10:]
+            session_data['state'] = state
+        
+    except Exception as e:
+        output = f"Error: {str(e)}"
+        if in_linux_mode:
+            logger.error(f"SSH/Linux error: {e}")
+    
+    emit('qsh_output', {'output': output, 'plot_html': plot_html, 'prompt': prompt, 'linux_prompt': linux_prompt})
+
+# WS for Existing Channel
+@socketio.on('connect_channel')
+def qram_quantum_channel():
+    state = stream_qram_state(request.sid)
+    emit('quantum_update', {'state': state})
+    logger.warning('WS Active')
+
+# Cleanup on disconnect
+@socketio.on('disconnect')
+def handle_disconnect():
+    sid = request.sid
+    if sid in repl_sessions:
+        session_data = repl_sessions[sid]
+        if session_data.get('in_linux_mode') and paramiko:
+            channel = session_data.get('channel')
+            ssh_client = session_data.get('ssh_client')
+            if channel:
+                channel.close()
+            if ssh_client:
+                ssh_client.close()
+        del repl_sessions[sid]
+
+# Main block
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)
