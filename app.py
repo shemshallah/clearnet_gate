@@ -6,7 +6,6 @@ import base64
 import requests
 import time
 import select
-import paramiko  # Requires: pip install paramiko
 from io import BytesIO
 from flask import Flask, redirect, request, session, Response, jsonify
 from flask_socketio import SocketIO, emit
@@ -16,6 +15,15 @@ from itertools import product
 from datetime import datetime
 import urllib.parse
 import re
+
+# Graceful Paramiko Import (Prevents Boot Crash)
+paramiko = None
+try:
+    import paramiko
+    print("Paramiko loaded - SSH enabled")
+except ImportError:
+    print("Paramiko missing - SSH features disabled. Add 'paramiko==3.4.0' to requirements.txt")
+    paramiko = None
 
 # Production Logging
 logging.basicConfig(level=logging.WARNING)
@@ -168,6 +176,12 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', logger
 def not_found(error):
     return "Render Side 404", 404
 
+# 500 Handler (Catch-All for Errors)
+@app.errorhandler(500)
+def internal_error(error):
+    logger.error(f"Internal Error: {str(error)}")
+    return "Quantum Decoherence: App restarting... Check logs.", 500
+
 # Health Check
 @app.route('/health')
 def health_check():
@@ -176,31 +190,35 @@ def health_check():
 # Login Route
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        user = request.form.get('username')
-        passw = request.form.get('password')
-        if user == ADMIN_USER and hashlib.sha3_256(passw.encode()).hexdigest() == ADMIN_PASS_HASH:
-            session['logged_in'] = True
-            session['user'] = user
-            # Generate session_id & matching gen_key
-            client_ip = request.remote_addr
-            session_id = request.form.get('session', f'sess_{client_ip}')
-            gen_key, _ = bh_repeatable_keygen(session_id)
-            session['session_id'] = session_id
-            # Entangle client IP siamese-style
-            entangle_ip_address(client_ip)
-            # Redirect with matching params
-            params = urllib.parse.urlencode({'session': session_id, 'bridge_key': gen_key})
-            return redirect(f'/?{params}')
-        else:
-            return "Invalid credentials", 401
-    return '''
-    <form method="post">
-        Username: <input type="text" name="username" value="shemshallah"><br>
-        Password: <input type="password" name="password"><br>
-        <input type="submit">
-    </form>
-    '''
+    try:
+        if request.method == 'POST':
+            user = request.form.get('username')
+            passw = request.form.get('password')
+            if user == ADMIN_USER and hashlib.sha3_256(passw.encode()).hexdigest() == ADMIN_PASS_HASH:
+                session['logged_in'] = True
+                session['user'] = user
+                # Generate session_id & matching gen_key
+                client_ip = request.remote_addr
+                session_id = request.form.get('session', f'sess_{client_ip}')
+                gen_key, _ = bh_repeatable_keygen(session_id)
+                session['session_id'] = session_id
+                # Entangle client IP siamese-style
+                entangle_ip_address(client_ip)
+                # Redirect with matching params
+                params = urllib.parse.urlencode({'session': session_id, 'bridge_key': gen_key})
+                return redirect(f'/?{params}')
+            else:
+                return "Invalid credentials", 401
+        return '''
+        <form method="post">
+            Username: <input type="text" name="username" value="shemshallah"><br>
+            Password: <input type="password" name="password"><br>
+            <input type="submit">
+        </form>
+        '''
+    except Exception as e:
+        logger.error(f"Login Error: {e}")
+        return "Login decoherence - try again.", 500
 
 # Registry Routes (Pre-Registered Subs 256-999)
 @app.route('/registry')
@@ -252,103 +270,107 @@ def web_proxy():
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def quantum_gate(path):
-    if not session.get('logged_in'):
-        return redirect('/login')
-    
-    client_ip = request.remote_addr
-    if client_ip == '127.0.0.1' and not request.args.get('bridge_key'):
-        return 'OK', 200
-    
-    host = request.headers.get('Host', '').lower()
-    quantum_hosts = [QUANTUM_DOMAIN]
-    
-    if any(qh in host for qh in quantum_hosts):
-        params = request.query_string.decode()
-        duckdns_url = f"https://{DUCKDNS_DOMAIN}/?{params}" if params else f"https://{DUCKDNS_DOMAIN}/"
-        # Link to 127.0.0.1 via DuckDNS (Alice's local webserver exposed)
-        logger.warning(f'Alice Bridge: {host} → DuckDNS {ALICE_IP} (127.0.0.1 overlay)')
-        return redirect(duckdns_url, code=302)
-    
-    # Prefer persisted session_id
-    session_id = session.get('session_id', request.args.get('session', f'sess_{client_ip}'))
-    
-    qram_entangled_session('user_ip', client_ip)
-    qram_entangled_session('session_id', session_id)
-    
-    provided_key = request.args.get('bridge_key', '')
-    session['session_id'] = session_id  # Ensure it's set
-    
-    gen_key, ts = bh_repeatable_keygen(session_id)
-    enc_key = bh_encryption_cascade(bridge_key)
-    
-    if not hashlib.sha256(provided_key.encode()).hexdigest() == hashlib.sha256(gen_key.encode()).hexdigest():
-        params = urllib.parse.urlencode({'enc_key': enc_key, 'session': session_id})
-        gate_url = f"https://{RENDER_DOMAIN}/?{params}"
-        logger.warning(f'Invalid Key Redirect: {client_ip} -> Gate with params')
-        return redirect(gate_url, code=302)
-    
-    mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')
-    
-    offload_res = entangled_cpu_offload(f'fidelity_lattice * 1.0001')
-    comp_tensor = core_ghz.full().real
-    comp_lattice = len(foam_lattice_compress(comp_tensor))
-    tele_id = inter_hole_teleport('cascade_state')
-    # Entangle ALICE_IP for siamese mirror
-    ip_mirror_fid = entangle_ip_address(ALICE_IP)
-    
-    logger.warning(f'Access: {client_ip}, Sess {session_id}, 5x5x5 Lattice Active')
-    return f"""
-    <html>
-        <head><title>Quantum Realm Prod - QSH Portal (5x5x5 Lattice)</title>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
-        <link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" />
-        <script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js"></script>
-        <style>
-            #overlay-frame {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; opacity: 0.3; border: none; pointer-events: none; }}
-            body {{ position: relative; }}
-        </style>
-        </head>
-        <body style="background: #000; color: #0f0; font-family: monospace;">
-            <!-- Siamese Mirror Overlay: DuckDNS HTML (Linux webserver) as background -->
-            <iframe id="overlay-frame" src="https://{DUCKDNS_DOMAIN}" onload="console.log('DuckDNS Overlay Entangled')"></iframe>
-            <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render (5x5x5)</h1>
-            <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {ip_negativity:.16f}, Tele {tele_id:.6f}, IP Mirror Fid {ip_mirror_fid:.16f}, Back {session.get('backup_id', 'none')}</p>
-            <p style="color: #0f0;">Enc: {enc_key[:32]}... | Mirror Pull: {mirror_pull[:50]}... | Registry: /registry | Sell: /sell/<sub> | Web Proxy: /web_proxy</p>
-            <p style="color: #0f0;">DuckDNS Linked: {DUCKDNS_DOMAIN} → Alice {ALICE_IP} (127.0.0.1 Linux Webserver Overlay Active)</p>
-            <div id="terminal" style="width: 100%; height: 400px; background: #000;"></div>
-            <script>
-                const socket = io();
-                const term = new Terminal({{ cursorBlink: true, theme: {{ background: '#000', foreground: '#0f0' }} }});
-                term.open(document.getElementById('terminal'));
-                term.write('QSH Foam REPL v1.1 (5x5x5 Lattice - IP Entangled)\\r\\n');
-                term.write('Type "help" for commands. Subs 256-999 pre-registered to shemshallah.\\r\\n');
-                term.write('New: "connect_linux" for SSH, "entangle_ip <ip>" for siamese mirror, Overlay: DuckDNS HTML backgrounded\\r\\n');
-                term.write('QSH> ');
-                
-                term.onData((data) => {{
-                    if (data === '\\r') {{
-                        const cmd = term.buffer.active.getLine( term.buffer.active.baseY + term.buffer.active.cursorY ).translateToString(true).trim();
-                        socket.emit('qsh_command', {{ command: cmd }});
-                        term.write('\\r\\n');
-                    }} else if (data === '\\u007F') {{
-                        term.write('\\b \\b');
-                    }} else {{
-                        term.write(data);
-                    }}
-                }});
-                
-                socket.on('qsh_output', (data) => {{
-                    term.write(data.output + '\\r\\n');
-                    if (data.plot_html) term.write('\\r\\n' + data.plot_html + '\\r\\n');
-                    if (data.prompt) term.write('QSH> ');
-                    else if (data.linux_prompt) term.write(data.linux_prompt);
-                }});
-                
-                socket.on('connect', () => console.log('Socket Connected - 5x5x5 Lattice Active'));
-            </script>
-        </body>
-    </html>
-    """
+    try:
+        if not session.get('logged_in'):
+            return redirect('/login')
+        
+        client_ip = request.remote_addr
+        if client_ip == '127.0.0.1' and not request.args.get('bridge_key'):
+            return 'OK', 200
+        
+        host = request.headers.get('Host', '').lower()
+        quantum_hosts = [QUANTUM_DOMAIN]
+        
+        if any(qh in host for qh in quantum_hosts):
+            params = request.query_string.decode()
+            duckdns_url = f"https://{DUCKDNS_DOMAIN}/?{params}" if params else f"https://{DUCKDNS_DOMAIN}/"
+            # Link to 127.0.0.1 via DuckDNS (Alice's local webserver exposed)
+            logger.warning(f'Alice Bridge: {host} → DuckDNS {ALICE_IP} (127.0.0.1 overlay)')
+            return redirect(duckdns_url, code=302)
+        
+        # Prefer persisted session_id
+        session_id = session.get('session_id', request.args.get('session', f'sess_{client_ip}'))
+        
+        qram_entangled_session('user_ip', client_ip)
+        qram_entangled_session('session_id', session_id)
+        
+        provided_key = request.args.get('bridge_key', '')
+        session['session_id'] = session_id  # Ensure it's set
+        
+        gen_key, ts = bh_repeatable_keygen(session_id)
+        enc_key = bh_encryption_cascade(bridge_key)
+        
+        if not hashlib.sha256(provided_key.encode()).hexdigest() == hashlib.sha256(gen_key.encode()).hexdigest():
+            params = urllib.parse.urlencode({'enc_key': enc_key, 'session': session_id})
+            gate_url = f"https://{RENDER_DOMAIN}/?{params}"
+            logger.warning(f'Invalid Key Redirect: {client_ip} -> Gate with params')
+            return redirect(gate_url, code=302)
+        
+        mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')
+        
+        offload_res = entangled_cpu_offload(f'fidelity_lattice * 1.0001')
+        comp_tensor = core_ghz.full().real
+        comp_lattice = len(foam_lattice_compress(comp_tensor))
+        tele_id = inter_hole_teleport('cascade_state')
+        # Entangle ALICE_IP for siamese mirror
+        ip_mirror_fid = entangle_ip_address(ALICE_IP)
+        
+        logger.warning(f'Access: {client_ip}, Sess {session_id}, 5x5x5 Lattice Active')
+        return f"""
+        <html>
+            <head><title>Quantum Realm Prod - QSH Portal (5x5x5 Lattice)</title>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+            <link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" />
+            <script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js"></script>
+            <style>
+                #overlay-frame {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; opacity: 0.3; border: none; pointer-events: none; }}
+                body {{ position: relative; }}
+            </style>
+            </head>
+            <body style="background: #000; color: #0f0; font-family: monospace;">
+                <!-- Siamese Mirror Overlay: DuckDNS HTML (Linux webserver) as background -->
+                <iframe id="overlay-frame" src="https://{DUCKDNS_DOMAIN}" onload="console.log('DuckDNS Overlay Entangled')"></iframe>
+                <h1 style="color: #0f0;">quantum.realm.domain.dominion.foam.computer.render (5x5x5)</h1>
+                <p style="color: #0f0;">Prod Foam: Fid {offload_res}, Comp {comp_lattice}B. Neg {ip_negativity:.16f}, Tele {tele_id:.6f}, IP Mirror Fid {ip_mirror_fid:.16f}, Back {session.get('backup_id', 'none')}{' | SSH: ' + ('Enabled' if paramiko else 'Disabled - Add paramiko to requirements.txt')}</p>
+                <p style="color: #0f0;">Enc: {enc_key[:32]}... | Mirror Pull: {mirror_pull[:50]}... | Registry: /registry | Sell: /sell/<sub> | Web Proxy: /web_proxy</p>
+                <p style="color: #0f0;">DuckDNS Linked: {DUCKDNS_DOMAIN} → Alice {ALICE_IP} (127.0.0.1 Linux Webserver Overlay Active)</p>
+                <div id="terminal" style="width: 100%; height: 400px; background: #000;"></div>
+                <script>
+                    const socket = io();
+                    const term = new Terminal({{ cursorBlink: true, theme: {{ background: '#000', foreground: '#0f0' }} }});
+                    term.open(document.getElementById('terminal'));
+                    term.write('QSH Foam REPL v1.1 (5x5x5 Lattice - IP Entangled)\\r\\n');
+                    term.write('Type "help" for commands. Subs 256-999 pre-registered to shemshallah.\\r\\n');
+                    term.write('New: "connect_linux" for SSH, "entangle_ip <ip>" for siamese mirror, Overlay: DuckDNS HTML backgrounded\\r\\n');
+                    term.write('QSH> ');
+                    
+                    term.onData((data) => {{
+                        if (data === '\\r') {{
+                            const cmd = term.buffer.active.getLine( term.buffer.active.baseY + term.buffer.active.cursorY ).translateToString(true).trim();
+                            socket.emit('qsh_command', {{ command: cmd }});
+                            term.write('\\r\\n');
+                        }} else if (data === '\\u007F') {{
+                            term.write('\\b \\b');
+                        }} else {{
+                            term.write(data);
+                        }}
+                    }});
+                    
+                    socket.on('qsh_output', (data) => {{
+                        term.write(data.output + '\\r\\n');
+                        if (data.plot_html) term.write('\\r\\n' + data.plot_html + '\\r\\n');
+                        if (data.prompt) term.write('QSH> ');
+                        else if (data.linux_prompt) term.write(data.linux_prompt);
+                    }});
+                    
+                    socket.on('connect', () => console.log('Socket Connected - 5x5x5 Lattice Active'));
+                </script>
+            </body>
+        </html>
+        """
+    except Exception as e:
+        logger.error(f"Quantum Gate Error: {e}")
+        return f"Gate decoherence: {str(e)}", 500
 
 # QSH Foam REPL Backend
 repl_sessions = {}
@@ -374,86 +396,28 @@ def handle_qsh_command(data):
     linux_prompt = None
     try:
         if pending_auth:
-            # Handle auth input
-            if pending_auth == 'user':
-                if cmd == LINUX_USER:
-                    output = f"Password: "
-                    session_data['pending_auth'] = 'pass'
-                    prompt = False
-                    linux_prompt = output
-                else:
-                    output = "Login incorrect"
-                    session_data['pending_auth'] = None
-                    prompt = True
-            elif pending_auth == 'pass':
-                if cmd == LINUX_PASS:
-                    output = f"Connecting via SSH to linuxbserver@{LINUX_HOST} (duckdns -> alice -> quantum.realm...render)\\n"
-                    try:
-                        ssh = paramiko.SSHClient()
-                        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                        ssh.connect(LINUX_HOST, username=LINUX_USER, password=LINUX_PASS, timeout=10)
-                        channel = ssh.invoke_shell()
-                        time.sleep(1)  # Wait for shell to start
-                        initial_out = ''
-                        # Read initial output (banner, prompt, etc.)
-                        ready, _, _ = select.select([channel], [], [], 2)
-                        if ready:
-                            initial_out += channel.recv(4096).decode('utf-8', errors='ignore')
-                        # Drain any more
-                        while channel.recv_ready():
-                            initial_out += channel.recv(1024).decode('utf-8', errors='ignore')
-                        output += initial_out
-                        session_data['ssh_client'] = ssh
-                        session_data['channel'] = channel
-                        session_data['in_linux_mode'] = True
-                        session_data['pending_auth'] = None
-                        linux_prompt = f"{LINUX_USER}@{LINUX_HOST}:~$ "
-                        logger.warning(f'SSH connected for sid {sid}')
-                    except Exception as ssh_err:
-                        output += f"SSH Connection failed: {str(ssh_err)}"
-                        session_data['pending_auth'] = None
-                        prompt = True
-                        logger.error(f'SSH Error: {ssh_err}')
-                else:
-                    output = "Login incorrect"
-                    session_data['pending_auth'] = None
-                    prompt = True
-            emit('qsh_output', {'output': output, 'prompt': prompt, 'linux_prompt': linux_prompt})
+            # Handle auth input (SSH disabled if no paramiko)
+            output = "SSH Auth Pending - But paramiko required for connect_linux. Install it."
+            session_data['pending_auth'] = None
+            prompt = True
+            emit('qsh_output', {'output': output, 'prompt': prompt})
             return
 
         if in_linux_mode:
-            if cmd in ['exit', 'logout', 'qsh']:
-                # Cleanup
-                if channel:
-                    channel.close()
-                if ssh_client:
-                    ssh_client.close()
-                session_data['ssh_client'] = None
-                session_data['channel'] = None
-                session_data['in_linux_mode'] = False
-                output = "Disconnected from linuxbserver. Back to QSH."
-                prompt = True
-                logger.warning(f'SSH disconnected for sid {sid}')
-            else:
-                # Send command to SSH channel
-                channel.send(cmd + '\n')
-                time.sleep(0.2)  # Brief wait for processing
-                bash_out = ''
-                # Wait for output with timeout
-                ready, _, _ = select.select([channel], [], [], 5)  # 5s timeout
-                if ready:
-                    bash_out += channel.recv(4096).decode('utf-8', errors='ignore')
-                # Drain remaining
-                while channel.recv_ready():
-                    bash_out += channel.recv(1024).decode('utf-8', errors='ignore')
-                # Strip trailing newlines
-                bash_out = bash_out.rstrip()
-                output = bash_out if bash_out else f"No output from command: {cmd}"
-                linux_prompt = f"{LINUX_USER}@{LINUX_HOST}:~$ "
-                prompt = False
+            # SSH Cleanup (if somehow active)
+            output = "SSH Mode - But paramiko disabled. Force exit."
+            if channel:
+                channel.close()
+            if ssh_client:
+                ssh_client.close()
+            session_data['ssh_client'] = None
+            session_data['channel'] = None
+            session_data['in_linux_mode'] = False
+            prompt = True
         else:
             if cmd == 'help':
-                output = "Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, plot fidelity, pull matplotlib, registry list, sell <sub>, connect_linux, entangle_ip <ip>, exit, clear"
+                ssh_status = " (SSH disabled - add paramiko)" if not paramiko else ""
+                output = f"Commands: help, entangle <q1 q2>, measure fidelity, compress lattice, teleport <input>, plot fidelity, pull matplotlib, registry list, sell <sub>, connect_linux{ssh_status}, entangle_ip <ip>, exit, clear"
             elif cmd.startswith('entangle '):
                 parts = cmd.split()
                 if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
@@ -494,11 +458,14 @@ def handle_qsh_command(data):
                 mirror_fid = entangle_ip_address(ip)
                 output = f"Siamese mirror entangled for IP {ip}: Fidelity {mirror_fid:.16f}"
             elif cmd == 'connect_linux':
-                output = f"Connecting to linuxbserver via {DUCKDNS_DOMAIN} -> alice {LINUX_HOST} -> {QUANTUM_DOMAIN}\\n"
-                output += f"Username: "
-                session_data['pending_auth'] = 'user'
-                prompt = False
-                linux_prompt = output
+                if not paramiko:
+                    output = "connect_linux disabled: Add 'paramiko==3.4.0' to requirements.txt and redeploy."
+                else:
+                    output = f"Connecting to linuxbserver via {DUCKDNS_DOMAIN} -> alice {LINUX_HOST} -> {QUANTUM_DOMAIN}\\n"
+                    output += f"Username: "
+                    session_data['pending_auth'] = 'user'
+                    prompt = False
+                    linux_prompt = output
             elif cmd == 'clear':
                 history = []
                 output = "History cleared"
@@ -540,7 +507,7 @@ def handle_disconnect():
     sid = request.sid
     if sid in repl_sessions:
         session_data = repl_sessions[sid]
-        if session_data.get('in_linux_mode'):
+        if session_data.get('in_linux_mode') and paramiko:
             channel = session_data.get('channel')
             ssh_client = session_data.get('ssh_client')
             if channel:
