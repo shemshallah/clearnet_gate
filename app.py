@@ -101,7 +101,6 @@ ADMIN_PASS_HASH = os.environ.get('ADMIN_PASS_HASH', '930f0446221f865871805ab4e95
 QUANTUM_NET = '192.168.42.0/24'
 QUANTUM_GATEWAY = UBUNTU_QUANTUM_IP
 QUANTUM_DNS_PRIMARY = UBUNTU_QUANTUM_IP
-QUANTUM_DNS_BRIDGE = ALICE_LOCAL
 IP_POOL = [f'192.168.42.{i}' for i in range(10, 255)]
 ALLOCATED_IPS = {}
 
@@ -2200,11 +2199,7 @@ def quantum_gate():
     </script>
 </body>
 </html>
-        ''', session_id=session_id, ip_display=ip_display, setup_complete=setup_complete, 
-              connection_info=connection_info, client_ip=client_ip, quantum_ip=quantum_ip, 
-              metrics=metrics, ssh_status=ssh_status, QUANTUM_NET=QUANTUM_NET, 
-              QUANTUM_DNS_PRIMARY=QUANTUM_DNS_PRIMARY, QUANTUM_GATEWAY=QUANTUM_GATEWAY
-    
+        '''
     return html
 
 @socketio.on('qsh_command')
