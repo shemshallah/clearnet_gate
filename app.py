@@ -241,6 +241,9 @@ socketio = SocketIO(
     engineio_logger=False
 )
 
+# Global for QSH sessions
+qsh_sessions = {}
+
 # =============================================================================
 # QUANTUM FOAM - MULTI-DIMENSIONAL LATTICE (3x3x3 BASE SCALING TO 11D FOR QRAM)
 # =============================================================================
@@ -474,7 +477,8 @@ class QuantumFoamLattice:
         """Entangle specific dimension for QRAM with real QuTiP operations"""
         try:
             n_sites_dim = self.base_size ** dim  # 3^dim scaling
-            site_idx = random.randint(0, min(1000, n_sites_dim) - 1)
+            sample_sites = min(1000, n_sites_dim)
+            site_idx = random.randint(0, sample_sites - 1)
             qubit_idx = site_idx % self.n_core
             phase = np.exp(2j * np.pi * site_idx / n_sites_dim)
             # Dim-scaled phase for higher dims
@@ -1029,9 +1033,6 @@ options {{
         
         return True
 
-    # ... (other methods like setup_web_server, setup_firewall, verify_setup remain similar, but update IPs and descriptions accordingly)
-    # For brevity, assuming they are updated similarly with new IPs and roles
-
     def setup_web_server(self):
         """Install and configure Apache2 web server on Ubuntu (192.168.42.6) serving from 192.168.42.0"""
         self.log_step("Web Server Installation", "STARTING", f"Installing Apache2 on Ubuntu DNS ({UBUNTU_QUANTUM_IP}) serving {QUANTUM_DNS_PRIMARY}")
@@ -1468,6 +1469,10 @@ def issue_user_ip_and_hex(username):
         
         return user_ip, hex_address
 
+def run_autonomous_setup_background():
+    """Background thread for autonomous setup"""
+    autonomous_setup.run_autonomous_setup()
+
 @app.route('/')
 def root():
     if session.get('logged_in'):
@@ -1822,7 +1827,14 @@ def email_html():
 </html>
     '''
 
-# ... (rest of routes like quantum_gate, registry, QSH handler updated with new IPs and roles, but similar structure)
+def issue_quantum_ip(session_id):
+    """Fallback quantum IP issuance for admin"""
+    available_ips = [ip for ip in IP_POOL if ip not in ALLOCATED_IPS.values()]
+    if not available_ips:
+        available_ips = IP_POOL
+    ip = random.choice(available_ips)
+    ALLOCATED_IPS[session_id] = ip
+    return ip
 
 @app.route('/computer/render/gate')
 def quantum_gate():
@@ -2050,8 +2062,6 @@ def quantum_gate():
     
     return html
 
-# ... (QSH commands updated to reflect new DNS and ranges)
-
 @socketio.on('qsh_command')
 def handle_qsh_command(data):
     sid = request.sid
@@ -2114,7 +2124,39 @@ Web: {QUANTUM_DNS_PRIMARY}:80 | DNS: {QUANTUM_DNS_PRIMARY}:53
 Quantum Routes: 3x3x3 lattice at quantum.*
 '''
         
-        # ... (other commands similar, updated with new info)
+        elif cmd == 'metrics':
+            m = quantum_foam.get_state_metrics()
+            output = f'''
+Quantum Foam Metrics:
+--------------------
+Fidelity: {m['fidelity']:.15f}
+Negativity: {m['negativity']:.6f}
+Lattice Sites (Base): {m['lattice_sites_base']}
+Entangled IPs: {m['entangled_ips']}
+QRAM Dims: {m['qram_dims']}
+QRAM Capacity (GB): {m['qram_effective_capacity_gb']:.2f}
+Core Qubits: {m['core_qubits']}
+Bridge Key: {m['bridge_key'][:16]}...
+'''
+        
+        elif cmd == 'setup_status':
+            output = f"Setup Complete: {SETUP_STATE['setup_complete']}\nConnection: {SETUP_STATE.get('connection_string', 'N/A')}\nLog Entries: {len(SETUP_STATE['setup_log'])}"
+        
+        elif cmd.startswith('teleport '):
+            data = cmd[9:].strip()
+            if data:
+                fid = quantum_foam.quantum_teleport(data)
+                output = f"Teleportation of '{data}': Fidelity = {fid:.6f}"
+            else:
+                output = "Usage: teleport <data>"
+        
+        elif cmd.startswith('entangle '):
+            ip = cmd[9:].strip()
+            if ip:
+                fid = quantum_foam.entangle_ip(ip)
+                output = f"Entangled {ip}: Fidelity = {fid:.15f}"
+            else:
+                output = "Usage: entangle <ip>"
         
         elif cmd.startswith('entangle_user_hex '):
             hex_str = cmd[18:].strip()
@@ -2134,20 +2176,30 @@ Quantum Routes: 3x3x3 lattice at quantum.*
             else:
                 output = 'Usage: entangle_web_hex <HEX.HEX.HEX> (e.g., 00.01.02)'
         
+        elif cmd == 'registry':
+            output = f"Domain Registry Sample:\n{list(RENDER_TLDS.items())[:5]}"
+        
         elif cmd == 'issue_ip':
             new_ip, new_hex = issue_user_ip_and_hex('manual')
             hex_ip = f"192.168.42.7.{new_hex}"
             output = f'✓ Issued user IP: {new_ip} | HEX: {hex_ip}'
         
-        # ... (rest unchanged)
+        elif cmd == 'clear':
+            sess['history'] = []
+            output = "History cleared."
         
+        elif cmd == 'exit':
+            output = "Session closed."
+            prompt = False
+        
+        else:
+            output = f"Unknown command: {cmd}. Type 'help' for commands."
+    
     except Exception as e:
         logger.error(f"QSH command error: {e}", exc_info=True)
         output = f'✗ Error: {str(e)}'
     
     emit('qsh_output', {'output': output, 'prompt': prompt})
-
-# ... (other routes unchanged)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
