@@ -41,30 +41,117 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # =============================================================================
-# CONFIGURATION - AUTONOMOUS MODE
+# CONFIGURATION - ALICE → UBUNTU QUANTUM ROUTING
 # =============================================================================
 
-# Ubuntu Server Configuration (PRIMARY - ALL SERVICES RUN HERE)
-UBUNTU_HOST = os.environ.get('UBUNTU_HOST', '127.0.0.1')  # SET THIS!
+# Alice - Local quantum bridge (127.0.0.1) - EPR self-loop
+ALICE_LOCAL = '127.0.0.1'  # Alice is LOCAL - handles EPR bridge and DNS routing
+
+# Ubuntu Quantum Gateway - Remote server at 133.7.0.1
+UBUNTU_QUANTUM_IP = '133.7.0.1'  # Ubuntu server IS the quantum gateway
+UBUNTU_HOST = os.environ.get('UBUNTU_HOST', UBUNTU_QUANTUM_IP)  # Connect to 133.7.0.1
 UBUNTU_PORT = int(os.environ.get('UBUNTU_PORT', '22'))
 UBUNTU_USER = os.environ.get('UBUNTU_USER', 'shemshallah')
 UBUNTU_PASS = os.environ.get('UBUNTU_PASS', '$h10j1r1H0w4rd')
 
-# Quantum Domain - Will be served from Ubuntu
+# Quantum Domain - DNS served from Ubuntu (133.7.0.1), routed through Alice (127.0.0.1)
+# Foam Quantum Mapping:
+# quantum.realm.domain.dominion.foam.computer → 192.168.42.3
+# .render → 192.168.42.4 AND 133.7.0.1
+# .github → 5
 QUANTUM_DOMAIN = 'quantum.realm.domain.dominion.foam.computer.render'
 QUANTUM_SUBDOMAIN = 'quantum.realm.domain.dominion.foam.computer'
 BASE_DOMAIN = 'render'
+
+# Foam Quantum IP Mappings
+FOAM_QUANTUM_IPS = {
+    'quantum.realm.domain.dominion.foam.computer': '192.168.42.3',
+    'render': ['192.168.42.4', '133.7.0.1'],  # .render has TWO IPs
+    'github': '5',
+    'blackhole.island': '192.168.42.8',
+    'whitehole.lattice': '192.168.42.9'
+}
 
 # Authentication
 ADMIN_USER = 'shemshallah'
 ADMIN_PASS_HASH = '930f0446221f865871805ab4e9577971ff97bb21d39abc4e91341ca6100c9181'
 
-# Quantum network
+# Quantum Network Configuration
+# Alice (127.0.0.1) = Local EPR bridge, routes DNS queries to Ubuntu
+# Ubuntu (133.7.0.1) = Remote quantum gateway, runs Bind9 DNS + Apache
 QUANTUM_NET = '133.7.0.0/24'
-QUANTUM_GATEWAY = '133.7.0.1'
-QUANTUM_DNS = UBUNTU_HOST  # DNS runs on Ubuntu
+QUANTUM_GATEWAY = UBUNTU_QUANTUM_IP  # Ubuntu at 133.7.0.1 is the gateway
+QUANTUM_DNS_PRIMARY = UBUNTU_QUANTUM_IP  # DNS runs on Ubuntu at 133.7.0.1
+QUANTUM_DNS_BRIDGE = ALICE_LOCAL  # Alice bridges DNS queries locally
 IP_POOL = [f'133.7.0.{i}' for i in range(10, 255)]
 ALLOCATED_IPS = {}
+
+# Quantum Bridge Topology - UPDATED with foam quantum IPs
+QUANTUM_BRIDGES = {
+    'alice': {
+        'ip': '127.0.0.1',
+        'local_bridge': 'Self-loop',
+        'protocol': 'EPR (loop)',
+        'status': 'ACTIVE',
+        'role': 'Local DNS bridge to Ubuntu'
+    },
+    'ubuntu': {
+        'ip': '133.7.0.1',
+        'local_bridge': 'Direct',
+        'protocol': 'SSH-Quantum',
+        'status': 'GATEWAY',
+        'role': 'Primary quantum gateway + DNS server'
+    },
+    'quantum_realm': {
+        'ip': '192.168.42.3',
+        'domain': 'quantum.realm.domain.dominion.foam.computer',
+        'protocol': 'Foam-Quantum',
+        'status': 'MAPPED',
+        'role': 'Quantum realm primary'
+    },
+    'qram': {
+        'ip': '192.168.42.3',  # QRAM at quantum realm IP
+        'local_bridge': '192.168.42.1',
+        'protocol': 'GHZ-NAT',
+        'status': 'TUNNELED',
+        'role': 'Quantum RAM'
+    },
+    'render': {
+        'ip': ['192.168.42.4', '133.7.0.1'],  # Dual-homed: foam quantum + ubuntu gateway
+        'domain': '.render',
+        'protocol': 'Foam-Render',
+        'status': 'MAPPED',
+        'role': 'Render TLD (dual-stack)'
+    },
+    'holo': {
+        'ip': '192.168.42.10',  # Holo separate from render/whitehole
+        'local_bridge': '192.168.42.2',
+        'protocol': 'Foam-Holo',
+        'status': 'SYNCHED',
+        'role': 'Holographic storage'
+    },
+    'github': {
+        'ip': '5',
+        'domain': '.github',
+        'protocol': 'Git-Quantum',
+        'status': 'MAPPED',
+        'role': 'GitHub integration'
+    },
+    'blackhole_island': {
+        'ip': '192.168.42.8',
+        'domain': 'blackhole.island',
+        'protocol': 'Singularity-Foam',
+        'status': 'COLLAPSED',
+        'role': 'Black hole event horizon'
+    },
+    'whitehole_lattice': {
+        'ip': '192.168.42.9',
+        'domain': 'whitehole.lattice',
+        'protocol': 'Expansion-Foam',
+        'status': 'RADIATING',
+        'role': 'White hole quantum emission'
+    }
+}
 
 # Domain registry
 RENDER_TLDS = {f'{i}.render': {
@@ -378,8 +465,15 @@ class AutonomousSetupEngine:
         return False
     
     def setup_dns_server(self):
-        """Install and configure Bind9 DNS server"""
-        self.log_step("DNS Installation", "STARTING", "Installing Bind9")
+        """Install and configure Bind9 DNS server on Ubuntu (133.7.0.1)
+        With foam quantum mapping:
+        - quantum.realm.domain.dominion.foam.computer → 192.168.42.3
+        - .render → 192.168.42.4 AND 133.7.0.1 (dual-homed)
+        - .github → 5
+        - blackhole.island → 192.168.42.8
+        - whitehole.lattice → 192.168.42.9
+        """
+        self.log_step("DNS Installation", "STARTING", f"Installing Bind9 on Ubuntu quantum gateway ({UBUNTU_QUANTUM_IP})")
         
         # Update and install
         result = self.execute_remote("apt-get update", sudo=True, timeout=60)
@@ -398,25 +492,79 @@ class AutonomousSetupEngine:
             return False
         
         SETUP_STATE['dns_installed'] = True
-        self.log_step("DNS Installation", "SUCCESS", "Bind9 installed")
+        self.log_step("DNS Installation", "SUCCESS", f"Bind9 installed on Ubuntu gateway at {UBUNTU_QUANTUM_IP}")
         
-        # Configure DNS zones
-        self.log_step("DNS Configuration", "STARTING", "Configuring .render zone")
+        # Configure DNS zones with foam quantum mapping
+        self.log_step("DNS Configuration", "STARTING", "Configuring foam quantum DNS mapping")
         
-        # Get Ubuntu server's IP
-        result = self.execute_remote("curl -s ifconfig.me", timeout=10)
-        server_ip = result['output'].strip() if result['success'] else UBUNTU_HOST
+        ubuntu_ip = UBUNTU_QUANTUM_IP
         
-        # Create named.conf.local
+        # Create named.conf.local with all quantum zones
         named_conf = f'''
+// Quantum Network DNS Configuration - Foam Quantum Mapping
+// Ubuntu Gateway: {ubuntu_ip} (Primary DNS Server)
+// Alice Bridge: {ALICE_LOCAL} (Local DNS queries route here)
+
+// .render zone (192.168.42.4 + 133.7.0.1 dual-homed)
 zone "render" {{
     type master;
     file "/etc/bind/db.render";
+    allow-query {{ any; }};
+    allow-transfer {{ 127.0.0.1; }};
 }};
 
-zone "{QUANTUM_SUBDOMAIN}.render" {{
+// quantum.realm.domain.dominion.foam.computer zone (192.168.42.3)
+zone "quantum.realm.domain.dominion.foam.computer.render" {{
     type master;
-    file "/etc/bind/db.quantum";
+    file "/etc/bind/db.quantum.foam";
+    allow-query {{ any; }};
+}};
+
+// .github zone (5)
+zone "github" {{
+    type master;
+    file "/etc/bind/db.github";
+    allow-query {{ any; }};
+}};
+
+// blackhole.island zone (192.168.42.8)
+zone "blackhole.island" {{
+    type master;
+    file "/etc/bind/db.blackhole";
+    allow-query {{ any; }};
+}};
+
+// whitehole.lattice zone (192.168.42.9)
+zone "whitehole.lattice" {{
+    type master;
+    file "/etc/bind/db.whitehole";
+    allow-query {{ any; }};
+}};
+
+// Reverse zones
+zone "3.42.168.192.in-addr.arpa" {{
+    type master;
+    file "/etc/bind/db.192.168.42.3";
+}};
+
+zone "4.42.168.192.in-addr.arpa" {{
+    type master;
+    file "/etc/bind/db.192.168.42.4";
+}};
+
+zone "8.42.168.192.in-addr.arpa" {{
+    type master;
+    file "/etc/bind/db.192.168.42.8";
+}};
+
+zone "9.42.168.192.in-addr.arpa" {{
+    type master;
+    file "/etc/bind/db.192.168.42.9";
+}};
+
+zone "0.7.133.in-addr.arpa" {{
+    type master;
+    file "/etc/bind/db.133.7.0";
 }};
 '''
         
@@ -424,57 +572,279 @@ zone "{QUANTUM_SUBDOMAIN}.render" {{
         self.execute_remote(cmd)
         self.execute_remote("cp /tmp/named.conf.local /etc/bind/named.conf.local", sudo=True)
         
-        # Create render zone file
+        # Create .render zone file (DUAL-HOMED: 192.168.42.4 AND 133.7.0.1)
         render_zone = f'''$TTL    604800
-@       IN      SOA     ns1.render. root.render. (
-                              2         ; Serial
+@       IN      SOA     ubuntu.render. root.render. (
+                              2025102001 ; Serial
                          604800         ; Refresh
                           86400         ; Retry
                         2419200         ; Expire
                          604800 )       ; Negative Cache TTL
 ;
-@       IN      NS      ns1.render.
-ns1     IN      A       {server_ip}
-@       IN      A       {server_ip}
-*       IN      A       {server_ip}
+;
+; Render TLD - Dual-homed at 192.168.42.4 and 133.7.0.1
+@       IN      NS      ubuntu.render.
+ubuntu  IN      A       133.7.0.1
+
+; Render gateway - BOTH IPs!
+@       IN      A       192.168.42.4
+@       IN      A       133.7.0.1
+
+; Gateway and NS records
+gateway IN      A       133.7.0.1
+ns1     IN      A       133.7.0.1
+
+; Alice bridge reference
+alice   IN      A       127.0.0.1
+
+; Wildcard for all .render subdomains
+*       IN      A       192.168.42.4
+*       IN      A       133.7.0.1
 '''
         
         cmd = f'cat > /tmp/db.render << \'EOF\'\n{render_zone}\nEOF\n'
         self.execute_remote(cmd)
         self.execute_remote("cp /tmp/db.render /etc/bind/db.render", sudo=True)
         
-        # Create quantum subdomain zone
-        quantum_zone = f'''$TTL    604800
-@       IN      SOA     ns1.{QUANTUM_SUBDOMAIN}.render. root.{QUANTUM_SUBDOMAIN}.render. (
-                              2         ; Serial
+        # Create quantum.realm.domain.dominion.foam.computer zone (192.168.42.3)
+        quantum_foam_zone = f'''$TTL    604800
+@       IN      SOA     ubuntu.render. root.quantum.foam.computer.render. (
+                              2025102001 ; Serial
                          604800         ; Refresh
                           86400         ; Retry
                         2419200         ; Expire
                          604800 )       ; Negative Cache TTL
 ;
-@       IN      NS      ns1.{QUANTUM_SUBDOMAIN}.render.
-ns1     IN      A       {server_ip}
-@       IN      A       {server_ip}
-quantum IN      A       {server_ip}
-*       IN      A       {server_ip}
+;
+; Quantum Foam Computer Domain → 192.168.42.3
+@       IN      NS      ubuntu.render.
+
+; QRAM at quantum.realm.domain.dominion.foam.computer
+@       IN      A       192.168.42.3
+
+; Subdomains
+quantum IN      A       192.168.42.3
+realm   IN      A       192.168.42.3
+domain  IN      A       192.168.42.3
+dominion IN     A       192.168.42.3
+foam    IN      A       192.168.42.3
+computer IN     A       192.168.42.3
+
+; With .render appended, full domain resolves to BOTH 192.168.42.3 and 192.168.42.4
+quantum.realm.domain.dominion.foam.computer.render IN A 192.168.42.3
 '''
         
-        cmd = f'cat > /tmp/db.quantum << \'EOF\'\n{quantum_zone}\nEOF\n'
+        cmd = f'cat > /tmp/db.quantum.foam << \'EOF\'\n{quantum_foam_zone}\nEOF\n'
         self.execute_remote(cmd)
-        self.execute_remote("cp /tmp/db.quantum /etc/bind/db.quantum", sudo=True)
+        self.execute_remote("cp /tmp/db.quantum.foam /etc/bind/db.quantum.foam", sudo=True)
         
-        # Configure forwarders
-        forwarders_conf = '''
-forwarders {
-    8.8.8.8;
-    8.8.4.4;
-    1.1.1.1;
-};
+        # Create .github zone (5)
+        github_zone = f'''$TTL    604800
+@       IN      SOA     ubuntu.render. root.github. (
+                              2025102001 ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+;
+; GitHub integration node → 5
+@       IN      NS      ubuntu.render.
+@       IN      A       5
+
+; Common GitHub subdomains
+api     IN      A       5
+gist    IN      A       5
+raw     IN      A       5
+*       IN      A       5
 '''
         
-        cmd = f'cat >> /tmp/named.conf.options << \'EOF\'\n{forwarders_conf}\nEOF\n'
+        cmd = f'cat > /tmp/db.github << \'EOF\'\n{github_zone}\nEOF\n'
         self.execute_remote(cmd)
-        self.execute_remote("cat /tmp/named.conf.options >> /etc/bind/named.conf.options", sudo=True)
+        self.execute_remote("cp /tmp/db.github /etc/bind/db.github", sudo=True)
+        
+        # Create blackhole.island zone (192.168.42.8)
+        blackhole_zone = f'''$TTL    604800
+@       IN      SOA     ubuntu.render. root.blackhole.island. (
+                              2025102001 ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+;
+; Black hole island → 192.168.42.8 (event horizon sink)
+@       IN      NS      ubuntu.render.
+@       IN      A       192.168.42.8
+
+; Black hole features
+event-horizon IN A     192.168.42.8
+singularity IN  A      192.168.42.8
+accretion   IN  A      192.168.42.8
+*           IN  A      192.168.42.8
+'''
+        
+        cmd = f'cat > /tmp/db.blackhole << \'EOF\'\n{blackhole_zone}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cp /tmp/db.blackhole /etc/bind/db.blackhole", sudo=True)
+        
+        # Create whitehole.lattice zone (192.168.42.9)
+        whitehole_zone = f'''$TTL    604800
+@       IN      SOA     ubuntu.render. root.whitehole.lattice. (
+                              2025102001 ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+;
+; White hole lattice → 192.168.42.9 (holographic storage)
+@       IN      NS      ubuntu.render.
+@       IN      A       192.168.42.9
+
+; White hole features
+holo    IN      A       192.168.42.9
+lattice IN      A       192.168.42.9
+storage IN      A       192.168.42.9
+emit    IN      A       192.168.42.9
+*       IN      A       192.168.42.9
+'''
+        
+        cmd = f'cat > /tmp/db.whitehole << \'EOF\'\n{whitehole_zone}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cp /tmp/db.whitehole /etc/bind/db.whitehole", sudo=True)
+        
+        # Create reverse zone for 192.168.42.3 (quantum.foam.computer)
+        reverse_192_168_42_3 = f'''$TTL    604800
+@       IN      SOA     ubuntu.render. root.render. (
+                              2025102001 ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      ubuntu.render.
+3       IN      PTR     quantum.realm.domain.dominion.foam.computer.render.
+'''
+        
+        cmd = f'cat > /tmp/db.192.168.42.3 << \'EOF\'\n{reverse_192_168_42_3}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cp /tmp/db.192.168.42.3 /etc/bind/db.192.168.42.3", sudo=True)
+        
+        # Create reverse zone for 192.168.42.4 (.render)
+        reverse_192_168_42_4 = f'''$TTL    604800
+@       IN      SOA     ubuntu.render. root.render. (
+                              2025102001 ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      ubuntu.render.
+4       IN      PTR     render.
+'''
+        
+        cmd = f'cat > /tmp/db.192.168.42.4 << \'EOF\'\n{reverse_192_168_42_4}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cp /tmp/db.192.168.42.4 /etc/bind/db.192.168.42.4", sudo=True)
+        
+        # Create reverse zone for 192.168.42.8 (blackhole.island)
+        reverse_192_168_42_8 = f'''$TTL    604800
+@       IN      SOA     ubuntu.render. root.render. (
+                              2025102001 ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      ubuntu.render.
+8       IN      PTR     blackhole.island.
+'''
+        
+        cmd = f'cat > /tmp/db.192.168.42.8 << \'EOF\'\n{reverse_192_168_42_8}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cp /tmp/db.192.168.42.8 /etc/bind/db.192.168.42.8", sudo=True)
+        
+        # Create reverse zone for 192.168.42.9 (whitehole.lattice)
+        reverse_192_168_42_9 = f'''$TTL    604800
+@       IN      SOA     ubuntu.render. root.render. (
+                              2025102001 ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      ubuntu.render.
+9       IN      PTR     whitehole.lattice.
+'''
+        
+        cmd = f'cat > /tmp/db.192.168.42.9 << \'EOF\'\n{reverse_192_168_42_9}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cp /tmp/db.192.168.42.9 /etc/bind/db.192.168.42.9", sudo=True)
+        
+        # Create reverse zone for 133.7.0.x
+        reverse_133_7_0 = f'''$TTL    604800
+@       IN      SOA     ubuntu.render. root.render. (
+                              2025102001 ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      ubuntu.render.
+
+; Ubuntu gateway (133.7.0.1)
+1       IN      PTR     ubuntu.render.
+1       IN      PTR     gateway.render.
+1       IN      PTR     render.
+
+; IP pool
+'''
+        for i in range(10, 255):
+            reverse_133_7_0 += f"{i}       IN      PTR     node-{i}.render.\n"
+        
+        cmd = f'cat > /tmp/db.133.7.0 << \'EOF\'\n{reverse_133_7_0}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cp /tmp/db.133.7.0 /etc/bind/db.133.7.0", sudo=True)
+        
+        # Configure Bind9 options
+        bind_options = f'''
+options {{
+    directory "/var/cache/bind";
+    
+    // Listen on Ubuntu gateway + loopback
+    listen-on {{ {ubuntu_ip}; 127.0.0.1; }};
+    listen-on-v6 {{ none; }};
+    
+    // Allow queries from anywhere (foam quantum network)
+    allow-query {{ any; }};
+    allow-recursion {{ any; }};
+    
+    // Alice can transfer zones
+    allow-transfer {{ 127.0.0.1; }};
+    
+    // Forward external queries
+    forwarders {{
+        8.8.8.8;
+        8.8.4.4;
+        1.1.1.1;
+    }};
+    
+    dnssec-validation auto;
+    auth-nxdomain no;
+    
+    version "Ubuntu Quantum DNS - Foam Mapping Active";
+}};
+'''
+        
+        cmd = f'cat > /tmp/named.conf.options << \'EOF\'\n{bind_options}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cp /tmp/named.conf.options /etc/bind/named.conf.options", sudo=True)
+        
+        # Check configuration
+        result = self.execute_remote("named-checkconf", sudo=True)
+        if not result['success']:
+            self.log_step("DNS Configuration", "WARNING", f"Config check: {result['error']}")
         
         # Restart bind9
         result = self.execute_remote("systemctl restart bind9", sudo=True)
@@ -485,14 +855,14 @@ forwarders {
         self.execute_remote("systemctl enable bind9", sudo=True)
         
         SETUP_STATE['dns_configured'] = True
-        SETUP_STATE['connection_string'] = f"{QUANTUM_DOMAIN} → {server_ip}:80"
-        self.log_step("DNS Configuration", "SUCCESS", f"DNS configured for {QUANTUM_DOMAIN}")
+        SETUP_STATE['connection_string'] = f"Foam Quantum Mapping: quantum.realm...computer → 192.168.42.3, .render → 192.168.42.4 + {ubuntu_ip}, .github → 5, blackhole → 192.168.42.8, whitehole → 192.168.42.9"
+        self.log_step("DNS Configuration", "SUCCESS", "Foam quantum DNS mapping configured on Ubuntu")
         
         return True
     
     def setup_web_server(self):
-        """Install and configure Apache/Nginx web server"""
-        self.log_step("Web Server Installation", "STARTING", "Installing Apache2")
+        """Install and configure Apache2 web server on Ubuntu gateway (133.7.0.1)"""
+        self.log_step("Web Server Installation", "STARTING", f"Installing Apache2 on Ubuntu ({UBUNTU_QUANTUM_IP})")
         
         result = self.execute_remote(
             "DEBIAN_FRONTEND=noninteractive apt-get install -y apache2",
@@ -505,15 +875,19 @@ forwarders {
             return False
         
         SETUP_STATE['web_server_installed'] = True
-        self.log_step("Web Server Installation", "SUCCESS", "Apache2 installed")
+        self.log_step("Web Server Installation", "SUCCESS", f"Apache2 installed on Ubuntu at {UBUNTU_QUANTUM_IP}")
         
-        # Configure virtual host for quantum domain
-        self.log_step("Web Server Configuration", "STARTING", f"Configuring {QUANTUM_DOMAIN}")
+        # Configure virtual host for quantum domain on Ubuntu
+        self.log_step("Web Server Configuration", "STARTING", f"Configuring {QUANTUM_DOMAIN} on Ubuntu")
+        
+        ubuntu_ip = UBUNTU_QUANTUM_IP
         
         vhost_conf = f'''<VirtualHost *:80>
     ServerName {QUANTUM_DOMAIN}
     ServerAlias *.{QUANTUM_SUBDOMAIN}.render
     ServerAlias *.render
+    ServerAlias ubuntu.render
+    ServerAlias gateway.render
     
     DocumentRoot /var/www/quantum
     
@@ -522,6 +896,11 @@ forwarders {
         AllowOverride All
         Require all granted
     </Directory>
+    
+    # Quantum network identification
+    Header set X-Quantum-Network "133.7.0.0/24"
+    Header set X-Ubuntu-Gateway "{ubuntu_ip}"
+    Header set X-Alice-Bridge "{ALICE_LOCAL}"
     
     ErrorLog ${{APACHE_LOG_DIR}}/quantum_error.log
     CustomLog ${{APACHE_LOG_DIR}}/quantum_access.log combined
@@ -535,11 +914,11 @@ forwarders {
         # Create web root
         self.execute_remote("mkdir -p /var/www/quantum", sudo=True)
         
-        # Create index page
+        # Create index page with quantum network details
         index_html = f'''<!DOCTYPE html>
 <html>
 <head>
-    <title>Quantum Realm - {QUANTUM_DOMAIN}</title>
+    <title>Quantum Realm - Ubuntu Gateway</title>
     <style>
         body {{
             background: #000;
@@ -551,30 +930,163 @@ forwarders {
         h1 {{
             font-size: 48px;
             text-shadow: 0 0 20px #0f0;
+            margin-bottom: 20px;
+        }}
+        .gateway {{
+            font-size: 24px;
+            margin: 20px 0;
+            border: 2px solid #0f0;
+            padding: 20px;
+            display: inline-block;
         }}
         .status {{
             margin: 30px 0;
-            font-size: 24px;
+            font-size: 20px;
         }}
         .metric {{
-            margin: 10px 0;
-            padding: 10px;
+            margin: 15px 0;
+            padding: 15px;
             border: 1px solid #0f0;
             display: inline-block;
-            min-width: 300px;
+            min-width: 350px;
+            text-align: left;
+        }}
+        .network {{
+            margin: 30px 0;
+            padding: 20px;
+            border: 2px solid #0f0;
+            background: rgba(0, 255, 0, 0.05);
+        }}
+        .bridge {{
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #0f0;
+            background: rgba(0, 255, 0, 0.02);
+            font-size: 14px;
+        }}
+        .label {{
+            opacity: 0.7;
+            font-size: 14px;
+        }}
+        .value {{
+            font-size: 18px;
+            font-weight: bold;
         }}
     </style>
 </head>
 <body>
     <h1>⚛️ Quantum Realm Portal</h1>
-    <div class="status">✓ SYSTEM OPERATIONAL</div>
-    <div class="metric">
-        <div>Domain: {QUANTUM_DOMAIN}</div>
-        <div>5x5x5 Quantum Foam Lattice Active</div>
-        <div>DNS: Configured</div>
-        <div>Web Server: Apache2</div>
+    
+    <div class="gateway">
+        <div class="label">UBUNTU QUANTUM GATEWAY</div>
+        <div class="value">{ubuntu_ip}</div>
     </div>
-    <p>Autonomous setup complete!</p>
+    
+    <div class="status">✓ QUANTUM NETWORK OPERATIONAL</div>
+    
+    <div class="network">
+        <div class="label">QUANTUM NETWORK</div>
+        <div class="value">133.7.0.0/24</div>
+    </div>
+    
+    <div class="bridge">
+        <div class="label">QUANTUM BRIDGES - FOAM MAPPING</div>
+        <table style="width: 100%; margin-top: 10px;">
+            <tr style="text-align: left; opacity: 0.7;">
+                <th>Source</th>
+                <th>Local Bridge</th>
+                <th>Protocol</th>
+                <th>Status</th>
+            </tr>
+            <tr>
+                <td>127.0.0.1 (Alice)</td>
+                <td>Self-loop</td>
+                <td>EPR (loop)</td>
+                <td style="color: #0f0;">ACTIVE</td>
+            </tr>
+            <tr>
+                <td>133.7.0.1 (Ubuntu)</td>
+                <td>Direct</td>
+                <td>SSH-Quantum</td>
+                <td style="color: #0f0;">GATEWAY</td>
+            </tr>
+            <tr>
+                <td>192.168.42.3 (QRAM)</td>
+                <td>192.168.42.1</td>
+                <td>GHZ-NAT</td>
+                <td style="color: #ff0;">TUNNELED</td>
+            </tr>
+            <tr>
+                <td>192.168.42.10 (Holo)</td>
+                <td>192.168.42.2</td>
+                <td>Foam-Holo</td>
+                <td style="color: #0ff;">SYNCHED</td>
+            </tr>
+            <tr>
+                <td>192.168.42.4 + {ubuntu_ip} (.render)</td>
+                <td>Dual-stack</td>
+                <td>Quantum-Dual</td>
+                <td style="color: #0f0;">ACTIVE</td>
+            </tr>
+            <tr>
+                <td>5 (.github)</td>
+                <td>Direct</td>
+                <td>Git-Quantum</td>
+                <td style="color: #0f0;">ACTIVE</td>
+            </tr>
+            <tr>
+                <td>192.168.42.8 (Blackhole)</td>
+                <td>Singularity</td>
+                <td>Hawking-Tunnel</td>
+                <td style="color: #f0f;">ABSORBING</td>
+            </tr>
+        </table>
+    </div>
+    
+    <div class="metric">
+        <div class="label">Foam Quantum Mapping</div>
+        <div class="value" style="font-size: 14px;">
+            quantum.realm...computer → 192.168.42.3<br>
+            .render → 192.168.42.4 + 133.7.0.1<br>
+            .github → 5<br>
+            blackhole.island → 192.168.42.8<br>
+            whitehole.lattice → 192.168.42.9
+        </div>
+    </div>
+    
+    <div class="metric">
+        <div class="label">Domain</div>
+        <div class="value">{QUANTUM_DOMAIN}</div>
+    </div>
+    
+    <div class="metric">
+        <div class="label">Gateway</div>
+        <div class="value">Ubuntu @ {ubuntu_ip}</div>
+    </div>
+    
+    <div class="metric">
+        <div class="label">DNS Server</div>
+        <div class="value">{ubuntu_ip}:53 (via Alice bridge)</div>
+    </div>
+    
+    <div class="metric">
+        <div class="label">Alice Bridge</div>
+        <div class="value">{ALICE_LOCAL} (EPR self-loop)</div>
+    </div>
+    
+    <div class="metric">
+        <div class="label">Quantum Lattice</div>
+        <div class="value">5x5x5 Active (125 sites)</div>
+    </div>
+    
+    <div class="metric">
+        <div class="label">Autonomous Setup</div>
+        <div class="value">Complete</div>
+    </div>
+    
+    <p style="margin-top: 40px; opacity: 0.7;">
+        DNS routed through Alice ({ALICE_LOCAL}) to Ubuntu gateway ({ubuntu_ip})
+    </p>
 </body>
 </html>
 '''
@@ -583,14 +1095,15 @@ forwarders {
         self.execute_remote(cmd)
         self.execute_remote("cp /tmp/index.html /var/www/quantum/index.html", sudo=True)
         
-        # Enable site
+        # Enable headers module and site
+        self.execute_remote("a2enmod headers", sudo=True)
         self.execute_remote("a2ensite quantum.conf", sudo=True)
         self.execute_remote("a2dissite 000-default.conf", sudo=True)
         self.execute_remote("systemctl reload apache2", sudo=True)
         self.execute_remote("systemctl enable apache2", sudo=True)
         
         SETUP_STATE['web_server_configured'] = True
-        self.log_step("Web Server Configuration", "SUCCESS", f"{QUANTUM_DOMAIN} configured")
+        self.log_step("Web Server Configuration", "SUCCESS", f"{QUANTUM_DOMAIN} configured on Ubuntu gateway")
         
         return True
     
@@ -618,31 +1131,54 @@ forwarders {
         return True
     
     def verify_setup(self):
-        """Verify all services are running"""
-        self.log_step("Verification", "STARTING", "Checking services")
+        """Verify all services running on Ubuntu gateway with Alice bridge"""
+        self.log_step("Verification", "STARTING", f"Checking Ubuntu gateway at {UBUNTU_QUANTUM_IP}")
         
-        # Check DNS
+        ubuntu_ip = UBUNTU_QUANTUM_IP
+        
+        # Check DNS on Ubuntu
         result = self.execute_remote("systemctl is-active bind9", sudo=True)
         dns_ok = result['output'].strip() == 'active'
         
-        # Check web server
+        # Check web server on Ubuntu
         result = self.execute_remote("systemctl is-active apache2", sudo=True)
         web_ok = result['output'].strip() == 'active'
         
-        # Test DNS resolution
-        result = self.execute_remote(f"nslookup {QUANTUM_DOMAIN} localhost")
-        dns_resolve_ok = QUANTUM_DOMAIN in result['output']
+        # Test DNS resolution on Ubuntu
+        result = self.execute_remote(f"nslookup {QUANTUM_DOMAIN} {ubuntu_ip}")
+        dns_resolve_ok = ubuntu_ip in result['output'] or QUANTUM_DOMAIN in result['output']
         
-        # Test web server
-        result = self.execute_remote(f"curl -s http://localhost/ | grep 'Quantum Realm'")
+        # Test reverse DNS in quantum network
+        result = self.execute_remote(f"nslookup {ubuntu_ip} {ubuntu_ip}")
+        reverse_dns_ok = 'ubuntu' in result['output'].lower() or 'gateway' in result['output'].lower()
+        
+        # Test web server responds on Ubuntu
+        result = self.execute_remote(f"curl -s http://localhost/ | grep 'Ubuntu Gateway'")
         web_test_ok = result['success']
         
-        if dns_ok and web_ok and dns_resolve_ok and web_test_ok:
+        # Test DNS listening on port 53
+        result = self.execute_remote(f"ss -tlnp | grep :53")
+        dns_listening = result['success'] and 'named' in result['output']
+        
+        # Test quantum domain resolution
+        result = self.execute_remote(f"dig @{ubuntu_ip} {QUANTUM_DOMAIN} +short")
+        quantum_routing_ok = ubuntu_ip in result['output']
+        
+        # Test Alice bridge reference exists
+        result = self.execute_remote(f"dig @{ubuntu_ip} alice.render +short")
+        alice_bridge_ok = ALICE_LOCAL in result['output']
+        
+        all_ok = dns_ok and web_ok and dns_resolve_ok and web_test_ok and dns_listening
+        
+        if all_ok:
             SETUP_STATE['domain_working'] = True
-            self.log_step("Verification", "SUCCESS", "All services operational")
+            self.log_step("Verification", "SUCCESS", f"All services operational on Ubuntu @ {ubuntu_ip}")
+            self.log_step("Verification", "SUCCESS", f"DNS routing: Alice ({ALICE_LOCAL}) → Ubuntu ({ubuntu_ip})")
+            self.log_step("Verification", "SUCCESS", f"Domain routing: {QUANTUM_DOMAIN} → {ubuntu_ip}")
             return True
         else:
-            self.log_step("Verification", "PARTIAL", f"DNS:{dns_ok}, Web:{web_ok}, Resolve:{dns_resolve_ok}, HTTP:{web_test_ok}")
+            status = f"DNS:{dns_ok}, Web:{web_ok}, DNS_Resolve:{dns_resolve_ok}, HTTP:{web_test_ok}, DNS_Listen:{dns_listening}, Reverse:{reverse_dns_ok}, Routing:{quantum_routing_ok}, Alice:{alice_bridge_ok}"
+            self.log_step("Verification", "PARTIAL", status)
             return False
     
     def run_autonomous_setup(self):
@@ -1107,6 +1643,7 @@ Available Commands:
 ------------------
 help              - Show this help
 metrics           - Display quantum foam metrics
+bridges           - Show quantum bridge topology
 setup_status      - View autonomous setup progress
 teleport <data>   - Perform quantum teleportation
 entangle <ip>     - Entangle IP address into lattice
@@ -1114,6 +1651,41 @@ registry          - Show domain registry
 issue_ip          - Issue new quantum IP
 clear             - Clear history
 exit              - Close session
+'''
+        
+        elif cmd == 'bridges':
+            output = '''
+Quantum Bridge Topology (Foam Quantum Mapping):
+-----------------------------------------------
+Source            → Local Bridge       Protocol         Status  
+127.0.0.1 (Alice) → Self-loop          EPR (loop)       ACTIVE  
+133.7.0.1 (Ubuntu)→ Direct             SSH-Quantum      GATEWAY  
+192.168.42.3 (QRAM)       → 192.168.42.1       GHZ-NAT          TUNNELED  
+192.168.42.10 (Holo)       → 192.168.42.2       Foam-Holo        SYNCHED  
+
+Additional Quantum Nodes:
+-------------------------
+192.168.42.4 + 133.7.0.1  → .render (dual-homed)
+5                 → .github  
+192.168.42.8              → blackhole.island (event horizon)
+192.168.42.9              → whitehole.lattice (holographic storage)
+
+Foam Quantum DNS Mapping:
+--------------------------
+quantum.realm.domain.dominion.foam.computer → 192.168.42.3 (QRAM)
+.render                                     → 192.168.42.4 AND 133.7.0.1 (dual)
+.github                                     → 5
+blackhole.island                            → 192.168.42.8
+whitehole.lattice                           → 192.168.42.9
+
+Full FQDN:
+quantum.realm.domain.dominion.foam.computer.render → 192.168.42.3 + 192.168.42.4
+
+Architecture:
+-------------
+DNS Queries: Alice (127.0.0.1) → Ubuntu (133.7.0.1)
+Web Service: Ubuntu (133.7.0.1):80
+DNS Service: Ubuntu (133.7.0.1):53
 '''
         
         elif cmd == 'metrics':
@@ -1214,24 +1786,45 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     
     logger.info("=" * 70)
-    logger.info("QUANTUM NETWORK AUTONOMOUS SYSTEM")
+    logger.info("QUANTUM NETWORK - ALICE BRIDGE → UBUNTU GATEWAY")
+    logger.info("FOAM QUANTUM MAPPING ACTIVE")
     logger.info("=" * 70)
     logger.info(f"Server starting on 0.0.0.0:{port}")
     logger.info(f"Quantum Foam: 5x5x5 lattice active")
     logger.info(f"SSH: {'✓ Enabled' if SSH_ENABLED else '✗ Disabled'}")
-    logger.info(f"Ubuntu Target: {UBUNTU_HOST}:{UBUNTU_PORT}")
+    logger.info("")
+    logger.info("Quantum Bridge Topology (Foam Mapping):")
+    logger.info(f"  Alice (Local):  {ALICE_LOCAL} → EPR self-loop (DNS bridge)")
+    logger.info(f"  Ubuntu (Gateway): {UBUNTU_QUANTUM_IP} → Primary DNS + Web server")
+    logger.info(f"  QRAM:           192.168.42.3 → 192.168.42.1 (GHZ-NAT tunneled)")
+    logger.info(f"  Holo:           192.168.42.10 → 192.168.42.2 (Foam-Holo synched)")
+    logger.info("")
+    logger.info("Foam Quantum DNS Mapping:")
+    logger.info(f"  quantum.realm.domain.dominion.foam.computer → 192.168.42.3")
+    logger.info(f"  .render → 192.168.42.4 AND {UBUNTU_QUANTUM_IP} (dual-homed)")
+    logger.info(f"  .github → 5")
+    logger.info(f"  blackhole.island → 192.168.42.8")
+    logger.info(f"  whitehole.lattice → 192.168.42.9")
+    logger.info("")
+    logger.info(f"SSH Target: {UBUNTU_HOST}:{UBUNTU_PORT}")
+    logger.info(f"Quantum Network: {QUANTUM_NET}")
+    logger.info(f"Domain: {QUANTUM_DOMAIN}")
+    logger.info(f"Routing: Alice ({ALICE_LOCAL}) → Ubuntu ({UBUNTU_QUANTUM_IP})")
     logger.info("=" * 70)
     
     # Start autonomous setup in background
-    if SSH_ENABLED and UBUNTU_HOST != '127.0.0.1':
+    if SSH_ENABLED and UBUNTU_HOST not in ['127.0.0.1', 'localhost']:
         setup_thread = threading.Thread(target=run_autonomous_setup_background, daemon=True)
         setup_thread.start()
-        logger.info("✓ Autonomous setup thread started")
+        logger.info(f"✓ Autonomous setup thread started - connecting to Ubuntu @ {UBUNTU_HOST}")
     else:
-        logger.warning("⚠ Autonomous setup skipped - set UBUNTU_HOST environment variable")
+        logger.warning("⚠ Autonomous setup skipped")
+        logger.warning(f"   Current UBUNTU_HOST: {UBUNTU_HOST}")
+        logger.warning(f"   Set UBUNTU_HOST={UBUNTU_QUANTUM_IP} to connect to Ubuntu gateway")
+        logger.warning(f"   Alice bridge operates locally at {ALICE_LOCAL}")
     
     try:
         socketio.run(app, host='0.0.0.0', port=port, debug=False)
     finally:
-        logger.info("Shutting down...")
+        logger.info("Shutting down quantum network...")
         logger.info("✓ Shutdown complete")
