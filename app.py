@@ -1,6 +1,9 @@
 import eventlet
 eventlet.monkey_patch()
 
+import warnings
+warnings.filterwarnings("ignore", message="TripleDES")
+
 import os
 import logging
 import hashlib
@@ -254,11 +257,15 @@ def update_mirror():
             repo_name = repo.split('/')[-1].replace('.git', '')
             full_path = os.path.join(GITHUB_MIRROR_LOCAL, repo_name)
             if not os.path.exists(full_path):
-                subprocess.run(['git', 'clone', repo, full_path], check=True, capture_output=True)
+                # Fixed: Add timeout to prevent hang
+                subprocess.run(['git', 'clone', repo, full_path], check=True, capture_output=True, timeout=30)
                 print(f"Cloned {repo} to {full_path}")
             else:
-                subprocess.run(['git', '-C', full_path, 'pull'], check=True, capture_output=True)
+                subprocess.run(['git', '-C', full_path, 'pull'], check=True, capture_output=True, timeout=30)
                 print(f"Updated {full_path}")
+    except subprocess.TimeoutExpired:
+        logger.warning("Git mirror update timed out. Skipping.")
+        print("Mirror update timed out - fallback to API pulls only.")
     except subprocess.CalledProcessError as e:
         logger.warning(f"Git mirror update failed (likely no git in runtime): {e}. Use Docker for full mirror.")
         print("Mirror skipped - fallback to API pulls only.")
@@ -285,7 +292,7 @@ def internal_error(error):
     logger.error(f"Internal Error: {str(error)}")
     return "Quantum Decoherence: App restarting... Check logs.", 500
 
-# Health Check
+# Health Check - Quick response for port detection
 @app.route('/health')
 def health_check():
     return 'OK', 200
@@ -615,13 +622,13 @@ def handle_qsh_command(data):
                     output = "setup_dns disabled: Add 'paramiko==3.4.0' to requirements.txt and redeploy."
                 else:
                     output = "Autonomous DNS Setup on Ubuntu (.render TLD)...\n"
-                    # Fixed: Multi-line script for proper quoting
-                    inner_script = f'''apt update && apt install -y bind9 bind9utils dnsutils
+                    # Fixed: Use heredoc-style for bash script to preserve formatting
+                    inner_script = '''apt update && apt install -y bind9 bind9utils dnsutils
 cat > /etc/bind/named.conf.local << EOF
-zone "render" {{
+zone "render" {
     type master;
     file "/etc/bind/db.render";
-}};
+};
 EOF
 cat > /etc/bind/db.render << EOF
 $TTL    604800
@@ -636,16 +643,18 @@ $TTL    604800
 ns1     IN      A       133.7.0.1
 @       IN      A       216.24.57.1
 *       IN      A       216.24.57.1  ; Wildcard for issuance
-forwarders {{
+forwarders {
     8.8.8.8;
     8.8.4.4;
-}};
+};
 EOF
 systemctl restart bind9
 systemctl enable bind9
 ufw allow 53
 echo "Bind9 configured for .render TLD on 133.7.0.1"'''
-                    setup_script = f'echo "{LINUX_PASS}" | sudo -S bash -c $\'{inner_script}\''
+                    # Fixed: Escape single quotes in inner_script for bash -c
+                    escaped_script = inner_script.replace("'", "'\\''")
+                    setup_script = f'echo "{LINUX_PASS}" | sudo -S bash -c $\'{escaped_script}\''
                     ssh = paramiko.SSHClient()
                     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                     ssh.connect(LINUX_HOST, username=LINUX_USER, password=LINUX_PASS)
@@ -732,4 +741,5 @@ def handle_disconnect():
 # Main block
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
+    print(f"Starting server on 0.0.0.0:{port}")
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
