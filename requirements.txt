@@ -1,6 +1,9 @@
+flask-sqlalchemy==3.1.1  
 flask==3.0.3
 flask-socketio==5.3.6
+sqlalchemy==2.0.36
 eventlet==0.36.1
+werkzeug==3.0.4
 numpy==1.26.4        # First: Pre-built wheel
 scipy==1.13.1        # Second: Uses numpy, pre-wheel
 qutip==4.7.5         # Third: Now compiles with g++
