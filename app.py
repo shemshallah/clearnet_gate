@@ -322,9 +322,10 @@ class SSHConnectionManager:
             if session_id in self.connections:
                 conn = self.connections[session_id]
                 try:
-                    # Test connection
-                    conn['client'].exec_command('echo test', timeout=5)
-                    return conn
+                    # Test connection with short timeout
+                    transport = conn['client'].get_transport()
+                    if transport and transport.is_active():
+                        return conn
                 except:
                     # Connection dead, remove it
                     self._cleanup_connection(session_id)
@@ -335,24 +336,30 @@ class SSHConnectionManager:
                 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 
                 logger.info(f"Connecting SSH to {LINUX_HOST}:{LINUX_PORT}...")
+                
+                # Connect with shorter timeout
                 client.connect(
                     LINUX_HOST,
                     port=LINUX_PORT,
                     username=LINUX_USER,
                     password=LINUX_PASS,
-                    timeout=10,
+                    timeout=5,  # 5 second timeout instead of 10
                     look_for_keys=False,
-                    allow_agent=False
+                    allow_agent=False,
+                    banner_timeout=5
                 )
                 
                 # Open interactive shell
                 channel = client.invoke_shell()
                 channel.settimeout(0.1)
                 
-                # Wait for prompt
-                time.sleep(0.5)
-                if channel.recv_ready():
-                    channel.recv(4096)
+                # Wait for prompt with timeout
+                start = time.time()
+                while time.time() - start < 2:
+                    if channel.recv_ready():
+                        channel.recv(4096)
+                        break
+                    time.sleep(0.1)
                 
                 self.connections[session_id] = {
                     'client': client,
@@ -363,9 +370,12 @@ class SSHConnectionManager:
                 logger.info(f"✓ SSH connected for session {session_id}")
                 return self.connections[session_id]
                 
+            except paramiko.AuthenticationException:
+                raise Exception(f"Authentication failed for user {LINUX_USER}")
+            except paramiko.SSHException as e:
+                raise Exception(f"SSH error: {str(e)}")
             except Exception as e:
-                logger.error(f"SSH connection failed: {e}")
-                raise
+                raise Exception(f"Connection failed: {str(e)}")
     
     def execute_command(self, session_id, command):
         """Execute command on SSH connection"""
@@ -981,6 +991,7 @@ help              - Show this help
 metrics           - Display quantum foam metrics
 teleport <data>   - Perform quantum teleportation
 entangle <ip>     - Entangle IP address into lattice
+test_ssh          - Test SSH connectivity (does not hang)
 connect_linux     - Establish SSH connection to Ubuntu server
 setup_dns         - Configure Bind9 DNS on Ubuntu
 registry          - Show domain registry
@@ -1020,6 +1031,55 @@ Bridge Key:           {metrics['bridge_key'][:50]}...
             else:
                 output = 'Usage: entangle <ip_address>'
         
+        elif cmd == 'test_ssh':
+            if not SSH_ENABLED:
+                output = '✗ SSH not available - install paramiko'
+            else:
+                output = f'''
+🔍 SSH Configuration Test
+------------------------
+Target Host:      {LINUX_HOST}
+Port:             {LINUX_PORT}
+Username:         {LINUX_USER}
+Password Set:     {'Yes' if LINUX_PASS else 'No'}
+Paramiko:         ✓ Loaded
+
+'''
+                # Quick connectivity test
+                if LINUX_HOST in ['127.0.0.1', 'localhost']:
+                    output += '''
+⚠ WARNING: Connecting to localhost (127.0.0.1)
+This is the Render container, not your Ubuntu server!
+
+To connect to your real Ubuntu server:
+1. Set ALICE_IP environment variable to your server's IP
+2. Ensure port 22 is accessible from internet
+3. Run 'connect_linux' to establish connection
+
+Current setup will only work if:
+- Running locally with SSH server
+- Testing in development environment
+'''
+                else:
+                    output += f'✓ Target appears to be remote host\n'
+                    output += f'\nAttempting quick connection test...\n'
+                    
+                    try:
+                        import socket
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.settimeout(3)
+                        result = sock.connect_ex((LINUX_HOST, LINUX_PORT))
+                        sock.close()
+                        
+                        if result == 0:
+                            output += f'✓ Port {LINUX_PORT} is open on {LINUX_HOST}\n'
+                            output += f'\nReady to connect! Run: connect_linux'
+                        else:
+                            output += f'✗ Cannot reach {LINUX_HOST}:{LINUX_PORT}\n'
+                            output += f'\nCheck firewall and network settings.'
+                    except Exception as e:
+                        output += f'✗ Connection test failed: {e}'
+        
         elif cmd == 'connect_linux':
             if not SSH_ENABLED:
                 output = '✗ SSH not available - install paramiko: pip install paramiko'
@@ -1027,7 +1087,25 @@ Bridge Key:           {metrics['bridge_key'][:50]}...
                 output = '✓ Already connected to Ubuntu server'
             else:
                 try:
+                    # Check if connecting to localhost
+                    if LINUX_HOST in ['127.0.0.1', 'localhost']:
+                        output = f'''
+⚠ WARNING: SSH target is {LINUX_HOST}:22 (localhost)
+
+This will attempt to SSH into the Render container itself, not your Ubuntu server.
+
+To connect to your actual Ubuntu server, set environment variable:
+  ALICE_IP=your.ubuntu.server.ip
+
+For now, attempting local connection (will likely fail)...
+'''
+                        emit('qsh_output', {'output': output, 'prompt': False})
+                        time.sleep(1)
+                    
                     session_id = session.get('session_id', f'ssh_{sid}')
+                    output = f'🔌 Connecting to {LINUX_HOST}:{LINUX_PORT} as {LINUX_USER}...\n'
+                    emit('qsh_output', {'output': output, 'prompt': False})
+                    
                     conn = ssh_manager.get_connection(session_id)
                     sess['ssh_connected'] = True
                     sess['ssh_session_id'] = session_id
@@ -1041,7 +1119,23 @@ Type 'exit' to close SSH connection.
 '''
                     prompt = False
                 except Exception as e:
-                    output = f'✗ SSH connection failed: {str(e)}'
+                    error_msg = str(e)
+                    output = f'''
+✗ SSH connection failed: {error_msg}
+
+Common issues:
+1. ALICE_IP not set correctly (currently: {LINUX_HOST})
+2. SSH port not accessible from Render
+3. Firewall blocking connection
+4. Invalid credentials
+
+To fix:
+- Set environment variable ALICE_IP to your Ubuntu server's public IP
+- Ensure port 22 is open on your Ubuntu server
+- Verify credentials: LINUX_USER={LINUX_USER}
+
+For testing, you can run other QSH commands without SSH.
+'''
         
         elif cmd == 'setup_dns':
             if not SSH_ENABLED:
