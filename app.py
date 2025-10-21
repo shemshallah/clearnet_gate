@@ -37,8 +37,8 @@ eventlet.monkey_patch()
 # Domain Configs
 RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')
 DUCKDNS_DOMAIN = os.environ.get('DUCKDNS_DOMAIN', 'alicequantum.duckdns.org')
-ALICE_IP = os.environ.get('ALICE_IP', '133.7.0.1')  # Changed to quantum gateway IP
-QUANTUM_DOMAIN = os.environ.get('QUANTUM_DOMAIN', 'quantum.realm.domain.dominion.foam.computer.render')
+ALICE_IP = os.environ.get('ALICE_IP', '133.7.0.1')  # Ubuntu Gateway
+QUANTUM_DOMAIN = os.environ.get('QUANTUM_DOMAIN', 'quantum.realm.domain.dominion.foam.computer.render')  # .render endpoint
 LOCAL_WEBSERVER_PORT = 80
 GITHUB_MIRROR_LOCAL = './github_mirror'  # Local root for all mirrored files
 
@@ -49,22 +49,24 @@ GITHUB_MIRROR_BASE = 'https://quantum.realm.domain.dominion.foam.computer.render
 ADMIN_USER = 'shemshallah'
 ADMIN_PASS_HASH = '930f0446221f865871805ab4e9577971ff97bb21d39abc4e91341ca6100c9181'  # Pre-computed SHA3-256 of b'$h10j1r1H0w4rd'
 
-# Quantum Network Config
+# Quantum Network Config (133.7.0.0/24)
 QUANTUM_NET_CIDR = '133.7.0.0/24'
 QUANTUM_GATEWAY = '133.7.0.1'
 QUANTUM_DNS = '133.7.0.1'
 QUANTUM_POOL_START = '133.7.0.10'
 QUANTUM_POOL_END = '133.7.0.254'
-IP_POOL = list(range(int(''.join(QUANTUM_POOL_START.split('.'))), int(''.join(QUANTUM_POOL_END.split('.'))) + 1))  # Flatten for random issuance
+IP_POOL = []
+for d in range(int(QUANTUM_POOL_START.split('.')[-1]), int(QUANTUM_POOL_END.split('.')[-1]) + 1):
+    IP_POOL.append(f"133.7.0.{d}")
 
-# Registry (Pre-Registered Subs 256-999 to Admin + .quantum TLDs)
+# Registry (Pre-Registered Subs 256-999 to Admin + .render TLDs)
 PRE_REG_SUBS = {str(i): {'owner': ADMIN_USER, 'status': 'available', 'price': 1.00} for i in range(256, 1000)}
-QUANTUM_TLDS = {f'{i}.quantum': {'owner': ADMIN_USER, 'status': 'available', 'price': 5.00, 'ip': None} for i in range(1, 1001)}  # Example: 1.quantum, etc.
+RENDER_TLDS = {f'{i}.render': {'owner': ADMIN_USER, 'status': 'available', 'price': 5.00, 'ip': None} for i in range(1, 1001)}  # Example: 1.render, etc.
 
-# Linuxbserver Config (SSH to Alice/Ubuntu)
+# Linuxbserver Config (SSH to Ubuntu)
 LINUX_USER = ADMIN_USER
 LINUX_PASS = os.environ.get('LINUX_PASS', '$h10j1r1H0w4rd')  # Secure via env
-LINUX_HOST = ALICE_IP  # SSH target (quantum gateway)
+LINUX_HOST = ALICE_IP  # SSH target (Ubuntu gateway)
 
 # Quantum Foam Initialization - Upgraded to 5x5x5 Lattice
 try:
@@ -129,9 +131,47 @@ def foam_lattice_compress(data_tensor):
 
 def inter_hole_teleport(comp_input):
     input_state = qt.basis(2, int(hashlib.md5(comp_input.encode()).hexdigest(), 16) % 2)
-    channel = qt.bell_state('00')
-    teleported = qt.teleport(input_state, channel, [qt.basis(2, 0), qt.basis(2, 0)])
-    return float(teleported[0].full().flatten()[0].real)
+    
+    # Manual CNOT matrix for qubits 0 (control), 1 (target), 2 (idle) - dims [[2,2,2],[2,2,2]]
+    cnot_matrix = np.zeros((8,8), dtype=complex)
+    cnot_matrix[0,0] = 1  # |000> -> |000>
+    cnot_matrix[1,1] = 1  # |001> -> |001>
+    cnot_matrix[3,2] = 1  # |010> -> |011>
+    cnot_matrix[2,3] = 1  # |011> -> |010>
+    cnot_matrix[6,4] = 1  # |100> -> |110>
+    cnot_matrix[7,5] = 1  # |101> -> |111>
+    cnot_matrix[4,6] = 1  # |110> -> |100>
+    cnot_matrix[5,7] = 1  # |111> -> |101>
+    cnot = qt.Qobj(cnot_matrix, dims=[[2,2,2],[2,2,2]])
+    
+    # EPR on qubits 1,2: (|00> + |11>)/√2
+    epr12 = (qt.tensor(qt.basis(2,0), qt.basis(2,0)) + qt.tensor(qt.basis(2,1), qt.basis(2,1))).unit()
+    
+    # Initial: input (0) tensor EPR (1,2)
+    initial = qt.tensor(input_state, epr12)
+    
+    # CNOT: control 0, target 1
+    after_cnot = cnot * initial
+    
+    # Hadamard on 0: H = (X + Z)/√2
+    h = (qt.sigmax() + qt.sigmaz()).unit() / np.sqrt(2)
+    h_full = qt.tensor(h, qt.qeye(2), qt.qeye(2))
+    after_h = h_full * after_cnot
+    
+    # Projector |00><00| on 0,1 tensor I_2
+    p00 = qt.tensor(qt.ket2dm(qt.basis(2,0)), qt.ket2dm(qt.basis(2,0)), qt.qeye(2))
+    
+    # Post-measurement (unnormalized)
+    projected = p00 * after_h
+    norm = projected.norm()
+    if norm > 1e-10:
+        projected = projected / norm
+    
+    # Trace out Alice's qubits (0,1) → Bob's state (2)
+    teleported = projected.ptrace(2)
+    
+    # Original return: float of [0,0] real part (density matrix element)
+    return float(teleported.full()[0,0].real)
 
 def entangle_ip_address(ip_addr):
     """Siamese mirror pairing: Entangle IP into lattice state (thematic)"""
@@ -155,10 +195,8 @@ def issue_quantum_ip(session_id):
     """Issue unique IP from pool"""
     if 'issued_ip' not in session:
         idx = int(hashlib.sha256(session_id.encode()).hexdigest(), 16) % len(IP_POOL)
-        flat_ip = IP_POOL[idx]
-        issued_ip = f"{flat_ip//100000}.{flat_ip//10000%10}.{flat_ip//100%10}.{flat_ip%10}"
-        session['issued_ip'] = issued_ip
-        logger.warning(f"Issued quantum IP {issued_ip} for session {session_id}")
+        session['issued_ip'] = IP_POOL[idx]
+        logger.warning(f"Issued quantum IP {session['issued_ip']} for session {session_id}")
     return session['issued_ip']
 
 # Matplotlib Plot Util - Now for 5x5x5
@@ -282,19 +320,19 @@ def login():
         logger.error(f"Login Error: {e}")
         return "Login decoherence - try again.", 500
 
-# Registry Routes (Enhanced: .quantum TLDs + IP Issuance)
+# Registry Routes (Enhanced: .render TLDs + IP Issuance)
 @app.route('/registry')
 def registry():
     if not session.get('logged_in') or session['user'] != ADMIN_USER:
         return "Unauthorized", 403
-    combined = {**PRE_REG_SUBS, **QUANTUM_TLDS}
+    combined = {**PRE_REG_SUBS, **RENDER_TLDS}
     return jsonify(combined)
 
 @app.route('/sell/<domain>', methods=['GET', 'POST'])
 def sell_domain(domain):
     if not session.get('logged_in') or session['user'] != ADMIN_USER:
         return redirect('/login')
-    combined = {**PRE_REG_SUBS, **QUANTUM_TLDS}
+    combined = {**PRE_REG_SUBS, **RENDER_TLDS}
     if domain not in combined or combined[domain]['status'] != 'available':
         return "Domain not available", 400
     if request.method == 'POST':
@@ -303,14 +341,15 @@ def sell_domain(domain):
         if buyer:
             combined[domain]['owner'] = buyer
             combined[domain]['status'] = 'sold'
-            # For .quantum: Issue IP & add to DNS via SSH (autonomous)
-            if domain.endswith('.quantum'):
+            # For .render: Issue IP & add to DNS via SSH (autonomous)
+            issued_ip = None
+            if domain.endswith('.render'):
                 issued_ip = issue_quantum_ip(buyer)
                 combined[domain]['ip'] = issued_ip
                 # Trigger SSH to update Bind9 zonefile
                 update_dns_zone(domain, issued_ip)
-            logger.warning(f'Sold {domain} to {buyer} {"with IP " + issued_ip if "ip" in locals() else ""}')
-            return f"Domain {domain} sold! {'IP: ' + issued_ip if 'issued_ip' in locals() else ''} Key: {bridge_key}"
+            logger.warning(f'Sold {domain} to {buyer} {"with IP " + issued_ip if issued_ip else ""}')
+            return f"Domain {domain} sold! {'IP: ' + issued_ip if issued_ip else ''} Key: {bridge_key}"
     return '''
     <form method="post">
         Email: <input type="email" name="buyer_email"><br>
@@ -319,7 +358,7 @@ def sell_domain(domain):
     '''
 
 def update_dns_zone(domain, ip):
-    """Autonomous SSH to Ubuntu: Add A record to .quantum zone"""
+    """Autonomous SSH to Ubuntu: Add A record to .render zone"""
     if not paramiko:
         logger.error("Paramiko required for DNS update")
         return
@@ -327,7 +366,7 @@ def update_dns_zone(domain, ip):
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh.connect(LINUX_HOST, username=LINUX_USER, password=LINUX_PASS)
-        stdin, stdout, stderr = ssh.exec_command(f'echo "IN A {ip}" >> /etc/bind/db.quantum && rndc reload quantum')
+        stdin, stdout, stderr = ssh.exec_command(f'echo "{domain} IN A {ip}" >> /etc/bind/db.render && rndc reload render')
         if stderr.read().decode():
             logger.error(f"DNS update error: {stderr.read().decode()}")
         ssh.close()
@@ -339,7 +378,7 @@ def update_dns_zone(domain, ip):
 def update_domain(domain):
     if not session.get('logged_in') or session['user'] != ADMIN_USER:
         return "Unauthorized", 403
-    combined = {**PRE_REG_SUBS, **QUANTUM_TLDS}
+    combined = {**PRE_REG_SUBS, **RENDER_TLDS}
     if domain in combined:
         new_status = request.form.get('status', 'available')
         combined[domain]['status'] = new_status
@@ -428,7 +467,7 @@ def quantum_gate(path):
                     const term = new Terminal({{ cursorBlink: true, theme: {{ background: '#000', foreground: '#0f0' }} }});
                     term.open(document.getElementById('terminal'));
                     term.write('QSH Foam REPL v2.0 (5x5x5 Lattice - IP Entangled)\\r\\n');
-                    term.write('Issued IP: {issued_ip} | Type "help" for commands. .quantum TLDs now issuable.\\r\\n');
+                    term.write('Issued IP: {issued_ip} | Type "help" for commands. .render TLDs now issuable.\\r\\n');
                     term.write('New: "setup_dns" auto-configures Bind9 on Ubuntu, "connect_linux" for SSH tunnel\\r\\n');
                     term.write('Note: Git mirror may be limited on Render - use "pull matplotlib" for API fallback.\\r\\n');
                     term.write('QSH> ');
@@ -542,12 +581,12 @@ def handle_qsh_command(data):
                 mirror_pull = pull_from_mirror('matplotlib/raw/main/setup.py')
                 output = mirror_pull  # Show full pull
             elif cmd == 'registry list':
-                combined = {**PRE_REG_SUBS, **QUANTUM_TLDS}
+                combined = {**PRE_REG_SUBS, **RENDER_TLDS}
                 subs_list = ', '.join([k for k, v in combined.items() if v['status'] == 'available'][:10])
-                output = f"Available (Subs + .quantum): {subs_list}... (Full: /registry)"
+                output = f"Available (Subs + .render): {subs_list}... (Full: /registry)"
             elif cmd.startswith('sell '):
                 domain = cmd.split(' ', 1)[1]
-                combined = {**PRE_REG_SUBS, **QUANTUM_TLDS}
+                combined = {**PRE_REG_SUBS, **RENDER_TLDS}
                 if domain in combined:
                     output = f"Selling {domain} - Visit /sell/{domain}"
                 else:
@@ -560,28 +599,29 @@ def handle_qsh_command(data):
                 if not paramiko:
                     output = "setup_dns disabled: Add 'paramiko==3.4.0' to requirements.txt and redeploy."
                 else:
-                    output = "Autonomous DNS Setup on Ubuntu...\n"
+                    output = "Autonomous DNS Setup on Ubuntu (.render TLD)...\n"
                     # Run full setup script via SSH
                     setup_script = """
 apt update && apt install -y bind9 bind9utils dnsutils
 cat > /etc/bind/named.conf.local << EOF
-zone "quantum" {
+zone "render" {
     type master;
-    file "/etc/bind/db.quantum";
+    file "/etc/bind/db.render";
 };
 EOF
-cat > /etc/bind/db.quantum << EOF
+cat > /etc/bind/db.render << EOF
 $TTL    604800
-@       IN      SOA     quantum. root.quantum. (
+@       IN      SOA     ns1.render. root.render. (
                               2         ; Serial
                          604800         ; Refresh
                           86400         ; Retry
                         2419200         ; Expire
                          604800 )       ; Negative Cache TTL
 ;
-@       IN      NS      quantum.
-@       IN      A       133.7.0.1
-*       IN      A       133.7.0.1  ; Wildcard for issuance
+@       IN      NS      ns1.render.
+ns1     IN      A       133.7.0.1
+@       IN      A       216.24.57.1
+*       IN      A       216.24.57.1  ; Wildcard for issuance
 forwarders {
     8.8.8.8;
     8.8.4.4;
@@ -590,7 +630,7 @@ EOF
 systemctl restart bind9
 systemctl enable bind9
 ufw allow 53
-echo "Bind9 configured for .quantum TLD on 133.7.0.1"
+echo "Bind9 configured for .render TLD on 133.7.0.1"
                     """
                     ssh = paramiko.SSHClient()
                     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -600,7 +640,7 @@ echo "Bind9 configured for .quantum TLD on 133.7.0.1"
                     if stderr.read().decode():
                         output += f"\nERR: {stderr.read().decode()}"
                     ssh.close()
-                    output += "\nDNS Setup Complete: .quantum zone active on 133.7.0.1:53"
+                    output += "\nDNS Setup Complete: .render zone active on 133.7.0.1:53"
             elif cmd == 'connect_linux':
                 if not paramiko:
                     output = "connect_linux disabled: Add 'paramiko==3.4.0' to requirements.txt and redeploy."
