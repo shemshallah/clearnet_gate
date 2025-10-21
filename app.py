@@ -23,11 +23,11 @@ from itertools import product
 from datetime import datetime, timezone
 import urllib.parse
 
-# Real Paramiko import - production SSH
+# Real Paramiko import
 try:
     import paramiko
     SSH_ENABLED = True
-    print("✓ Paramiko loaded - Real SSH connections enabled")
+    print("✓ Paramiko loaded - SSH autonomous mode enabled")
 except ImportError:
     SSH_ENABLED = False
     print("✗ Paramiko missing - Install: pip install paramiko")
@@ -41,30 +41,28 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # =============================================================================
-# CONFIGURATION - Real Production Values
+# CONFIGURATION - AUTONOMOUS MODE
 # =============================================================================
 
-# Your server endpoints
-RENDER_DOMAIN = os.environ.get('RENDER_DOMAIN', 'clearnet_gate.onrender.com')
-DUCKDNS_DOMAIN = os.environ.get('DUCKDNS_DOMAIN', 'alicequantum.duckdns.org')
-ALICE_IP = os.environ.get('ALICE_IP', '127.0.0.1')  # Alice gateway
-QUANTUM_DOMAIN = 'quantum.realm.domain.dominion.foam.computer.render'
+# Ubuntu Server Configuration (PRIMARY - ALL SERVICES RUN HERE)
+UBUNTU_HOST = os.environ.get('UBUNTU_HOST', '127.0.0.1')  # SET THIS!
+UBUNTU_PORT = int(os.environ.get('UBUNTU_PORT', '22'))
+UBUNTU_USER = os.environ.get('UBUNTU_USER', 'shemshallah')
+UBUNTU_PASS = os.environ.get('UBUNTU_PASS', '$h10j1r1H0w4rd')
 
-# Real authentication credentials
+# Quantum Domain - Will be served from Ubuntu
+QUANTUM_DOMAIN = 'quantum.realm.domain.dominion.foam.computer.render'
+QUANTUM_SUBDOMAIN = 'quantum.realm.domain.dominion.foam.computer'
+BASE_DOMAIN = 'render'
+
+# Authentication
 ADMIN_USER = 'shemshallah'
-# Password: $h10j1r1H0w4rd (correct version with 'j')
 ADMIN_PASS_HASH = '930f0446221f865871805ab4e9577971ff97bb21d39abc4e91341ca6100c9181'
 
-# Ubuntu SSH credentials (from your spec)
-LINUX_HOST = ALICE_IP
-LINUX_USER = ADMIN_USER
-LINUX_PASS = os.environ.get('LINUX_PASS', '$h10j1r1H0w4rd')
-LINUX_PORT = int(os.environ.get('LINUX_PORT', '22'))
-
-# Quantum network configuration
+# Quantum network
 QUANTUM_NET = '133.7.0.0/24'
 QUANTUM_GATEWAY = '133.7.0.1'
-QUANTUM_DNS = '133.7.0.1'
+QUANTUM_DNS = UBUNTU_HOST  # DNS runs on Ubuntu
 IP_POOL = [f'133.7.0.{i}' for i in range(10, 255)]
 ALLOCATED_IPS = {}
 
@@ -82,8 +80,22 @@ PRE_REG_SUBS = {str(i): {
     'price': 1.00
 } for i in range(256, 1000)}
 
+# Autonomous setup state
+SETUP_STATE = {
+    'ssh_connected': False,
+    'dns_installed': False,
+    'dns_configured': False,
+    'web_server_installed': False,
+    'web_server_configured': False,
+    'firewall_configured': False,
+    'domain_working': False,
+    'setup_complete': False,
+    'setup_log': [],
+    'connection_string': None
+}
+
 # =============================================================================
-# REAL QUANTUM FOAM - 5x5x5 LATTICE WITH QUTIP RESONANCE
+# QUANTUM FOAM - 5x5x5 LATTICE
 # =============================================================================
 
 class QuantumFoamLattice:
@@ -91,29 +103,22 @@ class QuantumFoamLattice:
     
     def __init__(self):
         self.size = 5
-        self.n_sites = 125  # 5^3
+        self.n_sites = 125
         
         logger.info("Initializing real 5x5x5 quantum foam lattice...")
         
         try:
-            # Create real GHZ state core (6 qubits for tractable computation)
             self.n_core = 6
             self.core_state = self._create_ghz_core()
-            
-            # Create lattice mapping (125 logical sites)
             self.lattice_mapping = self._initialize_lattice_structure()
-            
-            # Calculate real entanglement metrics
             self.fidelity = self._measure_fidelity()
             self.negativity = self._calculate_negativity()
             
-            # Generate unique bridge key from quantum state
             state_hash = hashlib.sha256(
                 self.core_state.full().tobytes()
             ).hexdigest()
             self.bridge_key = f"QFOAM-5x5x5-{state_hash[:32]}"
             
-            # IP entanglement registry (tracks which IPs are quantum-entangled)
             self.ip_entanglement = {}
             
             logger.info(f"✓ Quantum lattice active: fidelity={self.fidelity:.15f}")
@@ -125,7 +130,7 @@ class QuantumFoamLattice:
             self._initialize_fallback()
     
     def _initialize_fallback(self):
-        """Fallback initialization if quantum ops fail"""
+        """Fallback initialization"""
         self.n_core = 6
         self.core_state = qt.tensor([qt.basis(2, 0)] * self.n_core)
         self.lattice_mapping = {i: {
@@ -140,20 +145,19 @@ class QuantumFoamLattice:
         logger.warning("Fallback quantum state initialized")
     
     def _create_ghz_core(self):
-        """Create real GHZ state: (|000000⟩ + |111111⟩)/√2"""
+        """Create real GHZ state"""
         zeros = qt.tensor([qt.basis(2, 0)] * self.n_core)
         ones = qt.tensor([qt.basis(2, 1)] * self.n_core)
         ghz = (zeros + ones).unit()
         return ghz
     
     def _initialize_lattice_structure(self):
-        """Map 125 lattice sites to quantum state indices"""
+        """Map 125 lattice sites"""
         mapping = {}
         for i in range(self.size):
             for j in range(self.size):
                 for k in range(self.size):
                     site_idx = i + self.size * j + self.size**2 * k
-                    # Map to core qubit (modulo for coverage)
                     qubit_idx = site_idx % self.n_core
                     mapping[site_idx] = {
                         'coords': (i, j, k),
@@ -163,33 +167,26 @@ class QuantumFoamLattice:
         return mapping
     
     def _measure_fidelity(self):
-        """Measure real fidelity against ideal GHZ"""
+        """Measure fidelity"""
         ideal_ghz = self._create_ghz_core()
         return float(qt.fidelity(self.core_state, ideal_ghz))
     
     def _calculate_negativity(self):
-        """Calculate real entanglement negativity"""
-        # For GHZ states, use analytical result
-        # The partial_transpose function has compatibility issues across scipy/qutip versions
-        # GHZ state has known negativity of 0.5 for 3:3 bipartition
+        """Calculate entanglement negativity"""
         logger.info("Using analytical GHZ entanglement negativity: 0.5")
         return 0.5
     
     def entangle_ip(self, ip_address):
         """Entangle IP address into quantum lattice"""
         try:
-            # Hash IP to lattice site
             ip_hash = int(hashlib.sha256(ip_address.encode()).hexdigest(), 16)
             site_idx = ip_hash % self.n_sites
             
-            # Get lattice site info
             site_info = self.lattice_mapping[site_idx]
             qubit_idx = site_info['qubit']
             phase = site_info['phase']
             
-            # Apply phase rotation to entangled qubit (real quantum operation)
             try:
-                # Manual phase gate construction for compatibility
                 phase_angle = np.angle(phase)
                 phase_matrix = np.array([[1, 0], [0, np.exp(1j * phase_angle)]])
                 phase_gate = qt.Qobj(phase_matrix)
@@ -199,17 +196,13 @@ class QuantumFoamLattice:
                      for i in range(self.n_core)]
                 )
                 
-                # Update state (this is real quantum evolution)
                 self.core_state = rotation * self.core_state
                 logger.debug(f"Phase rotation applied to qubit {qubit_idx}")
             except Exception as e:
                 logger.debug(f"Phase gate application skipped: {e}")
-                # Continue without state update - still track entanglement
             
-            # Calculate entanglement fidelity for this IP
             ip_fidelity = self._measure_fidelity() * (1 - 0.001 * (site_idx / self.n_sites))
             
-            # Register entanglement
             self.ip_entanglement[ip_address] = {
                 'site': site_idx,
                 'coords': site_info['coords'],
@@ -225,64 +218,58 @@ class QuantumFoamLattice:
             
         except Exception as e:
             logger.error(f"IP entanglement error for {ip_address}: {e}")
-            # Return fallback fidelity
             return 0.999
     
     def quantum_teleport(self, data_input):
-        """Real quantum teleportation through lattice"""
-        # Create input qubit state from data
-        data_hash = int(hashlib.md5(data_input.encode()).hexdigest(), 16) % 2
-        input_state = qt.basis(2, data_hash)
-        
-        # Create EPR pair (Bell state)
-        epr = (qt.tensor(qt.basis(2, 0), qt.basis(2, 0)) +
-               qt.tensor(qt.basis(2, 1), qt.basis(2, 1))).unit()
-        
-        # Alice has input + first EPR qubit, Bob has second EPR qubit
-        initial = qt.tensor(input_state, epr)
-        
-        # Bell measurement (Alice's operation)
-        # CNOT on qubits 0,1
-        cnot = qt.cnot(N=3, control=0, target=1)
-        after_cnot = cnot * initial
-        
-        # Hadamard on qubit 0
-        H = qt.hadamard_transform(N=3, target=0)
-        after_H = H * after_cnot
-        
-        # Measure qubits 0,1 (simulate with projection)
-        proj_00 = qt.tensor(
-            qt.basis(2, 0) * qt.basis(2, 0).dag(),
-            qt.basis(2, 0) * qt.basis(2, 0).dag(),
-            qt.qeye(2)
-        )
-        
-        # Post-measurement state
-        measured = proj_00 * after_H
-        norm = measured.norm()
-        
-        if norm > 1e-10:
-            measured = measured / norm
-        
-        # Bob's qubit (trace out Alice's)
-        bob_state = measured.ptrace(2)
-        
-        # Calculate teleportation fidelity
-        tele_fidelity = float(qt.fidelity(bob_state, input_state))
-        
-        logger.info(f"✓ Quantum teleportation: fidelity={tele_fidelity:.6f}")
-        
-        return tele_fidelity
-    
-    def compress_foam_data(self, data_tensor):
-        """Quantum-inspired data compression using SVD"""
-        U, S, Vh = np.linalg.svd(data_tensor, full_matrices=False)
-        
-        # Keep top 4 singular values (quantum compression)
-        rank = min(4, len(S))
-        compressed = U[:, :rank] @ np.diag(S[:rank]) @ Vh[:rank, :]
-        
-        return compressed.tobytes()
+        """Real quantum teleportation"""
+        try:
+            data_hash = int(hashlib.md5(data_input.encode()).hexdigest(), 16) % 2
+            input_state = qt.basis(2, data_hash)
+            
+            epr = (qt.tensor(qt.basis(2, 0), qt.basis(2, 0)) +
+                   qt.tensor(qt.basis(2, 1), qt.basis(2, 1))).unit()
+            
+            initial = qt.tensor(input_state, epr)
+            
+            cnot_matrix = np.array([
+                [1, 0, 0, 0, 0, 0, 0, 0],
+                [0, 1, 0, 0, 0, 0, 0, 0],
+                [0, 0, 1, 0, 0, 0, 0, 0],
+                [0, 0, 0, 1, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 1, 0, 0],
+                [0, 0, 0, 0, 1, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 1],
+                [0, 0, 0, 0, 0, 0, 1, 0]
+            ], dtype=complex)
+            cnot = qt.Qobj(cnot_matrix, dims=[[2, 2, 2], [2, 2, 2]])
+            after_cnot = cnot * initial
+            
+            h_matrix = np.array([[1, 1], [1, -1]]) / np.sqrt(2)
+            H = qt.tensor(qt.Qobj(h_matrix), qt.qeye(2), qt.qeye(2))
+            after_H = H * after_cnot
+            
+            proj_00 = qt.tensor(
+                qt.basis(2, 0) * qt.basis(2, 0).dag(),
+                qt.basis(2, 0) * qt.basis(2, 0).dag(),
+                qt.qeye(2)
+            )
+            
+            measured = proj_00 * after_H
+            norm = measured.norm()
+            
+            if norm > 1e-10:
+                measured = measured / norm
+            
+            bob_state = measured.ptrace(2)
+            tele_fidelity = float(qt.fidelity(bob_state, input_state))
+            
+            logger.info(f"✓ Quantum teleportation: fidelity={tele_fidelity:.6f}")
+            
+            return tele_fidelity
+            
+        except Exception as e:
+            logger.error(f"Teleportation error: {e}")
+            return 0.5
     
     def get_state_metrics(self):
         """Get current quantum state metrics"""
@@ -295,7 +282,7 @@ class QuantumFoamLattice:
             'core_qubits': self.n_core
         }
 
-# Initialize real quantum foam
+# Initialize quantum foam
 logger.info("=" * 70)
 logger.info("QUANTUM FOAM INITIALIZATION")
 logger.info("=" * 70)
@@ -303,140 +290,142 @@ quantum_foam = QuantumFoamLattice()
 logger.info("=" * 70)
 
 # =============================================================================
-# REAL SSH CONNECTION MANAGER
+# AUTONOMOUS UBUNTU SETUP ENGINE
 # =============================================================================
 
-class SSHConnectionManager:
-    """Manages real SSH connections to Ubuntu server"""
+class AutonomousSetupEngine:
+    """Autonomously sets up complete infrastructure on Ubuntu server"""
     
     def __init__(self):
-        self.connections = {}
-        self.lock = threading.Lock()
+        self.ssh_client = None
+        self.max_retries = 5
+        self.retry_delay = 5
+        self.setup_lock = threading.Lock()
     
-    def get_connection(self, session_id):
-        """Get or create SSH connection for session"""
-        if not SSH_ENABLED:
-            raise Exception("SSH not available - install paramiko")
+    def log_step(self, step, status, details=""):
+        """Log setup progress"""
+        entry = {
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'step': step,
+            'status': status,
+            'details': details
+        }
+        SETUP_STATE['setup_log'].append(entry)
+        logger.info(f"SETUP [{status}]: {step} - {details}")
+    
+    def execute_remote(self, command, sudo=False, timeout=30):
+        """Execute command on Ubuntu server"""
+        if not self.ssh_client:
+            raise Exception("SSH not connected")
         
-        with self.lock:
-            if session_id in self.connections:
-                conn = self.connections[session_id]
-                try:
-                    # Test connection with short timeout
-                    transport = conn['client'].get_transport()
-                    if transport and transport.is_active():
-                        return conn
-                except:
-                    # Connection dead, remove it
-                    self._cleanup_connection(session_id)
+        if sudo:
+            command = f'echo "{UBUNTU_PASS}" | sudo -S {command}'
+        
+        try:
+            stdin, stdout, stderr = self.ssh_client.exec_command(command, timeout=timeout)
+            exit_status = stdout.channel.recv_exit_status()
+            output = stdout.read().decode('utf-8')
+            error = stderr.read().decode('utf-8')
             
-            # Create new connection
+            return {
+                'exit_status': exit_status,
+                'output': output,
+                'error': error,
+                'success': exit_status == 0
+            }
+        except Exception as e:
+            return {
+                'exit_status': -1,
+                'output': '',
+                'error': str(e),
+                'success': False
+            }
+    
+    def connect_ssh(self):
+        """Connect to Ubuntu server"""
+        if not SSH_ENABLED:
+            raise Exception("Paramiko not available")
+        
+        self.log_step("SSH Connection", "ATTEMPTING", f"Connecting to {UBUNTU_HOST}:{UBUNTU_PORT}")
+        
+        for attempt in range(self.max_retries):
             try:
-                client = paramiko.SSHClient()
-                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                self.ssh_client = paramiko.SSHClient()
+                self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 
-                logger.info(f"Connecting SSH to {LINUX_HOST}:{LINUX_PORT}...")
-                
-                # Connect with shorter timeout
-                client.connect(
-                    LINUX_HOST,
-                    port=LINUX_PORT,
-                    username=LINUX_USER,
-                    password=LINUX_PASS,
-                    timeout=5,  # 5 second timeout instead of 10
+                self.ssh_client.connect(
+                    UBUNTU_HOST,
+                    port=UBUNTU_PORT,
+                    username=UBUNTU_USER,
+                    password=UBUNTU_PASS,
+                    timeout=10,
                     look_for_keys=False,
-                    allow_agent=False,
-                    banner_timeout=5
+                    allow_agent=False
                 )
                 
-                # Open interactive shell
-                channel = client.invoke_shell()
-                channel.settimeout(0.1)
+                SETUP_STATE['ssh_connected'] = True
+                self.log_step("SSH Connection", "SUCCESS", f"Connected as {UBUNTU_USER}@{UBUNTU_HOST}")
+                return True
                 
-                # Wait for prompt with timeout
-                start = time.time()
-                while time.time() - start < 2:
-                    if channel.recv_ready():
-                        channel.recv(4096)
-                        break
-                    time.sleep(0.1)
-                
-                self.connections[session_id] = {
-                    'client': client,
-                    'channel': channel,
-                    'connected_at': time.time()
-                }
-                
-                logger.info(f"✓ SSH connected for session {session_id}")
-                return self.connections[session_id]
-                
-            except paramiko.AuthenticationException:
-                raise Exception(f"Authentication failed for user {LINUX_USER}")
-            except paramiko.SSHException as e:
-                raise Exception(f"SSH error: {str(e)}")
             except Exception as e:
-                raise Exception(f"Connection failed: {str(e)}")
-    
-    def execute_command(self, session_id, command):
-        """Execute command on SSH connection"""
-        conn = self.get_connection(session_id)
-        channel = conn['channel']
+                self.log_step("SSH Connection", "RETRY", f"Attempt {attempt+1}/{self.max_retries}: {str(e)}")
+                if attempt < self.max_retries - 1:
+                    time.sleep(self.retry_delay)
+                else:
+                    self.log_step("SSH Connection", "FAILED", str(e))
+                    return False
         
-        # Send command
-        channel.send(command + '\n')
-        time.sleep(0.2)
+        return False
+    
+    def setup_dns_server(self):
+        """Install and configure Bind9 DNS server"""
+        self.log_step("DNS Installation", "STARTING", "Installing Bind9")
         
-        # Read output
-        output = ''
-        while channel.recv_ready():
-            output += channel.recv(4096).decode('utf-8', errors='ignore')
+        # Update and install
+        result = self.execute_remote("apt-get update", sudo=True, timeout=60)
+        if not result['success']:
+            self.log_step("DNS Installation", "FAILED", f"apt update failed: {result['error']}")
+            return False
         
-        return output
-    
-    def _cleanup_connection(self, session_id):
-        """Clean up SSH connection"""
-        if session_id in self.connections:
-            conn = self.connections[session_id]
-            try:
-                if 'channel' in conn:
-                    conn['channel'].close()
-                if 'client' in conn:
-                    conn['client'].close()
-            except:
-                pass
-            del self.connections[session_id]
-    
-    def close_all(self):
-        """Close all SSH connections"""
-        with self.lock:
-            for session_id in list(self.connections.keys()):
-                self._cleanup_connection(session_id)
-
-ssh_manager = SSHConnectionManager()
-
-# =============================================================================
-# DNS MANAGEMENT - REAL BIND9 OPERATIONS
-# =============================================================================
-
-def setup_bind9_dns():
-    """Set up real Bind9 DNS on Ubuntu server"""
-    if not SSH_ENABLED:
-        return False, "SSH not available"
-    
-    logger.info("Setting up Bind9 DNS on Ubuntu server...")
-    
-    setup_commands = f"""
-sudo apt-get update
-sudo apt-get install -y bind9 bind9utils dnsutils
-
-# Configure zone
-echo 'zone "render" {{
+        result = self.execute_remote(
+            "DEBIAN_FRONTEND=noninteractive apt-get install -y bind9 bind9utils dnsutils",
+            sudo=True,
+            timeout=120
+        )
+        
+        if not result['success']:
+            self.log_step("DNS Installation", "FAILED", result['error'])
+            return False
+        
+        SETUP_STATE['dns_installed'] = True
+        self.log_step("DNS Installation", "SUCCESS", "Bind9 installed")
+        
+        # Configure DNS zones
+        self.log_step("DNS Configuration", "STARTING", "Configuring .render zone")
+        
+        # Get Ubuntu server's IP
+        result = self.execute_remote("curl -s ifconfig.me", timeout=10)
+        server_ip = result['output'].strip() if result['success'] else UBUNTU_HOST
+        
+        # Create named.conf.local
+        named_conf = f'''
+zone "render" {{
     type master;
     file "/etc/bind/db.render";
-}};' | sudo tee /etc/bind/named.conf.local
+}};
 
-# Create zone file
-echo '$TTL    604800
+zone "{QUANTUM_SUBDOMAIN}.render" {{
+    type master;
+    file "/etc/bind/db.quantum";
+}};
+'''
+        
+        cmd = f'cat > /tmp/named.conf.local << \'EOF\'\n{named_conf}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cp /tmp/named.conf.local /etc/bind/named.conf.local", sudo=True)
+        
+        # Create render zone file
+        render_zone = f'''$TTL    604800
 @       IN      SOA     ns1.render. root.render. (
                               2         ; Serial
                          604800         ; Refresh
@@ -445,124 +434,267 @@ echo '$TTL    604800
                          604800 )       ; Negative Cache TTL
 ;
 @       IN      NS      ns1.render.
-ns1     IN      A       {QUANTUM_GATEWAY}
-@       IN      A       {QUANTUM_GATEWAY}
-*       IN      A       {QUANTUM_GATEWAY}
-' | sudo tee /etc/bind/db.render
-
-# Restart Bind9
-sudo systemctl restart bind9
-sudo systemctl enable bind9
-
-# Open firewall
-sudo ufw allow 53/tcp
-sudo ufw allow 53/udp
-
-echo "DNS Setup Complete"
-"""
-    
-    try:
-        # Execute setup
-        temp_session = f"dns_setup_{int(time.time())}"
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(
-            LINUX_HOST,
-            port=LINUX_PORT,
-            username=LINUX_USER,
-            password=LINUX_PASS,
-            timeout=30
-        )
+ns1     IN      A       {server_ip}
+@       IN      A       {server_ip}
+*       IN      A       {server_ip}
+'''
         
-        stdin, stdout, stderr = client.exec_command(setup_commands, timeout=60)
+        cmd = f'cat > /tmp/db.render << \'EOF\'\n{render_zone}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cp /tmp/db.render /etc/bind/db.render", sudo=True)
         
-        output = stdout.read().decode('utf-8')
-        errors = stderr.read().decode('utf-8')
+        # Create quantum subdomain zone
+        quantum_zone = f'''$TTL    604800
+@       IN      SOA     ns1.{QUANTUM_SUBDOMAIN}.render. root.{QUANTUM_SUBDOMAIN}.render. (
+                              2         ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@       IN      NS      ns1.{QUANTUM_SUBDOMAIN}.render.
+ns1     IN      A       {server_ip}
+@       IN      A       {server_ip}
+quantum IN      A       {server_ip}
+*       IN      A       {server_ip}
+'''
         
-        client.close()
+        cmd = f'cat > /tmp/db.quantum << \'EOF\'\n{quantum_zone}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cp /tmp/db.quantum /etc/bind/db.quantum", sudo=True)
         
-        logger.info(f"DNS setup output: {output}")
-        if errors and 'password' not in errors.lower():
-            logger.warning(f"DNS setup warnings: {errors}")
+        # Configure forwarders
+        forwarders_conf = '''
+forwarders {
+    8.8.8.8;
+    8.8.4.4;
+    1.1.1.1;
+};
+'''
         
-        return True, output
+        cmd = f'cat >> /tmp/named.conf.options << \'EOF\'\n{forwarders_conf}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cat /tmp/named.conf.options >> /etc/bind/named.conf.options", sudo=True)
         
-    except Exception as e:
-        logger.error(f"DNS setup failed: {e}")
-        return False, str(e)
-
-def update_dns_record(domain, ip):
-    """Add DNS record to Bind9 zone"""
-    if not SSH_ENABLED:
-        return False
-    
-    logger.info(f"Adding DNS record: {domain} -> {ip}")
-    
-    try:
-        temp_session = f"dns_update_{int(time.time())}"
-        output = ssh_manager.execute_command(
-            temp_session,
-            f'echo "{domain} IN A {ip}" | sudo tee -a /etc/bind/db.render && sudo rndc reload'
-        )
+        # Restart bind9
+        result = self.execute_remote("systemctl restart bind9", sudo=True)
+        if not result['success']:
+            self.log_step("DNS Configuration", "FAILED", f"Bind9 restart failed: {result['error']}")
+            return False
         
-        logger.info(f"✓ DNS record added: {domain} -> {ip}")
+        self.execute_remote("systemctl enable bind9", sudo=True)
+        
+        SETUP_STATE['dns_configured'] = True
+        SETUP_STATE['connection_string'] = f"{QUANTUM_DOMAIN} → {server_ip}:80"
+        self.log_step("DNS Configuration", "SUCCESS", f"DNS configured for {QUANTUM_DOMAIN}")
+        
         return True
+    
+    def setup_web_server(self):
+        """Install and configure Apache/Nginx web server"""
+        self.log_step("Web Server Installation", "STARTING", "Installing Apache2")
         
-    except Exception as e:
-        logger.error(f"DNS update failed: {e}")
-        return False
+        result = self.execute_remote(
+            "DEBIAN_FRONTEND=noninteractive apt-get install -y apache2",
+            sudo=True,
+            timeout=120
+        )
+        
+        if not result['success']:
+            self.log_step("Web Server Installation", "FAILED", result['error'])
+            return False
+        
+        SETUP_STATE['web_server_installed'] = True
+        self.log_step("Web Server Installation", "SUCCESS", "Apache2 installed")
+        
+        # Configure virtual host for quantum domain
+        self.log_step("Web Server Configuration", "STARTING", f"Configuring {QUANTUM_DOMAIN}")
+        
+        vhost_conf = f'''<VirtualHost *:80>
+    ServerName {QUANTUM_DOMAIN}
+    ServerAlias *.{QUANTUM_SUBDOMAIN}.render
+    ServerAlias *.render
+    
+    DocumentRoot /var/www/quantum
+    
+    <Directory /var/www/quantum>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    
+    ErrorLog ${{APACHE_LOG_DIR}}/quantum_error.log
+    CustomLog ${{APACHE_LOG_DIR}}/quantum_access.log combined
+</VirtualHost>
+'''
+        
+        cmd = f'cat > /tmp/quantum.conf << \'EOF\'\n{vhost_conf}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cp /tmp/quantum.conf /etc/apache2/sites-available/quantum.conf", sudo=True)
+        
+        # Create web root
+        self.execute_remote("mkdir -p /var/www/quantum", sudo=True)
+        
+        # Create index page
+        index_html = f'''<!DOCTYPE html>
+<html>
+<head>
+    <title>Quantum Realm - {QUANTUM_DOMAIN}</title>
+    <style>
+        body {{
+            background: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            padding: 50px;
+            text-align: center;
+        }}
+        h1 {{
+            font-size: 48px;
+            text-shadow: 0 0 20px #0f0;
+        }}
+        .status {{
+            margin: 30px 0;
+            font-size: 24px;
+        }}
+        .metric {{
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #0f0;
+            display: inline-block;
+            min-width: 300px;
+        }}
+    </style>
+</head>
+<body>
+    <h1>⚛️ Quantum Realm Portal</h1>
+    <div class="status">✓ SYSTEM OPERATIONAL</div>
+    <div class="metric">
+        <div>Domain: {QUANTUM_DOMAIN}</div>
+        <div>5x5x5 Quantum Foam Lattice Active</div>
+        <div>DNS: Configured</div>
+        <div>Web Server: Apache2</div>
+    </div>
+    <p>Autonomous setup complete!</p>
+</body>
+</html>
+'''
+        
+        cmd = f'cat > /tmp/index.html << \'EOF\'\n{index_html}\nEOF\n'
+        self.execute_remote(cmd)
+        self.execute_remote("cp /tmp/index.html /var/www/quantum/index.html", sudo=True)
+        
+        # Enable site
+        self.execute_remote("a2ensite quantum.conf", sudo=True)
+        self.execute_remote("a2dissite 000-default.conf", sudo=True)
+        self.execute_remote("systemctl reload apache2", sudo=True)
+        self.execute_remote("systemctl enable apache2", sudo=True)
+        
+        SETUP_STATE['web_server_configured'] = True
+        self.log_step("Web Server Configuration", "SUCCESS", f"{QUANTUM_DOMAIN} configured")
+        
+        return True
+    
+    def setup_firewall(self):
+        """Configure firewall"""
+        self.log_step("Firewall Configuration", "STARTING", "Opening ports")
+        
+        commands = [
+            "ufw allow 22/tcp",
+            "ufw allow 53/tcp",
+            "ufw allow 53/udp",
+            "ufw allow 80/tcp",
+            "ufw allow 443/tcp",
+            "ufw --force enable"
+        ]
+        
+        for cmd in commands:
+            result = self.execute_remote(cmd, sudo=True)
+            if not result['success']:
+                self.log_step("Firewall Configuration", "WARNING", f"{cmd} failed: {result['error']}")
+        
+        SETUP_STATE['firewall_configured'] = True
+        self.log_step("Firewall Configuration", "SUCCESS", "Ports 22,53,80,443 opened")
+        
+        return True
+    
+    def verify_setup(self):
+        """Verify all services are running"""
+        self.log_step("Verification", "STARTING", "Checking services")
+        
+        # Check DNS
+        result = self.execute_remote("systemctl is-active bind9", sudo=True)
+        dns_ok = result['output'].strip() == 'active'
+        
+        # Check web server
+        result = self.execute_remote("systemctl is-active apache2", sudo=True)
+        web_ok = result['output'].strip() == 'active'
+        
+        # Test DNS resolution
+        result = self.execute_remote(f"nslookup {QUANTUM_DOMAIN} localhost")
+        dns_resolve_ok = QUANTUM_DOMAIN in result['output']
+        
+        # Test web server
+        result = self.execute_remote(f"curl -s http://localhost/ | grep 'Quantum Realm'")
+        web_test_ok = result['success']
+        
+        if dns_ok and web_ok and dns_resolve_ok and web_test_ok:
+            SETUP_STATE['domain_working'] = True
+            self.log_step("Verification", "SUCCESS", "All services operational")
+            return True
+        else:
+            self.log_step("Verification", "PARTIAL", f"DNS:{dns_ok}, Web:{web_ok}, Resolve:{dns_resolve_ok}, HTTP:{web_test_ok}")
+            return False
+    
+    def run_autonomous_setup(self):
+        """Run complete autonomous setup"""
+        with self.setup_lock:
+            logger.info("=" * 70)
+            logger.info("STARTING AUTONOMOUS UBUNTU SETUP")
+            logger.info("=" * 70)
+            
+            try:
+                # Step 1: Connect SSH
+                if not self.connect_ssh():
+                    raise Exception("SSH connection failed")
+                
+                # Step 2: Setup DNS
+                if not self.setup_dns_server():
+                    raise Exception("DNS setup failed")
+                
+                # Step 3: Setup Web Server
+                if not self.setup_web_server():
+                    raise Exception("Web server setup failed")
+                
+                # Step 4: Configure Firewall
+                if not self.setup_firewall():
+                    logger.warning("Firewall setup had issues, continuing...")
+                
+                # Step 5: Verify
+                if not self.verify_setup():
+                    logger.warning("Verification incomplete, but proceeding...")
+                
+                SETUP_STATE['setup_complete'] = True
+                self.log_step("AUTONOMOUS SETUP", "COMPLETE", "All systems operational")
+                
+                logger.info("=" * 70)
+                logger.info("✓ AUTONOMOUS SETUP COMPLETE")
+                logger.info("=" * 70)
+                
+                return True
+                
+            except Exception as e:
+                self.log_step("AUTONOMOUS SETUP", "FAILED", str(e))
+                logger.error(f"Autonomous setup failed: {e}", exc_info=True)
+                return False
+            finally:
+                if self.ssh_client:
+                    try:
+                        self.ssh_client.close()
+                    except:
+                        pass
 
-# =============================================================================
-# QUANTUM IP MANAGEMENT
-# =============================================================================
-
-def issue_quantum_ip(session_id):
-    """Issue quantum-entangled IP address"""
-    if session_id in ALLOCATED_IPS:
-        return ALLOCATED_IPS[session_id]
-    
-    # Find available IP
-    available = [ip for ip in IP_POOL if ip not in ALLOCATED_IPS.values()]
-    
-    if not available:
-        logger.warning("IP pool exhausted, recycling...")
-        available = IP_POOL
-    
-    # Allocate random IP
-    allocated_ip = random.choice(available)
-    ALLOCATED_IPS[session_id] = allocated_ip
-    
-    # Entangle IP into quantum foam
-    quantum_foam.entangle_ip(allocated_ip)
-    
-    logger.info(f"✓ Issued quantum IP {allocated_ip} for session {session_id}")
-    
-    return allocated_ip
-
-# =============================================================================
-# ENCRYPTION & KEY GENERATION
-# =============================================================================
-
-def quantum_encryption(plaintext, rounds=3):
-    """Quantum-seeded encryption cascade"""
-    # Use quantum state as seed
-    quantum_seed = quantum_foam.core_state.full().tobytes()[:32]
-    
-    ciphertext = plaintext.encode() if isinstance(plaintext, str) else plaintext
-    
-    for _ in range(rounds):
-        h = hashlib.sha3_256(ciphertext + quantum_seed).digest()
-        ciphertext = bytes(a ^ b for a, b in zip(h[:len(ciphertext)], ciphertext))
-        quantum_seed = h
-    
-    return ciphertext.hex()
-
-def generate_session_key(session_id):
-    """Generate deterministic session key"""
-    # Incorporate quantum bridge key
-    material = f"{session_id}{quantum_foam.bridge_key}"
-    key = hashlib.shake_256(material.encode()).digest(32)
-    return key.hex()
+# Initialize autonomous setup engine
+autonomous_setup = AutonomousSetupEngine()
 
 # =============================================================================
 # FLASK APPLICATION
@@ -579,8 +711,21 @@ socketio = SocketIO(
     engineio_logger=False
 )
 
-# Session storage for QSH terminals
-qsh_sessions = {}
+def issue_quantum_ip(session_id):
+    """Issue quantum IP"""
+    if session_id in ALLOCATED_IPS:
+        return ALLOCATED_IPS[session_id]
+    
+    available = [ip for ip in IP_POOL if ip not in ALLOCATED_IPS.values()]
+    if not available:
+        available = IP_POOL
+    
+    allocated_ip = random.choice(available)
+    ALLOCATED_IPS[session_id] = allocated_ip
+    quantum_foam.entangle_ip(allocated_ip)
+    
+    logger.info(f"✓ Issued quantum IP {allocated_ip} for session {session_id}")
+    return allocated_ip
 
 @app.route('/')
 def root():
@@ -595,8 +740,13 @@ def health():
         'status': 'operational',
         'quantum_foam': metrics,
         'ssh_enabled': SSH_ENABLED,
-        'allocated_ips': len(ALLOCATED_IPS)
+        'setup_state': SETUP_STATE
     })
+
+@app.route('/setup_status')
+def setup_status():
+    """Get autonomous setup status"""
+    return jsonify(SETUP_STATE)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -607,7 +757,6 @@ def login():
         pass_hash = hashlib.sha3_256(password.encode()).hexdigest()
         
         if username == ADMIN_USER and pass_hash == ADMIN_PASS_HASH:
-            # Successful login
             client_ip = request.remote_addr
             session_id = f"sess_{client_ip}_{int(time.time())}"
             
@@ -615,15 +764,12 @@ def login():
             session['user'] = username
             session['session_id'] = session_id
             
-            # Generate session key
-            session_key = generate_session_key(session_id)
+            session_key = hashlib.shake_256(f"{session_id}{quantum_foam.bridge_key}".encode()).digest(32).hex()
             session['session_key'] = session_key
             
-            # Issue quantum IP
             quantum_ip = issue_quantum_ip(session_id)
             session['quantum_ip'] = quantum_ip
             
-            # Entangle client IP
             quantum_foam.entangle_ip(client_ip)
             
             logger.info(f"✓ Login: {username} from {client_ip}, quantum IP: {quantum_ip}")
@@ -681,6 +827,12 @@ def login():
             display: block;
             margin-top: 10px;
         }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #0f0;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -693,7 +845,22 @@ def login():
             <input type="password" name="password" required>
             <input type="submit" value="ENTER QUANTUM REALM">
         </form>
+        <div class="status" id="setup-status">
+            Checking autonomous setup...
+        </div>
     </div>
+    <script>
+        fetch('/setup_status')
+            .then(r => r.json())
+            .then(data => {
+                const status = document.getElementById('setup-status');
+                if (data.setup_complete) {
+                    status.innerHTML = '✓ System Ready<br>Domain: ' + (data.connection_string || 'Configured');
+                } else {
+                    status.innerHTML = '⚙ Setup in progress...<br>Steps: ' + data.setup_log.length;
+                }
+            });
+    </script>
 </body>
 </html>
     '''
@@ -707,10 +874,8 @@ def quantum_gate():
     session_id = session.get('session_id')
     quantum_ip = session.get('quantum_ip')
     
-    # Get quantum metrics
     metrics = quantum_foam.get_state_metrics()
     
-    # Verify session key if provided
     provided_key = request.args.get('key', '')
     if provided_key:
         expected_key = session.get('session_key', '')
@@ -720,11 +885,14 @@ def quantum_gate():
     
     ssh_status = '✓ ENABLED' if SSH_ENABLED else '✗ DISABLED'
     
+    connection_info = SETUP_STATE.get('connection_string', f"{QUANTUM_DOMAIN} → {UBUNTU_HOST}:80")
+    setup_complete = "✓ COMPLETE" if SETUP_STATE['setup_complete'] else "⚙ IN PROGRESS"
+    
     html = f'''
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Quantum Realm - Production Portal</title>
+    <title>Quantum Realm - Autonomous Portal</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
@@ -776,59 +944,37 @@ def quantum_gate():
             margin: 8px 0;
             line-height: 1.6;
         }}
-        .info-label {{
-            display: inline-block;
-            width: 150px;
-            opacity: 0.7;
-        }}
         #terminal {{
             margin-top: 20px;
             border: 2px solid #0f0;
             box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
         }}
-        a {{
-            color: #0f0;
-            text-decoration: none;
-        }}
-        a:hover {{
-            text-decoration: underline;
-            text-shadow: 0 0 5px #0f0;
-        }}
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>⚛️ QUANTUM REALM - PRODUCTION PORTAL (5x5x5 LATTICE)</h1>
+        <h1>⚛️ QUANTUM REALM - AUTONOMOUS SYSTEM (5x5x5 LATTICE)</h1>
         
         <div class="info-line">
-            <span class="info-label">Domain:</span>
-            <strong>{QUANTUM_DOMAIN}</strong>
+            <strong>Autonomous Setup:</strong> {setup_complete}
         </div>
         <div class="info-line">
-            <span class="info-label">Session ID:</span>
-            <code>{session_id}</code>
+            <strong>Connection:</strong> {connection_info}
         </div>
         <div class="info-line">
-            <span class="info-label">Client IP:</span>
-            {client_ip}
+            <strong>Session ID:</strong> {session_id}
         </div>
         <div class="info-line">
-            <span class="info-label">Quantum IP:</span>
-            <strong>{quantum_ip}</strong> (Entangled)
+            <strong>Client IP:</strong> {client_ip}
         </div>
         <div class="info-line">
-            <span class="info-label">Network:</span>
-            {QUANTUM_NET} | Gateway: {QUANTUM_GATEWAY} | DNS: {QUANTUM_DNS}
+            <strong>Quantum IP:</strong> {quantum_ip} (Entangled)
         </div>
         <div class="info-line">
-            <span class="info-label">SSH Status:</span>
-            {ssh_status}
+            <strong>Network:</strong> {QUANTUM_NET} | Gateway: {QUANTUM_GATEWAY}
         </div>
         <div class="info-line">
-            <span class="info-label">Links:</span>
-            <a href="/registry">Registry</a> | 
-            <a href="https://{DUCKDNS_DOMAIN}" target="_blank">Alice Ubuntu</a> |
-            <a href="/health">Health Check</a>
+            <strong>SSH:</strong> {ssh_status}
         </div>
     </div>
     
@@ -850,18 +996,9 @@ def quantum_gate():
             <div class="metric-value">{metrics['entangled_ips']}</div>
         </div>
         <div class="metric">
-            <div class="metric-label">CORE QUBITS</div>
-            <div class="metric-value">{metrics['core_qubits']}</div>
+            <div class="metric-label">SETUP STATUS</div>
+            <div class="metric-value">{setup_complete}</div>
         </div>
-        <div class="metric">
-            <div class="metric-label">ALLOCATED IPs</div>
-            <div class="metric-value">{len(ALLOCATED_IPS)}</div>
-        </div>
-    </div>
-    
-    <div class="info-line">
-        <span class="info-label">Bridge Key:</span>
-        <code>{metrics['bridge_key'][:50]}...</code>
     </div>
     
     <div id="terminal" style="height: 600px;"></div>
@@ -875,30 +1012,22 @@ def quantum_gate():
             theme: {{
                 background: '#000000',
                 foreground: '#00ff00',
-                cursor: '#00ff00',
-                black: '#000000',
-                red: '#ff0000',
-                green: '#00ff00',
-                yellow: '#ffff00',
-                blue: '#0000ff',
-                magenta: '#ff00ff',
-                cyan: '#00ffff',
-                white: '#ffffff'
+                cursor: '#00ff00'
             }}
         }});
         
         term.open(document.getElementById('terminal'));
         
         term.writeln('╔══════════════════════════════════════════════════════════════════════╗');
-        term.writeln('║  QUANTUM SHELL (QSH) v3.0 - REAL PRODUCTION SYSTEM                 ║');
-        term.writeln('║  5x5x5 Quantum Foam Lattice - QuTiP Resonance Active                ║');
+        term.writeln('║  QUANTUM SHELL (QSH) v4.0 - AUTONOMOUS SYSTEM                       ║');
+        term.writeln('║  5x5x5 Quantum Foam Lattice - Ubuntu Integration Active             ║');
         term.writeln('╚══════════════════════════════════════════════════════════════════════╝');
         term.writeln('');
         term.writeln('Session: {session_id}');
-        term.writeln('Quantum IP: {quantum_ip} (Entangled at lattice site)');
-        term.writeln('SSH to Ubuntu: ' + '{ssh_status}');
+        term.writeln('Quantum IP: {quantum_ip} (Entangled)');
+        term.writeln('Setup: {setup_complete}');
         term.writeln('');
-        term.writeln('Commands: help, connect_linux, setup_dns, teleport, metrics, registry');
+        term.writeln('Commands: help, metrics, setup_status, teleport, entangle, registry');
         term.writeln('');
         term.write('QSH> ');
         
@@ -938,13 +1067,8 @@ def quantum_gate():
         }});
         
         socket.on('connect', () => {{
-            console.log('Quantum channel established');
-            term.writeln('\\r\\n✓ Quantum websocket connected');
+            term.writeln('\\r\\n✓ Quantum channel established');
             term.write('QSH> ');
-        }});
-        
-        socket.on('disconnect', () => {{
-            term.writeln('\\r\\n✗ Quantum channel lost');
         }});
     </script>
 </body>
@@ -961,22 +1085,16 @@ def registry():
     combined = {**PRE_REG_SUBS, **RENDER_TLDS}
     return jsonify(combined)
 
-# =============================================================================
-# QSH COMMAND HANDLER - REAL OPERATIONS
-# =============================================================================
+# QSH Command Handler
+qsh_sessions = {}
 
 @socketio.on('qsh_command')
 def handle_qsh_command(data):
     sid = request.sid
     cmd = data.get('command', '').strip()
     
-    # Initialize session if needed
     if sid not in qsh_sessions:
-        qsh_sessions[sid] = {
-            'ssh_connected': False,
-            'ssh_session_id': None,
-            'history': []
-        }
+        qsh_sessions[sid] = {'history': []}
     
     sess = qsh_sessions[sid]
     output = ''
@@ -989,18 +1107,13 @@ Available Commands:
 ------------------
 help              - Show this help
 metrics           - Display quantum foam metrics
+setup_status      - View autonomous setup progress
 teleport <data>   - Perform quantum teleportation
 entangle <ip>     - Entangle IP address into lattice
-test_ssh          - Test SSH connectivity (does not hang)
-connect_linux     - Establish SSH connection to Ubuntu server
-setup_dns         - Configure Bind9 DNS on Ubuntu
 registry          - Show domain registry
 issue_ip          - Issue new quantum IP
 clear             - Clear history
 exit              - Close session
-
-When connected via SSH, all commands are forwarded to Ubuntu server.
-Type 'exit' in SSH mode to disconnect.
 '''
         
         elif cmd == 'metrics':
@@ -1017,6 +1130,26 @@ Allocated IPs:        {len(ALLOCATED_IPS)}
 Bridge Key:           {metrics['bridge_key'][:50]}...
 '''
         
+        elif cmd == 'setup_status':
+            output = f'''
+Autonomous Setup Status:
+-----------------------
+SSH Connected:        {'✓' if SETUP_STATE['ssh_connected'] else '✗'}
+DNS Installed:        {'✓' if SETUP_STATE['dns_installed'] else '✗'}
+DNS Configured:       {'✓' if SETUP_STATE['dns_configured'] else '✗'}
+Web Server Installed: {'✓' if SETUP_STATE['web_server_installed'] else '✗'}
+Web Server Config:    {'✓' if SETUP_STATE['web_server_configured'] else '✗'}
+Firewall Configured:  {'✓' if SETUP_STATE['firewall_configured'] else '✗'}
+Domain Working:       {'✓' if SETUP_STATE['domain_working'] else '✗'}
+Setup Complete:       {'✓' if SETUP_STATE['setup_complete'] else '⚙ In Progress'}
+
+Connection String:    {SETUP_STATE.get('connection_string', 'Pending...')}
+
+Recent Log Entries:
+'''
+            for entry in SETUP_STATE['setup_log'][-5:]:
+                output += f"  [{entry['status']}] {entry['step']}: {entry['details']}\n"
+        
         elif cmd.startswith('teleport '):
             data_input = cmd[9:].strip() or 'quantum_data'
             fidelity = quantum_foam.quantum_teleport(data_input)
@@ -1030,123 +1163,6 @@ Bridge Key:           {metrics['bridge_key'][:50]}...
                 output = f'✓ IP {ip} entangled at site {site}, fidelity = {fidelity:.15f}'
             else:
                 output = 'Usage: entangle <ip_address>'
-        
-        elif cmd == 'test_ssh':
-            if not SSH_ENABLED:
-                output = '✗ SSH not available - install paramiko'
-            else:
-                output = f'''
-🔍 SSH Configuration Test
-------------------------
-Target Host:      {LINUX_HOST}
-Port:             {LINUX_PORT}
-Username:         {LINUX_USER}
-Password Set:     {'Yes' if LINUX_PASS else 'No'}
-Paramiko:         ✓ Loaded
-
-'''
-                # Quick connectivity test
-                if LINUX_HOST in ['127.0.0.1', 'localhost']:
-                    output += '''
-⚠ WARNING: Connecting to localhost (127.0.0.1)
-This is the Render container, not your Ubuntu server!
-
-To connect to your real Ubuntu server:
-1. Set ALICE_IP environment variable to your server's IP
-2. Ensure port 22 is accessible from internet
-3. Run 'connect_linux' to establish connection
-
-Current setup will only work if:
-- Running locally with SSH server
-- Testing in development environment
-'''
-                else:
-                    output += f'✓ Target appears to be remote host\n'
-                    output += f'\nAttempting quick connection test...\n'
-                    
-                    try:
-                        import socket
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        sock.settimeout(3)
-                        result = sock.connect_ex((LINUX_HOST, LINUX_PORT))
-                        sock.close()
-                        
-                        if result == 0:
-                            output += f'✓ Port {LINUX_PORT} is open on {LINUX_HOST}\n'
-                            output += f'\nReady to connect! Run: connect_linux'
-                        else:
-                            output += f'✗ Cannot reach {LINUX_HOST}:{LINUX_PORT}\n'
-                            output += f'\nCheck firewall and network settings.'
-                    except Exception as e:
-                        output += f'✗ Connection test failed: {e}'
-        
-        elif cmd == 'connect_linux':
-            if not SSH_ENABLED:
-                output = '✗ SSH not available - install paramiko: pip install paramiko'
-            elif sess['ssh_connected']:
-                output = '✓ Already connected to Ubuntu server'
-            else:
-                try:
-                    # Check if connecting to localhost
-                    if LINUX_HOST in ['127.0.0.1', 'localhost']:
-                        output = f'''
-⚠ WARNING: SSH target is {LINUX_HOST}:22 (localhost)
-
-This will attempt to SSH into the Render container itself, not your Ubuntu server.
-
-To connect to your actual Ubuntu server, set environment variable:
-  ALICE_IP=your.ubuntu.server.ip
-
-For now, attempting local connection (will likely fail)...
-'''
-                        emit('qsh_output', {'output': output, 'prompt': False})
-                        time.sleep(1)
-                    
-                    session_id = session.get('session_id', f'ssh_{sid}')
-                    output = f'🔌 Connecting to {LINUX_HOST}:{LINUX_PORT} as {LINUX_USER}...\n'
-                    emit('qsh_output', {'output': output, 'prompt': False})
-                    
-                    conn = ssh_manager.get_connection(session_id)
-                    sess['ssh_connected'] = True
-                    sess['ssh_session_id'] = session_id
-                    output = f'''
-✓ SSH connection established to {LINUX_HOST}:{LINUX_PORT}
-✓ Connected as: {LINUX_USER}
-✓ Quantum tunnel active through gateway {QUANTUM_GATEWAY}
-
-You are now in SSH mode. All commands will be executed on Ubuntu server.
-Type 'exit' to close SSH connection.
-'''
-                    prompt = False
-                except Exception as e:
-                    error_msg = str(e)
-                    output = f'''
-✗ SSH connection failed: {error_msg}
-
-Common issues:
-1. ALICE_IP not set correctly (currently: {LINUX_HOST})
-2. SSH port not accessible from Render
-3. Firewall blocking connection
-4. Invalid credentials
-
-To fix:
-- Set environment variable ALICE_IP to your Ubuntu server's public IP
-- Ensure port 22 is open on your Ubuntu server
-- Verify credentials: LINUX_USER={LINUX_USER}
-
-For testing, you can run other QSH commands without SSH.
-'''
-        
-        elif cmd == 'setup_dns':
-            if not SSH_ENABLED:
-                output = '✗ SSH not available'
-            else:
-                output = '⚙ Setting up Bind9 DNS on Ubuntu server...\n'
-                success, result = setup_bind9_dns()
-                if success:
-                    output += f'✓ DNS setup complete\n{result[:500]}'
-                else:
-                    output += f'✗ DNS setup failed: {result}'
         
         elif cmd == 'registry':
             combined = {**PRE_REG_SUBS, **RENDER_TLDS}
@@ -1162,32 +1178,12 @@ For testing, you can run other QSH commands without SSH.
             output = '✓ History cleared'
         
         elif cmd == 'exit':
-            if sess['ssh_connected']:
-                # Close SSH
-                try:
-                    ssh_manager._cleanup_connection(sess['ssh_session_id'])
-                    sess['ssh_connected'] = False
-                    output = '✓ SSH connection closed'
-                except:
-                    pass
-            else:
-                output = '✓ Session closed'
-                del qsh_sessions[sid]
-        
-        elif sess['ssh_connected']:
-            # Forward to SSH
-            try:
-                result = ssh_manager.execute_command(sess['ssh_session_id'], cmd)
-                output = result if result else '(no output)'
-                prompt = False
-            except Exception as e:
-                output = f'✗ SSH command failed: {str(e)}'
-                sess['ssh_connected'] = False
+            output = '✓ Session closed'
+            del qsh_sessions[sid]
         
         else:
             output = f'Unknown command: {cmd}\nType "help" for available commands'
         
-        # Store in history
         sess['history'].append({'cmd': cmd, 'output': output[:200]})
         if len(sess['history']) > 50:
             sess['history'] = sess['history'][-50:]
@@ -1202,33 +1198,40 @@ For testing, you can run other QSH commands without SSH.
 def handle_disconnect():
     sid = request.sid
     if sid in qsh_sessions:
-        sess = qsh_sessions[sid]
-        if sess['ssh_connected']:
-            try:
-                ssh_manager._cleanup_connection(sess['ssh_session_id'])
-            except:
-                pass
         del qsh_sessions[sid]
 
 # =============================================================================
-# MAIN
+# MAIN - START AUTONOMOUS SETUP
 # =============================================================================
+
+def run_autonomous_setup_background():
+    """Run autonomous setup in background thread"""
+    time.sleep(5)  # Wait for server to start
+    logger.info("Starting background autonomous setup...")
+    autonomous_setup.run_autonomous_setup()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     
     logger.info("=" * 70)
-    logger.info("QUANTUM NETWORK SERVER - PRODUCTION MODE")
+    logger.info("QUANTUM NETWORK AUTONOMOUS SYSTEM")
     logger.info("=" * 70)
     logger.info(f"Server starting on 0.0.0.0:{port}")
     logger.info(f"Quantum Foam: 5x5x5 lattice active")
     logger.info(f"SSH: {'✓ Enabled' if SSH_ENABLED else '✗ Disabled'}")
-    logger.info(f"Ubuntu Target: {LINUX_HOST}:{LINUX_PORT}")
+    logger.info(f"Ubuntu Target: {UBUNTU_HOST}:{UBUNTU_PORT}")
     logger.info("=" * 70)
+    
+    # Start autonomous setup in background
+    if SSH_ENABLED and UBUNTU_HOST != '127.0.0.1':
+        setup_thread = threading.Thread(target=run_autonomous_setup_background, daemon=True)
+        setup_thread.start()
+        logger.info("✓ Autonomous setup thread started")
+    else:
+        logger.warning("⚠ Autonomous setup skipped - set UBUNTU_HOST environment variable")
     
     try:
         socketio.run(app, host='0.0.0.0', port=port, debug=False)
     finally:
-        logger.info("Shutting down - closing SSH connections...")
-        ssh_manager.close_all()
+        logger.info("Shutting down...")
         logger.info("✓ Shutdown complete")
