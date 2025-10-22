@@ -57,8 +57,11 @@ if os.environ.get('FLASK_ENV') == 'production':
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-# DB Config
+# DB Config - Enhanced for production (Render/Postgres fallback)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URI', 'sqlite:///holo.db')
+if os.environ.get('FLASK_ENV') == 'production' and not os.environ.get('DATABASE_URI'):
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'  # Ephemeral fallback if no external DB
+    logger.warning("No DATABASE_URI set in production; using in-memory SQLite (data will not persist)")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -1627,8 +1630,12 @@ def login():
                 session['quantum_ip'] = registrant.user_ip  # Issued IP
                 session['hex_ip'] = hex_ip  # HEX subdomain
                 
-                quantum_foam.entangle_ip(hex_ip)
-                quantum_foam.entangle_ip(registrant.user_ip)
+                # Wrapped entanglement calls
+                try:
+                    quantum_foam.entangle_ip(hex_ip)
+                    quantum_foam.entangle_ip(registrant.user_ip)
+                except Exception as ent_e:
+                    logger.warning(f"Entanglement skipped post-login: {ent_e}")
                 
                 logger.info(f"✓ Login: {username} from {client_ip}, user IP: {registrant.user_ip}, hex: {hex_ip}")
                 
@@ -1651,7 +1658,11 @@ def login():
                     quantum_ip = issue_quantum_ip(session_id)
                     session['quantum_ip'] = quantum_ip
                     
-                    quantum_foam.entangle_ip(client_ip)
+                    # Wrapped entanglement call
+                    try:
+                        quantum_foam.entangle_ip(client_ip)
+                    except Exception as ent_e:
+                        logger.warning(f"Entanglement skipped post-admin-login: {ent_e}")
                     
                     logger.info(f"✓ Admin Login: {username} from {client_ip}, quantum IP: {quantum_ip}")
                     
@@ -1809,8 +1820,11 @@ def register():
             db.session.commit()
             
             # Entangle
-            quantum_foam.entangle_ip(hex_ip)
-            quantum_foam.entangle_ip(user_ip)
+            try:
+                quantum_foam.entangle_ip(hex_ip)
+                quantum_foam.entangle_ip(user_ip)
+            except Exception as ent_e:
+                logger.warning(f"Entanglement skipped post-registration: {ent_e}")
             
             logger.info(f"✓ Registered: {username} ({email}) → {user_email}, IP: {user_ip}, HEX: {hex_address}")
             
@@ -1967,45 +1981,46 @@ def email_html():
 
 @app.route('/computer/render/gate')
 def quantum_gate():
-    if not session.get('logged_in'):
-        return redirect('/login')
-    
-    client_ip = request.remote_addr
-    session_id = session.get('session_id')
-    quantum_ip = session.get('quantum_ip', '')
-    hex_ip = session.get('hex_ip', '')
-    user_ip = session.get('user_ip', '')
-    
-    metrics = quantum_foam.get_state_metrics()
-    
-    provided_key = request.args.get('key', '')
-    expected_key = session.get('session_key', '')
-    if provided_key and provided_key != expected_key:
-        logger.warning(f"Invalid session key from {client_ip}: provided {provided_key[:8]}... != expected {expected_key[:8]}...")
-        return "Invalid session key", 403
-    
-    if not provided_key:
-        logger.info(f"Missing session key for {client_ip}, but allowing (direct access)")
-    
-    ssh_status = '✓ ENABLED' if SSH_ENABLED else '✗ DISABLED'
-    
-    connection_info = SETUP_STATE.get('connection_string', f"{QUANTUM_DOMAIN} DNS from {QUANTUM_DNS_PRIMARY}")
-    setup_complete = "✓ COMPLETE" if SETUP_STATE['setup_complete'] else "⚙ IN PROGRESS"
-    
-    ip_display = f"User IP: {user_ip} | HEX: {hex_ip}" if user_ip else quantum_ip
-    
-    # Render from cloned template if exists
     try:
-        return render_template('gate.html', 
-                               session_id=session_id, ip_display=ip_display, 
-                               setup_complete=setup_complete, connection_info=connection_info,
-                               client_ip=client_ip, quantum_ip=quantum_ip, metrics=metrics,
-                               ssh_status=ssh_status, QUANTUM_NET=QUANTUM_NET, 
-                               QUANTUM_DNS_PRIMARY=QUANTUM_DNS_PRIMARY, QUANTUM_GATEWAY=QUANTUM_GATEWAY)
-    except Exception as e:  # Broaden to catch template/render errors
-        logger.warning(f"Template render failed (using fallback): {e}")
-        # Fallback inline - properly indented under except
-        html = f'''
+        if not session.get('logged_in'):
+            return redirect('/login')
+        
+        client_ip = request.remote_addr
+        session_id = session.get('session_id')
+        quantum_ip = session.get('quantum_ip', '')
+        hex_ip = session.get('hex_ip', '')
+        user_ip = session.get('user_ip', '')
+        
+        metrics = quantum_foam.get_state_metrics()
+        
+        provided_key = request.args.get('key', '')
+        expected_key = session.get('session_key', '')
+        if provided_key and provided_key != expected_key:
+            logger.warning(f"Invalid session key from {client_ip}: provided {provided_key[:8]}... != expected {expected_key[:8]}...")
+            return "Invalid session key", 403
+        
+        if not provided_key:
+            logger.info(f"Missing session key for {client_ip}, but allowing (direct access)")
+        
+        ssh_status = '✓ ENABLED' if SSH_ENABLED else '✗ DISABLED'
+        
+        connection_info = SETUP_STATE.get('connection_string', f"{QUANTUM_DOMAIN} DNS from {QUANTUM_DNS_PRIMARY}")
+        setup_complete = "✓ COMPLETE" if SETUP_STATE['setup_complete'] else "⚙ IN PROGRESS"
+        
+        ip_display = f"User IP: {user_ip} | HEX: {hex_ip}" if user_ip else quantum_ip
+        
+        # Render from cloned template if exists
+        try:
+            return render_template('gate.html', 
+                                   session_id=session_id, ip_display=ip_display, 
+                                   setup_complete=setup_complete, connection_info=connection_info,
+                                   client_ip=client_ip, quantum_ip=quantum_ip, metrics=metrics,
+                                   ssh_status=ssh_status, QUANTUM_NET=QUANTUM_NET, 
+                                   QUANTUM_DNS_PRIMARY=QUANTUM_DNS_PRIMARY, QUANTUM_GATEWAY=QUANTUM_GATEWAY)
+        except Exception as template_e:
+            logger.warning(f"Template render failed (using fallback): {template_e}")
+            # Fallback inline - properly indented under except
+            html = f'''
 <!DOCTYPE html>
 <html>
 <head>
@@ -2200,8 +2215,12 @@ def quantum_gate():
     </script>
 </body>
 </html>
-        '''
-        return html
+            '''
+            return html
+            
+    except Exception as e:
+        logger.error(f"Gate route error: {e}", exc_info=True)
+        return jsonify({'error': 'Gate access failed - check logs'}), 500
 
 @socketio.on('qsh_command')
 def handle_qsh_command(data):
@@ -2371,10 +2390,10 @@ if __name__ == '__main__':
     logger.info(f"Routing: Alice ({ALICE_LOCAL}) → DNS {QUANTUM_DNS_PRIMARY} via {UBUNTU_HOST}")
     logger.info("=" * 70)
     
-    # Start autonomous setup in background
-    setup_thread = threading.Thread(target=run_autonomous_setup_background, daemon=True)
-    setup_thread.start()
-    logger.info(f"✓ Autonomous setup started - DNS from {QUANTUM_DNS_PRIMARY}")
+    # Start autonomous setup in background (temporarily disabled for debugging)
+    # setup_thread = threading.Thread(target=run_autonomous_setup_background, daemon=True)
+    # setup_thread.start()
+    logger.info("Autonomous setup disabled for debugging")
     
     try:
         socketio.run(app, host='0.0.0.0', port=port, debug=False)
