@@ -1,68 +1,13 @@
-# Quantum Foam Bridge - Python Dependencies
-# Install: pip install -r requirements.txt
-
-# CRITICAL: Eventlet must be installed first
-eventlet==0.40.3
-
-# Core Web Framework
-flask==3.1.0
-flask-socketio==5.5.1
+numpy==1.26.4
+scipy==1.13.1
+requests>=2.32.4,<3.0.0
+qutip==4.7.3
+flask==3.0.0
+flask-socketio==5.3.5
 flask-sqlalchemy==3.1.1
-werkzeug==3.1.3
-
-# WebSocket Support
-python-engineio==4.12.3
-python-socketio==5.14.2
-bidict==0.23.1
-simple-websocket==1.1.0
-wsproto==1.2.0
-
-# SSH Support
-paramiko==4.0.0
-pynacl==1.6.0
-bcrypt==5.0.0
-cryptography==44.0.0
-
-# Quantum Computing (Qiskit)
-qiskit==2.2.1
-qiskit-aer==0.17.2
-qiskit-ibm-runtime==0.43.0
-rustworkx==0.17.1
-qiskit-algorithms==0.3.1
-
-# Scientific Computing
-numpy==2.2.1
-scipy==1.15.2
-matplotlib==3.10.0
-
-# Database
-sqlalchemy==2.0.36
-greenlet==3.1.1
-
-# IBM Cloud Support
-ibm-cloud-sdk-core==3.24.2
-ibm-platform-services==0.69.0
-
-# Network & DNS
-dnspython==2.8.0
-requests==2.32.3
-urllib3==2.3.0
-
-# Authentication & Security
-pyjwt==2.10.1
-pyspnego==0.12.0
-requests-ntlm==1.3.0
-
-# Utilities
-python-dateutil==2.9.0.post0
-python-dotenv==1.0.1
-click==8.1.8
-itsdangerous==2.2.0
-jinja2==3.1.5
-markupsafe==3.0.2
-
-# Development & Testing (optional)
-# pytest==8.3.4
-# pytest-cov==6.0.0
-# black==24.10.0
-# flake8==7.1.1
+werkzeug==3.0.1
+eventlet==0.36.1
+paramiko==3.4.0
+matplotlib==3.8.2
+ibm-cloud-sdk-core
+python-dotenv==1.0.0
